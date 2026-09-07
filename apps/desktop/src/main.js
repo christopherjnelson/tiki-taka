@@ -85,6 +85,7 @@ let padPrevious = [],
   padConnected = false,
   menuRepeat = 0,
   finished = false,
+  roundCleared = false,
   lastTime = 0,
   toastTimeout,
   announcementTimeout,
@@ -358,6 +359,7 @@ function prepare() {
   if ($("venue-vibe")) $("venue-vibe").textContent = venue.vibe;
   phase = "ready";
   finished = false;
+  roundCleared = false;
   bank = false;
   focusToggle = false;
   clearInput();
@@ -610,6 +612,7 @@ function finish() {
   setPauseState(false);
   setControlsEnabled(false);
   const result = awardMatch(progress, game, mode, courtIndex);
+  roundCleared = result.cleared;
   const roundProfileId = profile?.id || null;
   void dataAdapter
     .recordRound({
@@ -634,7 +637,7 @@ function finish() {
   const details = `${game.score} points · ${game.passes} passes · ${game.triangles} triangles · best one-touch ${game.bestOneTouch || 0} · +${result.xp} XP`;
   const extra =
     mode === "career" && result.cleared
-      ? courtIndex === 5
+      ? courtIndex === COURTS.length - 1
         ? "Circuit complete. Chase three stars on every court."
         : `${COURTS[courtIndex + 1].name} is now unlocked.`
       : game.turnovers >= 3 && !game.config.practice
@@ -650,7 +653,7 @@ function finish() {
         : "ROUND COMPLETE",
     title,
     `${details}. ${extra}`,
-    mode === "career" && result.cleared && courtIndex < 5
+    mode === "career" && result.cleared && courtIndex < COURTS.length - 1
       ? "Next court"
       : "Play again",
     "Back to court",
@@ -664,9 +667,8 @@ $("start-button").addEventListener("click", () => {
   if (
     phase === "finished" &&
     mode === "career" &&
-    game.time <= 0 &&
-    game.score >= game.config.target &&
-    courtIndex < 5
+    roundCleared &&
+    courtIndex < COURTS.length - 1
   ) {
     courtIndex++;
     progress.lastCourt = courtIndex;
