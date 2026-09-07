@@ -32,6 +32,31 @@ The versioned filename changes when the package version changes. Update the Stea
 
 If the overlay or input behaves poorly under native Wayland, add `--ozone-platform=x11` to the shortcut's launch options and retest through XWayland. Leave the default launch options empty when native Wayland works. Do not add `--no-sandbox`; Electron documents that flag for testing only, and this host supports the Chromium namespace sandbox.
 
+## Troubleshoot a launch that produces no window
+
+If the shortcut starts and no window ever appears, open the Steam console output and look for this line:
+
+`FATAL:content/browser/zygote_host/zygote_host_impl_linux.cc:213] Zygote process exited prematurely with exit code -1`
+
+The matching symptom is a game that never draws a window, a process that ignores `SIGTERM`, and a Steam library entry stuck reporting that the game is still running. Steam itself then has to be force-killed.
+
+The cause is the Chromium sandbox helper. `electron-builder` writes `release/electron/linux-unpacked/chrome-sandbox` owned by the building user with mode `0755` and no setuid bit. Launched directly, Electron uses the Chromium namespace sandbox and the helper is never needed. Launched through Steam, Electron falls back to the setuid sandbox helper, the helper is not setuid-root, and the zygote process dies before any window is created.
+
+Fix it from the repository root:
+
+```sh
+sudo chown root:root release/electron/linux-unpacked/chrome-sandbox
+sudo chmod 4755 release/electron/linux-unpacked/chrome-sandbox
+```
+
+`scripts/launch-desktop.sh` prints a warning to stderr when the helper is not setuid-root, and still launches the game. The warning is the reminder to run the two commands above; it does not change how the game starts.
+
+Three things to keep in mind:
+
+- `npm run electron:pack` recreates `chrome-sandbox` with the default ownership and mode. Reapply both commands after every repackage.
+- The AppImage extracts itself to a temporary directory at runtime, so a setuid bit cannot persist inside it. Point Steam shortcuts at `scripts/launch-desktop.sh`, which runs the unpacked build, rather than at the AppImage.
+- `--no-sandbox` is a diagnostic only. Adding it to the launch options confirms that the sandbox is the cause, because the window then appears. This does not change the guidance above to leave `--no-sandbox` out of the shortcut: remove it as soon as it has confirmed the diagnosis, and fix the helper's ownership and mode instead.
+
 ## Scope of this test
 
 The non-Steam shortcut provides local launching and lets you configure Steam Input. Overlay and controller behavior depend on Steam, the display session, and the device; they need a hands-on test. It does not publish the game, provide downloads or updates, or prove Steam ownership.
