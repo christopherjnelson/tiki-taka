@@ -7,7 +7,7 @@ This is a local test workflow. Adding the build as a non-Steam game costs nothin
 1. Close any running desktop game, then build the Electron package with `npm run electron:pack`.
 2. From the repository root, confirm that this file exists and is executable:
 
-   `release/electron/tiki-taka-1.0.0-x86_64.AppImage`
+   `release/electron/tiki-taka-1.1.1-x86_64.AppImage`
 
 3. Launch Steam normally in the same desktop session as the controller.
 4. Choose **Games → Add a Non-Steam Game to My Library**.
