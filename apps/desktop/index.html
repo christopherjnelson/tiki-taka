@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#100b25" />
+    <meta
+      name="description"
+      content="Four players. One ball. Endless possibilities. A single-player possession game about finding your rhythm."
+    />
+    <title>tiki-taka — No goals. All flow.</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to the court</a>
+    <button
+      id="sidebar-backdrop"
+      class="sidebar-backdrop"
+      type="button"
+      aria-label="Close menu"
+      tabindex="-1"
+    ></button>
+    <div class="app-shell">
+      <aside id="game-sidebar" class="sidebar" aria-label="Game navigation">
+        <button id="sidebar-close" type="button" aria-label="Close menu">
+          ×
+        </button>
+        <a class="brand" href="./" aria-label="tiki-taka home"
+          ><span class="brand-mark" aria-hidden="true"
+            ><i></i><i></i><i></i></span
+          >tiki-taka</a
+        >
+        <p class="brand-tagline">NO GOALS. ALL FLOW.</p>
+        <div class="sidebar-rule"></div>
+        <button id="home-button" class="sidebar-home" type="button">
+          <span aria-hidden="true">⌂</span> Home
+        </button>
+        <p class="section-label">YOUR GAME</p>
+        <nav class="mode-nav" aria-label="Game mode">
+          <button
+            class="mode-button active"
+            data-mode="career"
+            aria-pressed="true"
+          >
+            <span class="nav-symbol" aria-hidden="true">↗</span> World tour
+            <span class="nav-arrow" aria-hidden="true">→</span>
+          </button>
+          <button class="mode-button" data-mode="daily" aria-pressed="false">
+            <span class="nav-symbol" aria-hidden="true">◷</span> Daily circuit
+          </button>
+          <button class="mode-button" data-mode="endless" aria-pressed="false">
+            <span class="nav-symbol" aria-hidden="true">∞</span> Endless flow
+          </button>
+          <button class="mode-button" data-mode="practice" aria-pressed="false">
+            <span class="nav-symbol" aria-hidden="true">◇</span> Free practice
+          </button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="utility-buttons sidebar-utilities">
+            <button id="help-button">
+              <span aria-hidden="true">?</span> How to play</button
+            ><button
+              id="sound-button"
+              aria-pressed="false"
+              title="Toggle sound"
+            >
+              Sound off
+            </button>
+            <button id="settings-button" type="button" aria-haspopup="dialog">
+              <span aria-hidden="true">⚙</span> Settings
+            </button>
+            <button id="play-view-button" type="button" aria-pressed="false">
+              <span aria-hidden="true">◇</span> Play view
+            </button>
+            <button id="fullscreen-button" type="button">
+              <span aria-hidden="true">⌗</span> Fullscreen
+            </button>
+            <button id="theme-button" type="button" aria-pressed="false">
+              <span aria-hidden="true">◐</span> Light
+            </button>
+            <button id="account-button" type="button">
+              <span aria-hidden="true">◎</span> Local profile
+            </button>
+          </div>
+          <p class="sidebar-note">A little space. A beautiful game.</p>
+        </div>
+      </aside>
+
+      <main id="main" class="main" tabindex="-1">
+        <header class="workspace-bar">
+          <button
+            id="sidebar-toggle"
+            type="button"
+            aria-controls="game-sidebar"
+            aria-expanded="true"
+          >
+            ☰ Menu
+          </button>
+          <span id="workspace-label">Home</span>
+          <button id="arena-home-button" type="button">Home</button>
+        </header>
+        <section id="home-view" class="home-view" aria-labelledby="home-title">
+          <div class="home-hero">
+            <p class="eyebrow">THE POSSESSION CLUB</p>
+            <h1 id="home-title">Find your flow.</h1>
+            <p>
+              Four players. One ball. Build rhythm, beat the press, and take
+              your game around the world.
+            </p>
+            <button id="home-continue" class="primary-button" type="button">
+              Continue tour ↗
+            </button>
+            <p id="home-continue-copy">The Courtyard · Lisbon</p>
+          </div>
+          <div class="home-modes" aria-label="Choose a game mode">
+            <button data-home-mode="career">
+              <strong>World tour</strong
+              ><span>Clear six venues and collect every star.</span>
+            </button>
+            <button data-home-mode="daily">
+              <strong>Daily circuit</strong
+              ><span>A fresh seeded challenge every day.</span>
+            </button>
+            <button data-home-mode="endless">
+              <strong>Endless flow</strong
+              ><span>Keep the run alive as the press builds.</span>
+            </button>
+            <button data-home-mode="practice">
+              <strong>Free practice</strong
+              ><span>Learn the rhythm without a turnover limit.</span>
+            </button>
+          </div>
+          <section class="home-progress" aria-label="Player progress">
+            <div>
+              <span class="section-label">YOUR LEVEL</span
+              ><strong id="level-label">Level 1 · New arrival</strong>
+              <div class="progress-track"><span id="xp-fill"></span></div>
+              <p id="xp-label">0 XP · Every pass is progress</p>
+            </div>
+            <dl>
+              <div>
+                <dt>Stars</dt>
+                <dd id="home-stars">0</dd>
+              </div>
+              <div>
+                <dt>Courts cleared</dt>
+                <dd id="home-cleared">0 / 6</dd>
+              </div>
+              <div>
+                <dt>Best flow</dt>
+                <dd id="home-best">—</dd>
+              </div>
+              <div>
+                <dt>Games</dt>
+                <dd id="home-games">0</dd>
+              </div>
+              <div>
+                <dt>Total passes</dt>
+                <dd id="home-total-passes">0</dd>
+              </div>
+              <div>
+                <dt>Best one-touch</dt>
+                <dd id="home-best-one-touch">0</dd>
+              </div>
+            </dl>
+          </section>
+          <section id="home-tour" class="home-tour">
+            <div class="tour-heading">
+              <div>
+                <p class="section-label">THE WORLD TOUR</p>
+                <h2>Choose your court.</h2>
+              </div>
+              <span>06 COURTS</span>
+            </div>
+            <div
+              id="court-list"
+              class="court-list"
+              aria-label="Choose a court"
+            ></div>
+          </section>
+        </section>
+        <section id="arena-view" class="arena-view" hidden>
+          <section class="court-heading" aria-labelledby="court-title">
+            <div>
+              <span id="mode-label" class="mode-label"
+                >SINGLE PLAYER / WORLD TOUR</span
+              >
+              <p id="eyebrow" class="eyebrow">01 / LISBON, PORTUGAL</p>
+              <h1 id="court-title">The Courtyard<span>.</span></h1>
+              <p id="court-description">
+                Room to breathe. Find the spare player and keep it moving.
+              </p>
+            </div>
+            <div class="court-stamp" aria-hidden="true">
+              <span>KEEP THE</span><strong>BALL</strong
+              ><span>KEEP THE FLOW</span>
+            </div>
+          </section>
+
+          <section class="game-panel" aria-label="Possession game">
+            <div class="scoreboard" aria-label="Match statistics">
+              <div class="stat score-stat">
+                <span id="score-label" class="stat-label">FLOW SCORE</span
+                ><strong id="score-value">000</strong>
+              </div>
+              <div class="stat">
+                <span class="stat-label">ON THE CLOCK</span
+                ><strong id="time-value">1:15</strong>
+              </div>
+              <div class="stat">
+                <span class="stat-label">MULTIPLIER</span
+                ><strong id="combo-value">×1</strong>
+              </div>
+              <div class="stat lives-stat">
+                <span class="stat-label">POSSESSIONS</span
+                ><strong id="lives-value">● ● ●</strong>
+              </div>
+              <button
+                id="pause-button"
+                class="pause-button"
+                aria-label="Pause game"
+                title="Pause (Esc)"
+                disabled
+              >
+                <span aria-hidden="true">Ⅱ</span>
+              </button>
+            </div>
+            <div id="court-wrap" class="court-wrap">
+              <canvas
+                id="court"
+                width="1000"
+                height="620"
+                tabindex="0"
+                aria-label="Possession court. You control four cream-colored players against orange defenders. Move the ball carrier with WASD or arrows. Pass with Space or player numbers 1 to 4. Full instructions in How to play."
+                >Your browser needs canvas support to play tiki-taka.</canvas
+              >
+              <div class="court-corner-label" aria-hidden="true">
+                TIKI-TAKA SOCIAL CLUB
+              </div>
+              <div id="game-overlay" class="game-overlay">
+                <div class="invitation">
+                  <p id="overlay-kicker" class="eyebrow">
+                    WELCOME TO THE COURTYARD
+                  </p>
+                  <h2 id="overlay-title">Find your flow.</h2>
+                  <p id="overlay-copy">
+                    Four players. One ball. No goals.<br />Outthink the press.
+                    Keep the beautiful game moving.
+                  </p>
+                  <button id="start-button" class="primary-button">
+                    Play the court <span aria-hidden="true">↗</span></button
+                  ><button
+                    id="secondary-button"
+                    class="secondary-button"
+                    hidden
+                  >
+                    Try again
+                  </button>
+                  <p id="invitation-note" class="invitation-note">
+                    75 SECONDS · 3 POSSESSIONS · YOUR RHYTHM
+                  </p>
+                </div>
+              </div>
+              <div
+                id="game-announcement"
+                class="game-announcement"
+                aria-live="polite"
+                aria-atomic="true"
+              ></div>
+            </div>
+            <div class="court-toolbar">
+              <div class="target-info">
+                <span class="target-dot" aria-hidden="true"></span
+                ><span id="target-label">Find the open player</span>
+              </div>
+              <div class="play-actions">
+                <button id="pass-button" title="Pass (Space)" disabled>
+                  Pass <kbd>SPACE</kbd></button
+                ><button
+                  id="bank-button"
+                  aria-pressed="false"
+                  title="Toggle wall pass (B)"
+                  disabled
+                >
+                  Wall pass <kbd>B</kbd></button
+                ><button
+                  id="focus-button"
+                  aria-pressed="false"
+                  title="Earn Focus with wall passes, triangles, or bonus zones. Toggle here or hold E."
+                  disabled
+                >
+                  Focus
+                  <span id="focus-value" class="focus-value">0.0 / 5s</span>
+                  <kbd>E</kbd
+                  ><span
+                    id="focus-meter"
+                    class="focus-track"
+                    role="meter"
+                    aria-label="Focus reserve"
+                    aria-valuemin="0"
+                    aria-valuemax="5"
+                    aria-valuenow="0"
+                    aria-valuetext="0.0 of 5 seconds"
+                    ><span id="focus-fill"></span
+                  ></span>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <div
+            id="touch-controls"
+            class="touch-controls"
+            aria-label="Touch game controls"
+          >
+            <div
+              id="joystick"
+              class="joystick"
+              aria-label="Drag to move the ball carrier"
+            >
+              <span class="joystick-cross" aria-hidden="true"></span
+              ><span id="joystick-thumb"></span>
+            </div>
+            <span class="touch-hint">MOVE</span>
+            <div class="touch-actions">
+              <button
+                id="touch-focus"
+                aria-pressed="false"
+                title="Earn Focus with wall passes, triangles, or bonus zones."
+                disabled
+              >
+                <span>Focus</span
+                ><span id="touch-focus-value" class="touch-focus-value"
+                  >0.0 / 5s</span
+                ><span class="touch-focus-track" aria-hidden="true"
+                  ><span id="touch-focus-fill"></span
+                ></span></button
+              ><button id="touch-bank" aria-pressed="false" disabled>
+                Wall</button
+              ><button id="touch-pass" disabled>
+                Pass <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="below-court">
+            <section class="objective-card" aria-label="Court objective">
+              <div class="card-heading">
+                <span class="section-label">THE OBJECTIVE</span
+                ><span id="best-label">PERSONAL BEST —</span>
+              </div>
+              <p id="goal-label">
+                Reach 180 points &amp; last until the whistle.
+              </p>
+              <div class="goal-track"><span id="goal-fill"></span></div>
+            </section>
+            <section class="tactic-card" aria-label="Playing style">
+              <div class="card-heading">
+                <label class="section-label" for="tactic-select"
+                  >YOUR PLAYING STYLE</label
+                ><span aria-hidden="true">↔</span>
+              </div>
+              <select id="tactic-select">
+                <option value="balanced">Playmaker</option>
+                <option value="runner">Mover</option>
+                <option value="maestro">Conductor</option>
+              </select>
+              <p id="tactic-description">A little more time to see the pass.</p>
+            </section>
+          </div>
+          <footer class="game-footer">
+            <p>
+              <kbd
+                ><span data-binding="moveUp">W</span>
+                <span data-binding="moveLeft">A</span>
+                <span data-binding="moveDown">S</span>
+                <span data-binding="moveRight">D</span></kbd
+              >
+              move <span class="footer-divider">/</span>
+              <kbd
+                ><span data-binding="direct1">1</span> –
+                <span data-binding="direct4">4</span></kbd
+              >
+              pass <span class="footer-divider">/</span>
+              <kbd data-binding="smartPass">SPACE</kbd> smart pass
+              <span class="footer-divider">/</span>
+              <kbd data-binding="focusHold">E</kbd> Focus
+              <span class="footer-divider">/</span> earn it: wall · zone ·
+              triangle
+            </p>
+            <span>GOOD FOOTBALL IS A CONVERSATION.</span>
+          </footer>
+        </section>
+      </main>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="account-dialog" aria-labelledby="account-title">
+      <div class="dialog-top">
+        <p class="eyebrow">THIS DEVICE / LOCAL DEMO</p>
+        <button
+          id="close-account"
+          type="button"
+          aria-label="Close local profiles"
+        >
+          ×
+        </button>
+      </div>
+      <h2 id="account-title">Local profiles.</h2>
+      <p class="account-note">
+        These passwordless demo profiles stay only in this browser. They are not
+        online accounts and do not sync.
+      </p>
+      <div id="account-guest">
+        <div class="account-grid">
+          <form id="register-form">
+            <h3>Create a profile</h3>
+            <label
+              >Email<input
+                id="register-email"
+                name="email"
+                type="email"
+                required
+                autocomplete="email" /></label
+            ><label
+              >Username<input
+                id="register-username"
+                name="username"
+                required
+                minlength="2"
+                autocomplete="username" /></label
+            ><button class="primary-button" type="submit">
+              Create local profile
+            </button>
+          </form>
+          <form id="login-form">
+            <h3>Use a profile</h3>
+            <label
+              >Email or username<input
+                id="login-identifier"
+                name="identifier"
+                required
+                autocomplete="username" /></label
+            ><button class="primary-button" type="submit">
+              Continue locally
+            </button>
+          </form>
+        </div>
+      </div>
+      <div id="account-profile" hidden>
+        <p>Playing locally as <strong id="profile-username"></strong></p>
+        <p id="profile-email"></p>
+        <button id="logout-button" class="secondary-button" type="button">
+          Return to guest
+        </button>
+      </div>
+      <p
+        id="account-status"
+        class="binding-status"
+        role="status"
+        aria-live="polite"
+      ></p>
+    </dialog>
+    <dialog id="settings-dialog" aria-labelledby="settings-title">
+      <div class="dialog-top">
+        <p class="eyebrow">PLAYER SETUP / CONTROL ROOM</p>
+        <button id="close-settings" type="button" aria-label="Close settings">
+          ×
+        </button>
+      </div>
+      <h2 id="settings-title">Tune your setup.</h2>
+      <div class="settings-preset">
+        <label for="preset-select">CONTROL PRESET</label>
+        <select id="preset-select">
+          <option value="wasd" selected>WASD</option>
+          <option value="arrows">Arrow keys</option>
+          <option value="left-hand">Left hand</option>
+          <option value="custom" disabled>Custom</option>
+        </select>
+      </div>
+      <p class="settings-note">
+        Choose a preset or select any key below to remap it. Each action
+        supports two bindings.
+      </p>
+      <div
+        id="bindings-list"
+        class="bindings-list"
+        aria-label="Keyboard bindings"
+      ></div>
+      <p
+        id="binding-status"
+        class="binding-status"
+        role="status"
+        aria-live="polite"
+      ></p>
+      <button id="reset-bindings" class="secondary-button" type="button">
+        Reset bindings
+      </button>
+    </dialog>
+    <dialog id="help-dialog" aria-labelledby="help-title">
+      <div class="dialog-top">
+        <p class="eyebrow">THE POSSESSION CLUB / FIELD NOTES</p>
+        <button id="close-help" aria-label="Close instructions">×</button>
+      </div>
+      <h2 id="help-title">Keep it moving.</h2>
+      <p class="help-lead">
+        You have four players, three possessions, and one job: keep the ball.
+        There are no goals and no shooting. Your score comes from the way you
+        play.
+      </p>
+      <div class="help-grid">
+        <section>
+          <h3>Find your rhythm</h3>
+          <p>
+            Move the player with the ball to open a passing lane. Your teammates
+            find space automatically. Orange defenders press harder the longer
+            you hold it. Pass before they arrive.
+          </p>
+          <p>
+            <strong>Hit the target and survive the clock</strong> to clear a
+            court. Three turnovers end the match. Earn XP, collect court stars,
+            and travel the world.
+          </p>
+          <h3>Make something beautiful</h3>
+          <ul>
+            <li>
+              <strong>Clean pass:</strong> 12 points. A return pass earns 6.
+            </li>
+            <li>
+              <strong>Triangle:</strong> A → B → C → A adds 35 points and earns
+              1.5 seconds of Focus.
+            </li>
+            <li>
+              <strong>Zone:</strong> receive in the highlighted circle for 25
+              extra points and 1 second of Focus.
+            </li>
+            <li>
+              <strong>Wall pass:</strong> bank off the boundary for 18 extra
+              points and 0.5 seconds of Focus.
+            </li>
+          </ul>
+          <p>
+            Your multiplier climbs every four completed passes, up to ×5. It
+            applies to pass, triangle, wall, and zone points and resets after a
+            turnover. One-touch passes add 5; every tenth adds another 50.
+          </p>
+          <p>
+            <strong>Queue your next pass before the ball arrives.</strong>
+            Quick releases build one-touch streaks; 10 gets the crowd going.
+          </p>
+        </section>
+        <section>
+          <h3>Your controls</h3>
+          <dl class="control-list">
+            <div>
+              <dt>Move</dt>
+              <dd>
+                <span data-binding="moveUp">W</span
+                ><span data-binding="moveLeft">A</span
+                ><span data-binding="moveDown">S</span
+                ><span data-binding="moveRight">D</span> / drag empty court
+              </dd>
+            </div>
+            <div>
+              <dt>Pass to player</dt>
+              <dd>
+                <span data-binding="direct1">1</span>–<span
+                  data-binding="direct4"
+                  >4</span
+                >
+                / click or tap teammate
+              </dd>
+            </div>
+            <div>
+              <dt>Smart pass</dt>
+              <dd><span data-binding="smartPass">Space</span> / Pass button</dd>
+            </div>
+            <div>
+              <dt>Wall pass</dt>
+              <dd>
+                <span data-binding="wallToggle">B</span> to toggle / hold
+                <span data-binding="wallHold">Shift</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Focus</dt>
+              <dd>
+                Hold <span data-binding="focusHold">E</span> / Focus button to
+                toggle
+              </dd>
+            </div>
+            <div>
+              <dt>Pause</dt>
+              <dd><span data-binding="pause">Esc</span></dd>
+            </div>
+          </dl>
+          <p>
+            <strong>Focus slows the action</strong> and gives you time to find
+            the next pass. Each round starts empty. Successful normal-speed wall
+            passes earn 0.5 seconds, bonus zones earn 1 second, and triangles
+            earn 1.5 seconds. Rewards stack up to your tactic’s reserve (5 / 3 /
+            4 seconds); plain passes and passes slowed by Focus earn none. You
+            cannot earn while Focus is active. After it runs out, release E or
+            LT before using newly earned Focus.
+          </p>
+          <p>
+            <strong>Gamepad:</strong> left stick moves, right stick aims. A
+            passes, X makes a wall pass, LT holds focus, Start pauses. Use the
+            D-pad and A in menus.
+          </p>
+          <p>
+            <strong>Touch:</strong> move with the joystick, tap a teammate to
+            pass, or use the Pass, Wall and Focus buttons.
+          </p>
+        </section>
+      </div>
+      <div class="help-modes">
+        <p>
+          <strong>Daily circuit</strong> brings a new seeded challenge each day.
+          <strong>Endless flow</strong> gets tougher over time; each triangle
+          adds 5 seconds. <strong>Free practice</strong> lets you learn without
+          a turnover limit.
+        </p>
+      </div>
+      <p class="help-footnote">
+        Progress saves on this device. The daily circuit resets at midnight UTC.
+      </p>
+    </dialog>
+    <noscript
+      ><div class="noscript">
+        Enable JavaScript to play tiki-taka.
+      </div></noscript
+    >
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "@tiki-taka/engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./game": "./src/game.js",
+    "./progress": "./src/progress.js",
+    "./settings": "./src/settings.js",
+    "./venues": "./src/venues.js"
+  }
+}

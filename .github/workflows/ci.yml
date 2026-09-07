@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web and browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify frozen mobile sources
+        run: npm run test:mobile-freeze
+      - name: Run unit tests
+        run: npm test
+      - name: Build desktop and mobile web apps
+        run: npm run build
+      - name: Run browser suites
+        run: npm run test:web
+      - name: Upload browser screenshots on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-failure-screenshots
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  electron:
+    name: Electron Linux package and smoke test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ELECTRON_OUTPUT: release/ci-check
+      ELECTRON_EXECUTABLE: release/ci-check/linux-unpacked/tiki-taka
+      ELECTRON_STABILITY_MS: 120000
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install private display dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes xvfb icewm
+      - name: Package Linux application
+        run: npm run electron:pack
+      - name: Enable the packaged Chromium sandbox helper
+        run: |
+          sudo chown root:root release/ci-check/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 release/ci-check/linux-unpacked/chrome-sandbox
+      - name: Run packaged Electron smoke test on private Xvfb
+        run: npm run test:electron
+      - name: Upload AppImage
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tiki-taka-linux-appimage
+          path: release/ci-check/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
+
+  android:
+    name: Android debug build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: Set up Java 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+      - name: Install Android API 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify frozen mobile sources before sync
+        run: npm run test:mobile-freeze
+      - name: Build web assets and sync Capacitor
+        run: npm run mobile:sync
+      - name: Verify frozen mobile sources after sync
+        run: npm run test:mobile-freeze
+      - name: Assemble debug APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleDebug --console=plain
+      - name: Upload debug APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tiki-taka-android-debug
+          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

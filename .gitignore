@@ -1,0 +1,41 @@
+# Dependencies and local tooling
+node_modules/
+.tooling/
+
+# Build and package output
+dist/
+release/
+public/downloads/
+apps/mobile/www/
+apps/mobile/android/.gradle/
+apps/mobile/android/**/build/
+
+# Test output
+test-results/
+coverage/
+.playwright/
+playwright-report/
+tests/.tmp-*
+
+# Machine-local Android configuration and signing material
+apps/mobile/android/local.properties
+*.jks
+*.keystore
+*.key
+*.p12
+*.pem
+
+# Environment files and logs
+.env
+.env.*
+!.env.example
+*.log
+npm-debug.log*
+
+# Editor and operating-system metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

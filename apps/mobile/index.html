@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"
+    />
+    <meta name="theme-color" content="#090b20" />
+    <title>Tiki Taka Mobile</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main id="app">
+      <section
+        id="home-screen"
+        class="screen active"
+        aria-labelledby="home-title"
+      >
+        <header class="hero">
+          <p>THE POSSESSION CLUB</p>
+          <h1 id="home-title">Find your<br /><em>flow.</em></h1>
+          <button id="continue-button" class="cta">
+            Play now <span>↗</span></button
+          ><small id="continue-copy">Lisbon · The Courtyard</small>
+        </header>
+        <div id="mode-grid" class="mode-grid" aria-label="Choose game mode">
+          <button data-mode="career">
+            <b>World tour</b><span>Six courts. One rhythm.</span>
+          </button>
+          <button data-mode="daily">
+            <b>Daily circuit</b><span>Today’s seeded test.</span>
+          </button>
+          <button data-mode="endless">
+            <b>Endless flow</b><span>Keep it alive.</span>
+          </button>
+          <button data-mode="practice">
+            <b>Free practice</b><span>Learn every touch.</span>
+          </button>
+        </div>
+        <div class="tour">
+          <div class="section-title">
+            <b>WORLD TOUR</b><span id="tour-count">0 / 6</span>
+          </div>
+          <div id="court-list"></div>
+        </div>
+      </section>
+
+      <section
+        id="game-screen"
+        class="screen game-screen"
+        aria-label="Possession game"
+      >
+        <header class="game-head">
+          <button id="game-back" aria-label="Back home">‹</button>
+          <div>
+            <small id="mode-label">WORLD TOUR</small>
+            <h1 id="court-title">The Courtyard</h1>
+          </div>
+          <button id="pause-button" aria-label="Pause">Ⅱ</button>
+        </header>
+        <div class="scorebar">
+          <span><small>FLOW</small><b id="score-value">000</b></span
+          ><span><small>TIME</small><b id="time-value">1:15</b></span
+          ><span><small>STREAK</small><b id="streak-value">×0</b></span
+          ><span
+            ><small>FOCUS</small><b id="focus-value">0.0 / 5</b
+            ><i><i id="focus-fill"></i></i></span
+          ><span><small>LIVES</small><b id="lives-value">● ● ●</b></span>
+        </div>
+        <div id="court-shell">
+          <canvas
+            id="court"
+            width="1000"
+            height="620"
+            tabindex="0"
+            aria-label="Possession court"
+          ></canvas>
+          <div id="game-overlay">
+            <h2 id="overlay-title">Keep it beautiful.</h2>
+            <p id="overlay-copy">Move. Pass. Beat the press.</p>
+            <button id="start-button" class="cta">Kick off ↗</button>
+          </div>
+        </div>
+        <div id="touch-controls">
+          <div id="joystick" aria-label="Move">
+            <i></i><span id="joystick-thumb"></span>
+          </div>
+          <div class="actions">
+            <button
+              id="focus-action"
+              aria-label="Hold to spend earned Focus"
+              title="Hold to spend earned Focus"
+            >
+              FOCUS <small>HOLD</small></button
+            ><button id="wall-action">WALL</button
+            ><button id="pass-action">PASS <span>↗</span></button>
+          </div>
+        </div>
+      </section>
+
+      <section id="profile-screen" class="screen">
+        <header class="page-head">
+          <p>YOUR CLUB</p>
+          <h1>Profile.</h1>
+        </header>
+        <div id="profile-card" class="card">
+          <h2 id="profile-name">Guest player</h2>
+          <p id="profile-status">Progress stays on this device.</p>
+          <div class="stats">
+            <span><b id="stat-games">0</b><small>Games</small></span
+            ><span><b id="stat-score">0</b><small>Best flow</small></span
+            ><span><b id="stat-passes">0</b><small>Passes</small></span
+            ><span><b id="stat-touch">0</b><small>Best one-touch</small></span>
+          </div>
+          <button id="logout-button" hidden>Sign out</button>
+        </div>
+        <div class="auth-grid">
+          <form id="register-form" class="card">
+            <h2>Create local profile</h2>
+            <input
+              name="email"
+              type="email"
+              autocomplete="email"
+              placeholder="Email"
+              required
+            /><input
+              name="username"
+              autocomplete="username"
+              placeholder="Username"
+              minlength="2"
+              required
+            /><button class="cta">Register</button>
+          </form>
+          <form id="login-form" class="card">
+            <h2>Sign in</h2>
+            <input
+              name="identifier"
+              autocomplete="username"
+              placeholder="Email or username"
+              required
+            /><button class="cta">Sign in</button>
+          </form>
+        </div>
+        <p id="auth-message" role="status"></p>
+      </section>
+
+      <section id="settings-screen" class="screen">
+        <header class="page-head">
+          <p>CONTROL ROOM</p>
+          <h1>Settings.</h1>
+        </header>
+        <div class="card settings-list">
+          <label
+            >Theme
+            <select id="theme-select">
+              <option value="dark">Midnight</option>
+              <option value="light">Daylight</option>
+            </select></label
+          ><label
+            >Sound <input id="sound-toggle" type="checkbox" checked /></label
+          ><label
+            >Playing style
+            <select id="settings-tactic">
+              <option value="balanced">Playmaker</option>
+              <option value="runner">Mover</option>
+              <option value="maestro">Conductor</option>
+            </select></label
+          >
+          <label
+            >Wall pass button
+            <select id="wall-mode-select">
+              <option value="armed">Arm, then pass</option>
+              <option value="instant">Instant wall pass</option>
+            </select></label
+          >
+          <p>
+            Arm, then pass previews the bank route. Instant fires a wall pass
+            with one touch.
+          </p>
+          <p>
+            Demo profiles and progress are stored only on this device. No cloud
+            sync.
+          </p>
+        </div>
+      </section>
+    </main>
+    <nav id="bottom-nav" aria-label="Main navigation">
+      <button data-screen="home" class="active">⌂<span>Home</span></button
+      ><button data-screen="game">◇<span>Play</span></button
+      ><button data-screen="profile">○<span>Profile</span></button
+      ><button data-screen="settings">⚙<span>Settings</span></button>
+    </nav>
+    <div id="toast" role="status"></div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+appId: com.tikitaka.game
+productName: tiki-taka
+artifactName: tiki-taka-${version}-${arch}.${ext}
+directories:
+  app: apps/electron
+  output: release/electron
+files:
+  - main.mjs
+  - "!**/node_modules/**"
+extraResources:
+  - from: dist/desktop
+    to: desktop
+asar: true
+linux:
+  category: Game
+  executableName: tiki-taka
+  syncDesktopName: true
+  icon: public/icon-512.png
+  target:
+    - target: dir
+      arch: [x64]
+    - target: AppImage
+      arch: [x64]
