@@ -15,6 +15,8 @@ const child = spawn(
     "--linux",
     "dir",
     "AppImage",
+    "--publish",
+    "never",
     "--config.directories.output",
     output,
   ],
