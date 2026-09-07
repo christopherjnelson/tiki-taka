@@ -32,7 +32,7 @@ try {
 
 const browserCandidates = [
   process.env.PLAYWRIGHT_EXECUTABLE_PATH,
-  '/opt/google/chrome/chrome',
+  browserName === 'chromium' ? '/opt/google/chrome/chrome' : undefined,
 ].filter(Boolean);
 const executablePath = browserCandidates.find(candidate => {
   try { accessSync(candidate, constants.X_OK); return true; } catch { return false; }
@@ -138,6 +138,14 @@ await check('desktop gameplay, controls, progression, help, and full run', async
 
   await page.locator('#start-button').click();
   await observeGame(page);
+  // Keep this round focused on input and exact Focus rewards, independent of
+  // runner speed. Restarting below and the separate career test retain live AI.
+  await page.evaluate(() => {
+    const game = window.__observedGame.game;
+    game.defenders = [];
+    game.zone = { x: -1000, y: -1000, r: 1 };
+    game.zoneTimer = Infinity;
+  });
   assert.equal(await page.locator('#game-overlay').isHidden(), true);
   assert.equal(await page.locator('#tactic-select').isDisabled(), true);
 
@@ -172,7 +180,11 @@ await check('desktop gameplay, controls, progression, help, and full run', async
   const focusAfter = await focusSeconds(page);
   assert.ok(focusAfter < focusBefore, `focus meter should drain (${focusBefore} → ${focusAfter})`);
 
-  await page.keyboard.press('Digit2');
+  const keyboardTarget = await page.evaluate(() => {
+    const game = window.__observedGame.game;
+    return game.players.find(player => player.id !== game.carrier).id + 1;
+  });
+  await page.keyboard.press(`Digit${keyboardTarget}`);
   const keyboardScore = await waitForScore(page);
   await page.waitForFunction(() => !window.__observedGame.game.ball && window.__observedGame.game.lock === 0 && window.__observedGame.game.passCooldown === 0);
   await page.keyboard.press('KeyB');
