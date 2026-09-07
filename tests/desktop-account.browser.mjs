@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { accessSync, constants, statSync } from "node:fs";
+import { freePort } from "./free-port.mjs";
 
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
 );
-const baseURL = process.env.BASE_URL || "http://localhost:5173";
+const baseURL = process.env.BASE_URL || `http://localhost:${await freePort()}`;
 let server;
 try {
   if (!(await fetch(baseURL)).ok) throw new Error("server unavailable");
