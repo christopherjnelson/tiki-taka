@@ -382,6 +382,34 @@ await check('portrait and landscape touch layouts remain usable without horizont
 });
 
 await check('service worker serves a complete app reload offline', async () => {
+  // The only service worker the app ships is the one scripts/build.mjs generates
+  // into dist/desktop, so this suite exercises the built output rather than the
+  // raw dev sources.
+  try {
+    accessSync(new URL('../dist/desktop/sw.js', import.meta.url), constants.R_OK);
+  } catch {
+    throw new Error('dist/desktop/sw.js is missing; run `npm run build` before the browser suites');
+  }
+  const buildPort = Number(process.env.BUILD_PORT || Number(new URL(baseURL).port || 5173) + 1);
+  const buildURL = `http://localhost:${buildPort}`;
+  const buildServer = spawn(process.execPath, ['scripts/serve.mjs'], {
+    cwd: new URL('..', import.meta.url),
+    env: { ...process.env, PORT: String(buildPort), SERVE_DIR: 'dist/desktop' },
+    stdio: 'ignore',
+  });
+  try {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      try { if ((await fetch(buildURL)).ok) break; } catch {}
+      if (attempt === 49) throw new Error(`Could not start build server at ${buildURL}`);
+    }
+    await offlineReload(buildURL);
+  } finally {
+    buildServer.kill();
+  }
+});
+
+async function offlineReload(baseURL) {
   const context = await browser.newContext({ serviceWorkers: 'allow' });
   const page = await context.newPage();
   const errors = watchErrors(page);
@@ -399,7 +427,7 @@ await check('service worker serves a complete app reload offline', async () => {
   assert.deepEqual(errors, []);
   await context.setOffline(false);
   await context.close();
-});
+}
 
 await browser.close();
 server?.kill();
