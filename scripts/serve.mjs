@@ -17,6 +17,16 @@ const types = {
   ".txt": "text/plain",
   ".apk": "application/vnd.android.package-archive",
 };
+// Kept identical to the policy apps/electron/main.mjs attaches to tiki://
+// responses. The desktop page also carries a CSP meta tag, but a meta element
+// cannot deliver frame-ancestors, so only this header gives the browser and
+// preview builds clickjacking protection.
+const securityHeaders = {
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "Referrer-Policy": "no-referrer",
+};
 const rootAssets = [
   "manifest.webmanifest",
   "icon.svg",
@@ -28,6 +38,9 @@ const appSource = (relative, app) =>
   relative.startsWith(path.join("apps", app, "src") + path.sep);
 const publicFile = (relative) =>
   relative === "index.html" ||
+  // The root redirect page loads this instead of an inline script, which the
+  // Content-Security-Policy above would block.
+  relative === "redirect.js" ||
   // The generated worker only exists in a build; there is no dev-time sw.js.
   (servingBuild && relative === "sw.js") ||
   rootAssets.includes(relative) ||
@@ -50,6 +63,7 @@ http
       );
       if (!servingBuild && (pathname === "/apk" || pathname === "/apk/")) {
         res.writeHead(302, {
+          ...securityHeaders,
           Location: "/public/downloads/tiki-taka-debug.apk",
           "Cache-Control": "no-store",
         }).end();
@@ -80,21 +94,22 @@ http
             : aliasedPath;
       const file = path.resolve(root, "." + requestPath);
       if (!file.startsWith(root + path.sep)) {
-        res.writeHead(403).end();
+        res.writeHead(403, securityHeaders).end();
         return;
       }
       if (!publicFile(path.relative(root, file))) {
-        res.writeHead(404).end("Not found");
+        res.writeHead(404, securityHeaders).end("Not found");
         return;
       }
       if (!(await stat(file)).isFile()) throw new Error("not a file");
       res.writeHead(200, {
+        ...securityHeaders,
         "Content-Type": types[path.extname(file)] || "application/octet-stream",
         "Cache-Control": "no-cache",
       });
       res.end(await readFile(file));
     } catch {
-      res.writeHead(404).end("Not found");
+      res.writeHead(404, securityHeaders).end("Not found");
     }
   })
   .listen(port, process.env.HOST || "127.0.0.1", () =>
