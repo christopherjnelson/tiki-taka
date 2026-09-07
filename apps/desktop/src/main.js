@@ -1386,12 +1386,14 @@ applyView(view, { updateHash: false });
 requestAnimationFrame(frame);
 if (storageFallback)
   toast("Browser storage is unavailable. Progress will last for this session.");
-if ("serviceWorker" in navigator && location.protocol !== "tiki:") {
+if (
+  import.meta.env?.PROD &&
+  "serviceWorker" in navigator &&
+  location.protocol !== "tiki:"
+) {
   window.addEventListener("load", () => {
-    if (import.meta.env?.PROD)
-      navigator.serviceWorker
-        .register(`${import.meta.env.BASE_URL}sw.js`)
-        .catch(() => {});
-    else navigator.serviceWorker.register("/sw.js").catch(() => {});
+    navigator.serviceWorker
+      .register(`${import.meta.env.BASE_URL}sw.js`)
+      .catch(() => {});
   });
 }

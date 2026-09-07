@@ -22,7 +22,8 @@ const appSource = (relative, app) =>
   relative.startsWith(path.join("apps", app, "src") + path.sep);
 const publicFile = (relative) =>
   relative === "index.html" ||
-  relative === "sw.js" ||
+  // The generated worker only exists in a build; there is no dev-time sw.js.
+  (servingBuild && relative === "sw.js") ||
   ["manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"].includes(
     relative,
   ) ||
