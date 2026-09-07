@@ -1,4 +1,4 @@
-const CACHE = "tiki-taka-v7-desktop-split";
+const CACHE = "tiki-taka-v8-desktop-split";
 const ASSETS = [
   "./",
   "./index.html",
@@ -14,6 +14,13 @@ const ASSETS = [
   "./apps/desktop/index.html",
   "./apps/desktop/src/style.css",
   "./apps/desktop/src/main.js",
+  // The dev page lives at /apps/desktop/, so its page-relative manifest and
+  // icon links resolve here; the built page sits at the root and its own
+  // generated service worker caches them there.
+  "./apps/desktop/manifest.webmanifest",
+  "./apps/desktop/icon.svg",
+  "./apps/desktop/icon-192.png",
+  "./apps/desktop/icon-512.png",
   "./packages/engine/src/index.js",
   "./packages/engine/src/game.js",
   "./packages/engine/src/progress.js",
