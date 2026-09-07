@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { mkdir } from "node:fs/promises";
+import { freePort } from "./free-port.mjs";
 
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
 );
-const baseURL = process.env.BASE_URL || "http://localhost:5173";
+const baseURL = process.env.BASE_URL || `http://localhost:${await freePort()}`;
 const outputDir = new URL("../test-results/", import.meta.url);
 await mkdir(outputDir, { recursive: true });
 let server;
