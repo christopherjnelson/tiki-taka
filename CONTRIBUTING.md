@@ -48,6 +48,14 @@ npm run electron:pack
 
 Close a running packaged game before rebuilding it. `npm run test:electron` uses a private Xvfb display, icewm, and temporary user data; Xvfb and icewm must be installed. See [Steam testing](docs/STEAM-TESTING.md) for hands-on Steam Input checks.
 
+## Version numbers
+
+Three locations state the release version and must stay in sync: root `package.json`, `apps/electron/package.json`, and `versionName` (with `versionCode`) in `apps/mobile/android/app/build.gradle`.
+
+`apps/electron/package.json` is the one electron-builder reads, because `electron-builder.yml` sets `directories.app` to `apps/electron`; its version becomes the packaged artifact name.
+
+The Android file is inside the mobile freeze, so bumping it means deliberately reopening that freeze. Read [the freeze record](docs/MOBILE-FREEZE.md) first.
+
 ## Android and the mobile freeze
 
 Mobile 1.1.1 and the shared engine are frozen. Read [the freeze record](docs/MOBILE-FREEZE.md) before changing `apps/mobile/`, `packages/`, or shared mobile assets. Desktop-only work must pass:
