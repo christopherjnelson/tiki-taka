@@ -17,6 +17,12 @@ const types = {
   ".txt": "text/plain",
   ".apk": "application/vnd.android.package-archive",
 };
+const rootAssets = [
+  "manifest.webmanifest",
+  "icon.svg",
+  "icon-192.png",
+  "icon-512.png",
+];
 const appSource = (relative, app) =>
   relative === path.join("apps", app, "index.html") ||
   relative.startsWith(path.join("apps", app, "src") + path.sep);
@@ -24,9 +30,7 @@ const publicFile = (relative) =>
   relative === "index.html" ||
   // The generated worker only exists in a build; there is no dev-time sw.js.
   (servingBuild && relative === "sw.js") ||
-  ["manifest.webmanifest", "icon.svg", "icon-192.png", "icon-512.png"].includes(
-    relative,
-  ) ||
+  rootAssets.includes(relative) ||
   relative.startsWith(`assets${path.sep}`) ||
   relative.startsWith(`licenses${path.sep}`) ||
   relative.startsWith(`src${path.sep}`) ||
@@ -51,19 +55,22 @@ http
         }).end();
         return;
       }
+      // The dev server hosts the desktop page at /apps/desktop/, so its
+      // page-relative asset links arrive prefixed; the build serves them from
+      // the root beside index.html and needs no alias.
+      const devAsset = servingBuild
+        ? undefined
+        : rootAssets.find(
+            (name) =>
+              pathname === `/${name}` || pathname === `/apps/desktop/${name}`,
+          );
       const aliasedPath =
         pathname === "/mobile" || pathname === "/mobile/"
           ? "/apps/mobile/index.html"
           : pathname.startsWith("/mobile/")
             ? `/apps/mobile/${pathname.slice(8)}`
-            : !servingBuild &&
-                [
-                  "/manifest.webmanifest",
-                  "/icon.svg",
-                  "/icon-192.png",
-                  "/icon-512.png",
-                ].includes(pathname)
-              ? `/public${pathname}`
+            : devAsset
+              ? `/public/${devAsset}`
               : pathname;
       const requestPath =
         aliasedPath === "/"
