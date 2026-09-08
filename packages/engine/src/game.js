@@ -2,7 +2,14 @@ export const WIDTH = 1000,
   HEIGHT = 620;
 export const LIMITS = { left: 50, right: 950, top: 50, bottom: 570 };
 export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, wall: 0.5 };
-export const SPLIT_PRESS = { radius: 45, base: 50, tight: 50, perDefender: 0.3 };
+export const SPLIT_PRESS = { radius: 65, base: 50, tight: 50, perDefender: 0.3 };
+// Ordered by precedence: the label a pass shows is the first bonus it earned.
+export const BONUS_LABELS = {
+  split: "SPLIT THE PRESS",
+  triangle: "TRIANGLE",
+  zone: "ZONE BONUS",
+  wall: "WALL PLAY",
+};
 export const ONE_TOUCH = {
   window: 0.35,
   moveTolerance: 8,
@@ -245,8 +252,8 @@ export class Game {
     this.oneTouchEligible = false;
     this.queuedPass = null;
   }
-  emit(type, text, x, y) {
-    this.events.push({ type, text, x, y });
+  emit(type, text, x, y, extra) {
+    this.events.push({ type, text, x, y, ...extra });
   }
   bestTarget(aim) {
     const from = this.players[this.carrier];
@@ -353,13 +360,13 @@ export class Game {
     const multiplier = 1 + Math.min(4, Math.floor(this.combo / 4));
     const repeat = this.history.at(-2) === this.carrier;
     let points = (repeat ? 6 : 12) * multiplier;
-    let label = `+${points}`;
+    const bonuses = [];
     const p = this.players[this.carrier];
     let focusReward = 0;
     if (ball.bank) {
       this.banks++;
       points += 18 * multiplier;
-      label = "WALL PLAY";
+      bonuses.push("wall");
       focusReward += FOCUS_REWARDS.wall;
     }
     if (ball.split !== null) {
@@ -372,7 +379,7 @@ export class Game {
           (SPLIT_PRESS.base + SPLIT_PRESS.tight * ball.split) * countScale,
         ) * multiplier;
       this.splits++;
-      label = "SPLIT THE PRESS";
+      bonuses.push("split");
       focusReward += FOCUS_REWARDS.split;
     }
     this.history.push(this.carrier);
@@ -384,14 +391,14 @@ export class Game {
     ) {
       points += 35 * multiplier;
       this.triangles++;
-      label = "TRIANGLE";
+      bonuses.push("triangle");
       focusReward += FOCUS_REWARDS.triangle;
       if (this.config.endless) this.time += 5;
     }
     if (distance(p, this.zone) < this.zone.r) {
       points += 25 * multiplier;
       this.zones++;
-      label = "ZONE BONUS";
+      bonuses.push("zone");
       focusReward += FOCUS_REWARDS.zone;
       this.rotateZone();
     }
@@ -406,11 +413,15 @@ export class Game {
       points += oneTouchBonus;
     }
     this.score += points;
+    // Several bonuses can land on one pass; the label shows the best of them
+    // while `bonuses` carries the full list for the popup stack.
+    const best = Object.keys(BONUS_LABELS).find((key) => bonuses.includes(key));
     this.emit(
       "score",
-      `${label.startsWith("+") ? "PASS" : label} +${points}`,
+      `${best ? BONUS_LABELS[best] : "PASS"} +${points}`,
       p.x,
       p.y - 25,
+      { bonuses },
     );
     if (!ball.focusUsed && focusReward > 0) {
       const gained = Math.min(focusReward, this.tactic.focus - this.focus);

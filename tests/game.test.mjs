@@ -545,7 +545,7 @@ test('a lane with fewer than two close defenders is not a split', () => {
   completePass(empty, 1);
   assert.equal(empty.splits, 0);
   assert.equal(empty.score, 12);
-  const single = threadingGame([{ x: 450, y: 330 }, { x: 450, y: 520 }]);
+  const single = threadingGame([{ x: 450, y: 343 }, { x: 450, y: 520 }]);
   completePass(single, 1);
   assert.equal(single.turnovers, 0);
   assert.equal(single.splits, 0);
@@ -554,9 +554,9 @@ test('a lane with fewer than two close defenders is not a split', () => {
 });
 
 test('splitting two defenders earns the bonus, focus and its own label', () => {
-  const game = threadingGame([{ x: 450, y: 330 }, { x: 450, y: 270 }]);
+  const game = threadingGame([{ x: 450, y: 343 }, { x: 450, y: 257 }]);
   assert.equal(game.pass(1), true);
-  assert.ok(Math.abs(game.ball.split - 1 / 3) < 1e-9, 'the split is measured when the pass is struck');
+  assert.ok(Math.abs(game.ball.split - 22 / 65) < 1e-9, 'the split is measured when the pass is struck');
   game.defenders[0].y = 40; game.defenders[1].y = 560;
   for (let frame = 0; game.ball && frame < 600 && game.status === 'playing'; frame++) game.update(STEP);
   assert.equal(game.ball, null);
@@ -576,18 +576,19 @@ test('tighter splits outscore looser ones and top the bonus ladder', () => {
     assert.equal(game.splits, 1);
     return game.score - 12;
   };
-  const tight = bonus(22), loose = bonus(42);
+  const tight = bonus(22), loose = bonus(62);
   assert.ok(tight > loose, `tight ${tight} must beat loose ${loose}`);
-  assert.equal(tight, 76);
-  assert.equal(loose, 53);
+  assert.equal(tight, 83);
+  assert.equal(loose, 52);
   assert.ok(loose > 35, 'even the loosest split outscores a triangle');
   assert.equal(SPLIT_PRESS.base, 50);
   assert.equal(SPLIT_PRESS.base + SPLIT_PRESS.tight, 100);
-  assert.ok(bonus(21) === 77 && 77 <= SPLIT_PRESS.base + SPLIT_PRESS.tight, 'the tightest survivable split stays under the ceiling');
+  assert.equal(SPLIT_PRESS.radius, 65);
+  assert.ok(bonus(21) === 84 && 84 <= SPLIT_PRESS.base + SPLIT_PRESS.tight, 'the tightest survivable split stays under the ceiling');
 });
 
 test('the same split pays more on a court with more defenders', () => {
-  const pair = [{ x: 450, y: 330 }, { x: 450, y: 270 }];
+  const pair = [{ x: 450, y: 343 }, { x: 450, y: 257 }];
   const bonus = extra => {
     // The spare defenders sit far off the lane: identical geometry, busier court.
     const game = threadingGame([...pair, ...extra]);
@@ -607,7 +608,7 @@ test('the same split pays more on a court with more defenders', () => {
 });
 
 test('splits scale with the combo multiplier like other bonuses', () => {
-  const game = threadingGame([{ x: 450, y: 330 }, { x: 450, y: 270 }]);
+  const game = threadingGame([{ x: 450, y: 343 }, { x: 450, y: 257 }]);
   game.combo = 7;
   completePass(game, 1);
   assert.equal(game.splits, 1);
@@ -641,4 +642,60 @@ test('bank passes are split across both of their segments without double countin
   completePass(corner, 1, true);
   assert.equal(corner.splits, 0, 'one defender near both segments counts once');
   assert.equal(corner.banks, 1);
+});
+
+test('a plain pass carries an empty bonus list', () => {
+  const game = threadingGame([]);
+  completePass(game, 1);
+  const scored = game.events.find(event => event.type === 'score');
+  assert.equal(scored.text, 'PASS +12');
+  assert.deepEqual(scored.bonuses, []);
+});
+
+test('a pass that splits and completes a triangle shows the split and pays both', () => {
+  const game = openGame({ speed: 0 });
+  const place = () => {
+    game.players[0].x = 200; game.players[0].y = 300;
+    game.players[1].x = 500; game.players[1].y = 560;
+    game.players[2].x = 800; game.players[2].y = 300;
+  };
+  const pass = id => {
+    // Settle past the one-touch window so only the labelled bonuses are in play.
+    advance(game, Math.max(game.passCooldown, ONE_TOUCH.window) + STEP);
+    place();
+    assert.equal(game.pass(id), true);
+    for (let frame = 0; game.ball && frame < 600 && game.status === 'playing'; frame++) game.update(STEP);
+    assert.equal(game.ball, null);
+    assert.equal(game.carrier, id);
+  };
+  // Parked out of every lane so only the last pass threads the press.
+  game.defenders = [{ x: 500, y: 60, id: 0 }, { x: 700, y: 60, id: 1 }];
+  pass(1);
+  pass(2);
+  assert.equal(game.score, 24);
+  game.defenders = [{ x: 500, y: 343, id: 0 }, { x: 500, y: 257, id: 1 }];
+  pass(0);
+  assert.equal(game.splits, 1);
+  assert.equal(game.triangles, 1);
+  assert.equal(game.score, 24 + 12 + 67 + 35, 'the triangle and the split both pay in full');
+  assert.equal(game.focus, FOCUS_REWARDS.split + FOCUS_REWARDS.triangle);
+  const scored = game.events.filter(event => event.type === 'score').at(-1);
+  assert.equal(scored.text, 'SPLIT THE PRESS +114', 'the rarest bonus owns the label');
+  assert.deepEqual(scored.bonuses, ['split', 'triangle']);
+  assert.equal(scored.x, game.players[0].x);
+  assert.equal(scored.y, game.players[0].y - 25);
+});
+
+test('the zone outranks the wall on a banked pass into the zone', () => {
+  const game = openGame({ speed: 0 });
+  game.players[0].x = 200; game.players[0].y = 200;
+  game.players[1].x = 600; game.players[1].y = 200;
+  game.zone = { x: 600, y: 200, r: 92 };
+  completePass(game, 1, true);
+  assert.equal(game.banks, 1);
+  assert.equal(game.zones, 1);
+  assert.equal(game.score, 12 + 18 + 25, 'the wall and the zone both pay in full');
+  const scored = game.events.filter(event => event.type === 'score').at(-1);
+  assert.equal(scored.text, 'ZONE BONUS +55');
+  assert.deepEqual(scored.bonuses, ['wall', 'zone']);
 });
