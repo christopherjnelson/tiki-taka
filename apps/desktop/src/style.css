@@ -74,6 +74,37 @@ canvas:focus-visible {
   outline: 3px solid var(--cyan);
   outline-offset: 3px;
 }
+/* Gamepad focus: element.focus() does not always trigger :focus-visible, so the
+   pad marks its target with .pad-focus. Ringed twice so it reads on both the
+   dark and light themes whatever colour sits behind it. */
+button.pad-focus,
+a.pad-focus,
+select.pad-focus,
+button:focus-visible,
+a:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: 3px;
+  box-shadow:
+    0 0 0 6px var(--pink),
+    0 0 18px 4px rgb(39 234 216 / 65%);
+  position: relative;
+  z-index: 3;
+}
+@media (prefers-reduced-motion: no-preference) {
+  button.pad-focus,
+  a.pad-focus,
+  select.pad-focus {
+    animation: pad-focus-pulse 1.1s ease-in-out infinite;
+  }
+}
+@keyframes pad-focus-pulse {
+  50% {
+    box-shadow:
+      0 0 0 6px var(--pink),
+      0 0 26px 8px rgb(39 234 216 / 85%);
+  }
+}
 [hidden] {
   display: none !important;
 }
