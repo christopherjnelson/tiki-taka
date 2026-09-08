@@ -22,7 +22,7 @@ This checks the 47 tracked mobile/shared source files against the saved hashes. 
 
 ## Reopened on 2026-09-08 for the split-the-press bonus
 
-The user explicitly reopened this freeze on 2026-09-08 to add the split-the-press bonus to shared gameplay. `packages/engine/src/game.js` changed and its hash in `docs/mobile-freeze-1.1.1.json` was regenerated for that one file; the other 46 entries are untouched.
+The user explicitly reopened this freeze on 2026-09-08 to add the split-the-press bonus to shared gameplay and to stop reward popups overlapping each other. Two frozen files changed and had their hashes in `docs/mobile-freeze-1.1.1.json` regenerated: `packages/engine/src/game.js` (split-the-press scoring, bonus label precedence) and `packages/presentation/src/renderer.js` (popups now stack instead of drawing on top of one another). The other 45 entries are untouched.
 
 Mobile gameplay therefore no longer matches the shipped 1.1.1 APK. Scoring, Focus rewards, and the on-court label set all differ from the build in `release/mobile/tiki-taka-1.1.1.apk`. Mobile needs re-verification and a version bump (Android version name and version code) before the next Android release; do not ship the new engine under 1.1.1.
 
