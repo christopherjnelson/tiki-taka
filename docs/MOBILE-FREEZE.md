@@ -20,9 +20,9 @@ node scripts/check-mobile-freeze.mjs
 
 This checks the 47 tracked mobile/shared source files against the saved hashes. It does not automatically reset changed files or silently update the baseline. Do not regenerate the manifest to make an unrelated change pass. Desktop shell/build tooling is outside this freeze; changing shared gameplay or mobile sources requires explicitly reopening that work.
 
-## Reopened on 2026-09-08 for the through-ball bonus
+## Reopened on 2026-09-08 for the split-the-press bonus
 
-The user explicitly reopened this freeze on 2026-09-08 to add the through-ball bonus to shared gameplay. `packages/engine/src/game.js` changed and its hash in `docs/mobile-freeze-1.1.1.json` was regenerated for that one file; the other 46 entries are untouched.
+The user explicitly reopened this freeze on 2026-09-08 to add the split-the-press bonus to shared gameplay. `packages/engine/src/game.js` changed and its hash in `docs/mobile-freeze-1.1.1.json` was regenerated for that one file; the other 46 entries are untouched.
 
 Mobile gameplay therefore no longer matches the shipped 1.1.1 APK. Scoring, Focus rewards, and the on-court label set all differ from the build in `release/mobile/tiki-taka-1.1.1.apk`. Mobile needs re-verification and a version bump (Android version name and version code) before the next Android release; do not ship the new engine under 1.1.1.
 

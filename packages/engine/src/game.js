@@ -1,8 +1,8 @@
 export const WIDTH = 1000,
   HEIGHT = 620;
 export const LIMITS = { left: 50, right: 950, top: 50, bottom: 570 };
-export const FOCUS_REWARDS = { triangle: 1.5, zone: 1, through: 0.75, wall: 0.5 };
-export const THROUGH_BALL = { radius: 45, base: 20, tight: 14 };
+export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, wall: 0.5 };
+export const SPLIT_PRESS = { radius: 45, base: 50, tight: 50, perDefender: 0.3 };
 export const ONE_TOUCH = {
   window: 0.35,
   moveTolerance: 8,
@@ -127,6 +127,18 @@ export function segmentDistance(p, a, b) {
   );
   return distance(p, { x: a.x + t * dx, y: a.y + t * dy });
 }
+export function splitTightness(defenders, lane) {
+  const gaps = defenders
+    .map((d) =>
+      Math.min(
+        ...lane.slice(1).map((end, i) => segmentDistance(d, lane[i], end)),
+      ),
+    )
+    .filter((gap) => gap < SPLIT_PRESS.radius)
+    .sort((a, b) => a - b);
+  if (gaps.length < 2) return null;
+  return clamp(1 - (gaps[0] + gaps[1]) / (2 * SPLIT_PRESS.radius), 0, 1);
+}
 export function bankPoint(a, b) {
   const { left, right, top, bottom } = LIMITS;
   const candidates = [
@@ -186,7 +198,7 @@ export class Game {
     this.triangles = 0;
     this.banks = 0;
     this.zones = 0;
-    this.throughBalls = 0;
+    this.splits = 0;
     this.focus = 0;
     this.focusActive = false;
     this.focusNeedsRelease = false;
@@ -285,6 +297,16 @@ export class Game {
     const from = this.players[this.carrier],
       to = this.players[id];
     const waypoint = bank ? bankPoint(from, to) : null;
+    const lane = waypoint
+      ? [
+          { x: from.x, y: from.y },
+          { ...waypoint },
+          { x: to.x, y: to.y },
+        ]
+      : [
+          { x: from.x, y: from.y },
+          { x: to.x, y: to.y },
+        ];
     this.ball = {
       x: from.x,
       y: from.y,
@@ -293,9 +315,7 @@ export class Game {
       bank,
       bounced: false,
       waypoint,
-      route: waypoint
-        ? [{ x: from.x, y: from.y }, { ...waypoint }]
-        : [{ x: from.x, y: from.y }],
+      split: splitTightness(this.defenders, lane),
       focusUsed: false,
       oneTouch,
       trail: [],
@@ -342,27 +362,18 @@ export class Game {
       label = "WALL PLAY";
       focusReward += FOCUS_REWARDS.wall;
     }
-    const lane = [...ball.route, { x: p.x, y: p.y }];
-    const threaded = this.defenders
-      .map((d) =>
-        Math.min(
-          ...lane.slice(1).map((end, i) => segmentDistance(d, lane[i], end)),
-        ),
-      )
-      .filter((gap) => gap < THROUGH_BALL.radius)
-      .sort((a, b) => a - b);
-    if (threaded.length >= 2) {
-      const tightness = clamp(
-        1 - (threaded[0] + threaded[1]) / (2 * THROUGH_BALL.radius),
-        0,
-        1,
-      );
+    if (ball.split !== null) {
+      // Splitting two of three is far harder than two of two, so the reward
+      // scales with how crowded the court is. Focus stays flat.
+      const countScale =
+        1 + SPLIT_PRESS.perDefender * (this.defenders.length - 2);
       points +=
-        Math.round(THROUGH_BALL.base + THROUGH_BALL.tight * tightness) *
-        multiplier;
-      this.throughBalls++;
-      label = "THROUGH BALL";
-      focusReward += FOCUS_REWARDS.through;
+        Math.round(
+          (SPLIT_PRESS.base + SPLIT_PRESS.tight * ball.split) * countScale,
+        ) * multiplier;
+      this.splits++;
+      label = "SPLIT THE PRESS";
+      focusReward += FOCUS_REWARDS.split;
     }
     this.history.push(this.carrier);
     if (this.history.length > 4) this.history.shift();

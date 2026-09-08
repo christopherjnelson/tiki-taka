@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, COURTS, TACTICS, FOCUS_REWARDS, THROUGH_BALL, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance } from '../src/game.js';
+import { Game, COURTS, TACTICS, FOCUS_REWARDS, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -540,54 +540,81 @@ function threadingGame(defenders) {
   return game;
 }
 
-test('a lane with fewer than two close defenders is not a through ball', () => {
+test('a lane with fewer than two close defenders is not a split', () => {
   const empty = threadingGame([]);
   completePass(empty, 1);
-  assert.equal(empty.throughBalls, 0);
+  assert.equal(empty.splits, 0);
   assert.equal(empty.score, 12);
   const single = threadingGame([{ x: 450, y: 330 }, { x: 450, y: 520 }]);
   completePass(single, 1);
   assert.equal(single.turnovers, 0);
-  assert.equal(single.throughBalls, 0);
+  assert.equal(single.splits, 0);
   assert.equal(single.score, 12);
   assert.equal(single.focus, 0);
 });
 
-test('threading two defenders earns a through ball bonus, focus and its own label', () => {
+test('splitting two defenders earns the bonus, focus and its own label', () => {
   const game = threadingGame([{ x: 450, y: 330 }, { x: 450, y: 270 }]);
-  completePass(game, 1);
+  assert.equal(game.pass(1), true);
+  assert.ok(Math.abs(game.ball.split - 1 / 3) < 1e-9, 'the split is measured when the pass is struck');
+  game.defenders[0].y = 40; game.defenders[1].y = 560;
+  for (let frame = 0; game.ball && frame < 600 && game.status === 'playing'; frame++) game.update(STEP);
+  assert.equal(game.ball, null);
+  assert.equal(game.carrier, 1);
   assert.equal(game.turnovers, 0);
-  assert.equal(game.throughBalls, 1);
-  assert.equal(game.score, 12 + 25);
-  assert.equal(game.focus, FOCUS_REWARDS.through);
-  assert.ok(game.events.some(event => event.type === 'score' && event.text === 'THROUGH BALL +37'));
-  assert.ok(FOCUS_REWARDS.through > FOCUS_REWARDS.wall && FOCUS_REWARDS.through < FOCUS_REWARDS.zone);
+  assert.equal(game.splits, 1, 'defenders scattering during flight cannot erase the split that was aimed through');
+  assert.equal(game.score, 12 + 67);
+  assert.equal(game.focus, FOCUS_REWARDS.split);
+  assert.ok(game.events.some(event => event.type === 'score' && event.text === 'SPLIT THE PRESS +79'));
+  assert.ok(FOCUS_REWARDS.split > FOCUS_REWARDS.triangle, 'splitting the press pays the most focus in the game');
 });
 
-test('tighter threads outscore looser ones and stay inside the bonus ladder', () => {
+test('tighter splits outscore looser ones and top the bonus ladder', () => {
   const bonus = gap => {
     const game = threadingGame([{ x: 450, y: 300 + gap }, { x: 450, y: 300 - gap }]);
     completePass(game, 1);
-    assert.equal(game.throughBalls, 1);
+    assert.equal(game.splits, 1);
     return game.score - 12;
   };
   const tight = bonus(22), loose = bonus(42);
   assert.ok(tight > loose, `tight ${tight} must beat loose ${loose}`);
-  assert.equal(loose, THROUGH_BALL.base + 1);
-  assert.ok(loose > 18, 'even a loose through ball beats a wall pass');
-  assert.ok(bonus(21) < THROUGH_BALL.base + THROUGH_BALL.tight, 'a survivable thread stays under the ceiling');
-  assert.ok(THROUGH_BALL.base + THROUGH_BALL.tight < 35, 'a through ball never eclipses a triangle');
+  assert.equal(tight, 76);
+  assert.equal(loose, 53);
+  assert.ok(loose > 35, 'even the loosest split outscores a triangle');
+  assert.equal(SPLIT_PRESS.base, 50);
+  assert.equal(SPLIT_PRESS.base + SPLIT_PRESS.tight, 100);
+  assert.ok(bonus(21) === 77 && 77 <= SPLIT_PRESS.base + SPLIT_PRESS.tight, 'the tightest survivable split stays under the ceiling');
 });
 
-test('through balls scale with the combo multiplier like other bonuses', () => {
+test('the same split pays more on a court with more defenders', () => {
+  const pair = [{ x: 450, y: 330 }, { x: 450, y: 270 }];
+  const bonus = extra => {
+    // The spare defenders sit far off the lane: identical geometry, busier court.
+    const game = threadingGame([...pair, ...extra]);
+    completePass(game, 1);
+    assert.equal(game.splits, 1);
+    assert.equal(game.focus, FOCUS_REWARDS.split, 'focus never scales with the defender count');
+    return game.score - 12;
+  };
+  const two = bonus([]), three = bonus([{ x: 200, y: 60 }]);
+  const four = bonus([{ x: 200, y: 60 }, { x: 800, y: 560 }]);
+  assert.equal(two, 67);
+  assert.equal(three, 87);
+  assert.equal(four, 107);
+  assert.ok(three > two, `three defenders (${three}) must beat two (${two}) for the same split`);
+  assert.ok(four > three, `four defenders (${four}) must beat three (${three})`);
+  assert.equal(SPLIT_PRESS.perDefender, 0.3);
+});
+
+test('splits scale with the combo multiplier like other bonuses', () => {
   const game = threadingGame([{ x: 450, y: 330 }, { x: 450, y: 270 }]);
   game.combo = 7;
   completePass(game, 1);
-  assert.equal(game.throughBalls, 1);
-  assert.equal(game.score, (12 + 25) * 3);
+  assert.equal(game.splits, 1);
+  assert.equal(game.score, (12 + 67) * 3);
 });
 
-test('bank passes are threaded across both of their segments without double counting', () => {
+test('bank passes are split across both of their segments without double counting', () => {
   const bankGame = defenders => {
     const game = openGame({ speed: 0 });
     game.players[0].x = 200; game.players[0].y = 200;
@@ -599,19 +626,19 @@ test('bank passes are threaded across both of their segments without double coun
   assert.ok(distance(wall, { x: 400, y: 50 }) < 1e-8);
   const second = bankGame([{ x: 482, y: 149 }, { x: 518, y: 101 }]);
   for (const d of second.defenders) {
-    assert.ok(segmentDistance(d, { x: 200, y: 200 }, wall) > THROUGH_BALL.radius);
-    assert.ok(segmentDistance(d, wall, { x: 600, y: 200 }) < THROUGH_BALL.radius);
+    assert.ok(segmentDistance(d, { x: 200, y: 200 }, wall) > SPLIT_PRESS.radius);
+    assert.ok(segmentDistance(d, wall, { x: 600, y: 200 }) < SPLIT_PRESS.radius);
   }
   completePass(second, 1, true);
   assert.equal(second.turnovers, 0);
   assert.equal(second.banks, 1);
-  assert.equal(second.throughBalls, 1);
-  assert.equal(second.focus, FOCUS_REWARDS.wall + FOCUS_REWARDS.through);
-  assert.ok(second.events.some(event => event.type === 'score' && event.text.startsWith('THROUGH BALL')));
+  assert.equal(second.splits, 1);
+  assert.equal(second.focus, FOCUS_REWARDS.wall + FOCUS_REWARDS.split);
+  assert.ok(second.events.some(event => event.type === 'score' && event.text.startsWith('SPLIT THE PRESS')));
   const corner = bankGame([{ x: 400, y: 80 }, { x: 200, y: 520 }]);
-  assert.ok(segmentDistance(corner.defenders[0], { x: 200, y: 200 }, wall) < THROUGH_BALL.radius);
-  assert.ok(segmentDistance(corner.defenders[0], wall, { x: 600, y: 200 }) < THROUGH_BALL.radius);
+  assert.ok(segmentDistance(corner.defenders[0], { x: 200, y: 200 }, wall) < SPLIT_PRESS.radius);
+  assert.ok(segmentDistance(corner.defenders[0], wall, { x: 600, y: 200 }) < SPLIT_PRESS.radius);
   completePass(corner, 1, true);
-  assert.equal(corner.throughBalls, 0, 'one defender near both segments counts once');
+  assert.equal(corner.splits, 0, 'one defender near both segments counts once');
   assert.equal(corner.banks, 1);
 });
