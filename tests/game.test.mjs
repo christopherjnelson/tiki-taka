@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, COURTS, TACTICS, FOCUS_REWARDS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance } from '../src/game.js';
+import { Game, COURTS, TACTICS, FOCUS_REWARDS, THROUGH_BALL, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -530,4 +530,88 @@ test('every campaign court has a feasible passing strategy under seeded pressure
     assert.ok(game.score >= court.target, `${court.name}: ${game.score}/${court.target}`);
     assert.ok(game.passes / attempts > 0.75, `${court.name}: viable pass completion`);
   }
+});
+
+function threadingGame(defenders) {
+  const game = openGame({ speed: 0 });
+  game.players[0].x = 200; game.players[0].y = 300;
+  game.players[1].x = 700; game.players[1].y = 300;
+  game.defenders = defenders.map((d, id) => ({ ...d, id }));
+  return game;
+}
+
+test('a lane with fewer than two close defenders is not a through ball', () => {
+  const empty = threadingGame([]);
+  completePass(empty, 1);
+  assert.equal(empty.throughBalls, 0);
+  assert.equal(empty.score, 12);
+  const single = threadingGame([{ x: 450, y: 330 }, { x: 450, y: 520 }]);
+  completePass(single, 1);
+  assert.equal(single.turnovers, 0);
+  assert.equal(single.throughBalls, 0);
+  assert.equal(single.score, 12);
+  assert.equal(single.focus, 0);
+});
+
+test('threading two defenders earns a through ball bonus, focus and its own label', () => {
+  const game = threadingGame([{ x: 450, y: 330 }, { x: 450, y: 270 }]);
+  completePass(game, 1);
+  assert.equal(game.turnovers, 0);
+  assert.equal(game.throughBalls, 1);
+  assert.equal(game.score, 12 + 25);
+  assert.equal(game.focus, FOCUS_REWARDS.through);
+  assert.ok(game.events.some(event => event.type === 'score' && event.text === 'THROUGH BALL +37'));
+  assert.ok(FOCUS_REWARDS.through > FOCUS_REWARDS.wall && FOCUS_REWARDS.through < FOCUS_REWARDS.zone);
+});
+
+test('tighter threads outscore looser ones and stay inside the bonus ladder', () => {
+  const bonus = gap => {
+    const game = threadingGame([{ x: 450, y: 300 + gap }, { x: 450, y: 300 - gap }]);
+    completePass(game, 1);
+    assert.equal(game.throughBalls, 1);
+    return game.score - 12;
+  };
+  const tight = bonus(22), loose = bonus(42);
+  assert.ok(tight > loose, `tight ${tight} must beat loose ${loose}`);
+  assert.equal(loose, THROUGH_BALL.base + 1);
+  assert.ok(loose > 18, 'even a loose through ball beats a wall pass');
+  assert.ok(bonus(21) < THROUGH_BALL.base + THROUGH_BALL.tight, 'a survivable thread stays under the ceiling');
+  assert.ok(THROUGH_BALL.base + THROUGH_BALL.tight < 35, 'a through ball never eclipses a triangle');
+});
+
+test('through balls scale with the combo multiplier like other bonuses', () => {
+  const game = threadingGame([{ x: 450, y: 330 }, { x: 450, y: 270 }]);
+  game.combo = 7;
+  completePass(game, 1);
+  assert.equal(game.throughBalls, 1);
+  assert.equal(game.score, (12 + 25) * 3);
+});
+
+test('bank passes are threaded across both of their segments without double counting', () => {
+  const bankGame = defenders => {
+    const game = openGame({ speed: 0 });
+    game.players[0].x = 200; game.players[0].y = 200;
+    game.players[1].x = 600; game.players[1].y = 200;
+    game.defenders = defenders.map((d, id) => ({ ...d, id }));
+    return game;
+  };
+  const wall = bankPoint({ x: 200, y: 200 }, { x: 600, y: 200 });
+  assert.ok(distance(wall, { x: 400, y: 50 }) < 1e-8);
+  const second = bankGame([{ x: 482, y: 149 }, { x: 518, y: 101 }]);
+  for (const d of second.defenders) {
+    assert.ok(segmentDistance(d, { x: 200, y: 200 }, wall) > THROUGH_BALL.radius);
+    assert.ok(segmentDistance(d, wall, { x: 600, y: 200 }) < THROUGH_BALL.radius);
+  }
+  completePass(second, 1, true);
+  assert.equal(second.turnovers, 0);
+  assert.equal(second.banks, 1);
+  assert.equal(second.throughBalls, 1);
+  assert.equal(second.focus, FOCUS_REWARDS.wall + FOCUS_REWARDS.through);
+  assert.ok(second.events.some(event => event.type === 'score' && event.text.startsWith('THROUGH BALL')));
+  const corner = bankGame([{ x: 400, y: 80 }, { x: 200, y: 520 }]);
+  assert.ok(segmentDistance(corner.defenders[0], { x: 200, y: 200 }, wall) < THROUGH_BALL.radius);
+  assert.ok(segmentDistance(corner.defenders[0], wall, { x: 600, y: 200 }) < THROUGH_BALL.radius);
+  completePass(corner, 1, true);
+  assert.equal(corner.throughBalls, 0, 'one defender near both segments counts once');
+  assert.equal(corner.banks, 1);
 });
