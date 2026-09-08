@@ -1190,7 +1190,9 @@ function pollGamepad(dt) {
   }
   if (!padConnected) {
     padConnected = true;
-    toast("Controller connected. A to pass · X for wall pass · LT to focus.");
+    toast(
+      "Controller connected. X to arm the wall pass · A to play it · LT to focus.",
+    );
   }
   const pressed = pad.buttons.map((b) => b.pressed),
     tap = (i) => pressed[i] && !padPrevious[i];
@@ -1266,7 +1268,7 @@ function pollGamepad(dt) {
     if (tap(1) || tap(9)) $("help-dialog").close();
   } else if (view === "arena" && phase === "playing") {
     if (tap(0)) doPass();
-    if (tap(2)) doPass(undefined, true);
+    if (tap(2)) toggleBank();
     if (tap(9)) pause();
   } else {
     if (tap(9) && phase === "paused" && view === "arena") resume();

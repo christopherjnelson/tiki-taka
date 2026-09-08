@@ -289,7 +289,11 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   const gamepadPasses = await page.evaluate(() => window.__observedGame.game.passes);
   await page.evaluate(() => window.__setTestPad({ button: 6, pressed: true }));
   await pulsePad(page, 2);
+  assert.equal(await page.locator('#bank-button').getAttribute('aria-pressed'), 'true', 'X should arm the wall pass');
+  assert.equal(await page.evaluate(() => window.__observedGame.game.passes), gamepadPasses, 'X alone should not complete a pass');
+  await pulsePad(page, 0);
   await waitForPassToSettle(page, gamepadPasses);
+  assert.equal(await page.locator('#bank-button').getAttribute('aria-pressed'), 'false', 'playing the armed wall pass should disarm it');
   assert.equal(await focusSeconds(page), 0.5, 'gamepad wall pass should earn focus');
   await page.waitForTimeout(150);
   assert.equal(await focusSeconds(page), 0.5, 'focus held while empty should require release before using later earnings');
