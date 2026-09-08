@@ -272,12 +272,24 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   });
   const page = await context.newPage();
   const errors = watchErrors(page);
-  await page.goto(`${baseURL}/#play`);
+  await page.goto(`${baseURL}/`);
   await page.waitForTimeout(150);
   const firstFocus = await page.evaluate(() => document.activeElement?.textContent?.trim());
   await pulsePad(page, 13);
   const nextFocus = await page.evaluate(() => document.activeElement?.textContent?.trim());
   assert.notEqual(nextFocus, firstFocus, 'D-pad should move menu focus');
+  assert.equal(
+    await page.evaluate(() => Boolean(document.querySelector('#home-view')?.contains(document.activeElement))),
+    true,
+    'home-view navigation should stay inside the home view',
+  );
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.classList.contains('pad-focus')),
+    true,
+    'gamepad focus should be visibly marked',
+  );
+  await page.goto(`${baseURL}/#play`);
+  await page.waitForTimeout(150);
   await page.locator('#start-button').focus();
   await pulsePad(page, 0);
   assert.equal(await page.locator('#game-overlay').isHidden(), true, 'A should activate focused start');
@@ -307,6 +319,27 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   assert.ok(focusAfter < focusBefore, 'LT should consume focus through the real animation poll');
   await pulsePad(page, 9);
   await expectText(page.locator('#overlay-title'), /ball can wait/i);
+  const overlayButtons = await page.evaluate(() => [...document.querySelectorAll('#game-overlay button')]
+    .filter(el => !el.disabled && !el.closest('[hidden]') && el.getClientRects().length).map(el => el.id));
+  assert.deepEqual(overlayButtons, ['start-button', 'secondary-button'], 'pause overlay should offer two buttons');
+  await page.evaluate(() => document.activeElement?.blur());
+  const visited = [];
+  for (let step = 0; step < 4; step++) {
+    await pulsePad(page, 13);
+    visited.push(await page.evaluate(() => ({
+      id: document.activeElement?.id,
+      inOverlay: Boolean(document.querySelector('#game-overlay')?.contains(document.activeElement)),
+      marked: Boolean(document.activeElement?.classList.contains('pad-focus')),
+    })));
+  }
+  assert.equal(visited.every(v => v.inOverlay && v.marked), true,
+    `paused d-pad focus must stay inside the overlay, got ${JSON.stringify(visited)}`);
+  assert.deepEqual([...new Set(visited.map(v => v.id))].sort(), ['secondary-button', 'start-button'],
+    `paused d-pad should cycle only the overlay buttons, got ${JSON.stringify(visited)}`);
+  const upFrom = visited.at(-1).id;
+  await pulsePad(page, 12);
+  assert.notEqual(await page.evaluate(() => document.activeElement?.id), upFrom, 'up on the d-pad should move too');
+  assert.equal(await page.evaluate(() => Boolean(document.querySelector('#game-overlay')?.contains(document.activeElement))), true);
   await pulsePad(page, 9);
   assert.equal(await page.locator('#game-overlay').isHidden(), true);
   await page.evaluate(() => window.__setTestPad({ connected: false }));

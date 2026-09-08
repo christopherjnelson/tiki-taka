@@ -92,6 +92,7 @@ let padPrevious = [],
   announcementTime = 0,
   focusEarnedTimeout;
 let capture = null;
+let padFocusElement = null;
 let sidebarOpen = false;
 let sidebarReturnFocus = null;
 let pointerId = null,
@@ -1173,6 +1174,60 @@ function releaseJoystick(e) {
 $("joystick").addEventListener("pointerup", releaseJoystick);
 $("joystick").addEventListener("pointercancel", releaseJoystick);
 $("joystick").addEventListener("lostpointercapture", releaseJoystick);
+document.addEventListener("focusout", (event) => {
+  if (event.target === padFocusElement) {
+    padFocusElement.classList.remove("pad-focus");
+    padFocusElement = null;
+  }
+});
+function padFocusables(root) {
+  return [
+    ...root.querySelectorAll("button:not(:disabled),select:not(:disabled)"),
+  ].filter((el) => !el.closest("[hidden]") && el.getClientRects().length);
+}
+function padFocus(el) {
+  if (!el) return;
+  if (padFocusElement && padFocusElement !== el)
+    padFocusElement.classList.remove("pad-focus");
+  padFocusElement = el;
+  el.classList.add("pad-focus");
+  el.focus({ preventScroll: false });
+}
+function padActivate(el) {
+  if (el instanceof HTMLSelectElement) {
+    const options = [...el.options].filter((option) => !option.disabled);
+    if (!options.length) return true;
+    const current = options.indexOf(el.selectedOptions[0]);
+    el.value = options[(current + 1) % options.length].value;
+    el.dispatchEvent(new Event("change"));
+    return true;
+  }
+  if (el instanceof HTMLButtonElement) {
+    el.click();
+    return true;
+  }
+  return false;
+}
+// One place for "collect the controls of whatever is actually on screen, move
+// focus with the d-pad or left stick, activate with A".
+function padNavigate(root, { dt, direction, activate, fallback }) {
+  if (!root) return;
+  menuRepeat -= dt;
+  if (direction && menuRepeat <= 0) {
+    const elements = padFocusables(root);
+    if (elements.length) {
+      const current = elements.indexOf(document.activeElement);
+      padFocus(
+        elements[(current + direction + elements.length) % elements.length],
+      );
+    }
+    menuRepeat = 0.2;
+  } else if (!direction) menuRepeat = 0;
+  if (activate) {
+    const el = document.activeElement;
+    if (!padActivate(root.contains(el) ? el : null) && fallback) fallback();
+  }
+}
 function pollGamepad(dt) {
   const pad = Array.from(navigator.getGamepads?.() || []).find(
     (p) => p?.connected,
@@ -1203,106 +1258,46 @@ function pollGamepad(dt) {
     aim = { x: pad.axes[2], y: pad.axes[3] };
   else if (Math.hypot(gamepadMove.x, gamepadMove.y) > 0.2)
     aim = { ...gamepadMove };
-  if (
-    drawerSidebar() &&
-    sidebarOpen &&
-    !$("settings-dialog").open &&
-    !$("help-dialog").open
-  ) {
-    if (tap(1) || tap(9)) closeSidebar();
-    menuRepeat -= dt;
-    const direction =
-      pressed[13] || pressed[15] || pad.axes[1] > 0.6
-        ? 1
-        : pressed[12] || pressed[14] || pad.axes[1] < -0.6
-          ? -1
-          : 0;
-    if (direction && menuRepeat <= 0) {
-      const elements = [
-        ...$("game-sidebar").querySelectorAll(
-          "button:not(:disabled),select:not(:disabled)",
-        ),
-      ].filter((el) => el.getClientRects().length);
-      const current = elements.indexOf(document.activeElement);
-      elements[
-        (current + direction + elements.length) % elements.length
-      ]?.focus({ preventScroll: false });
-      menuRepeat = 0.2;
-    } else if (!direction) menuRepeat = 0;
-    if (tap(0)) document.activeElement?.click?.();
+  const direction =
+    pressed[13] || pressed[15] || pad.axes[1] > 0.6
+      ? 1
+      : pressed[12] || pressed[14] || pad.axes[1] < -0.6
+        ? -1
+        : 0;
+  const nav = (root, fallback) =>
+    padNavigate(root, { dt, direction, activate: tap(0), fallback });
+  // Most modal context first: navigation is scoped to whatever is actually on
+  // screen so the d-pad never wanders into controls the player cannot see.
+  if ($("account-dialog").open) {
+    if (tap(1) || tap(9)) $("account-dialog").close();
+    else nav($("account-dialog"));
   } else if ($("settings-dialog").open) {
     if (tap(1) || tap(9)) {
       if (capture) cancelCapture();
       else $("settings-dialog").close();
     }
-    menuRepeat -= dt;
-    const direction =
-      pressed[13] || pressed[15] || pad.axes[1] > 0.6
-        ? 1
-        : pressed[12] || pressed[14] || pad.axes[1] < -0.6
-          ? -1
-          : 0;
-    if (direction && menuRepeat <= 0) {
-      const elements = [
-        ...$("settings-dialog").querySelectorAll(
-          "button:not(:disabled),select:not(:disabled)",
-        ),
-      ].filter((el) => el.getClientRects().length);
-      const current = elements.indexOf(document.activeElement);
-      elements[
-        (current + direction + elements.length) % elements.length
-      ]?.focus({ preventScroll: false });
-      menuRepeat = 0.2;
-    } else if (!direction) menuRepeat = 0;
-    if (tap(0) && !capture) {
-      const el = document.activeElement;
-      if (el instanceof HTMLSelectElement) {
-        const options = [...el.options].filter((option) => !option.disabled);
-        const current = options.indexOf(el.selectedOptions[0]);
-        const next = options[(current + 1) % options.length];
-        el.value = next.value;
-        el.dispatchEvent(new Event("change"));
-      } else if (el instanceof HTMLButtonElement) el.click();
-    }
+    padNavigate($("settings-dialog"), {
+      dt,
+      direction,
+      activate: tap(0) && !capture,
+    });
   } else if ($("help-dialog").open) {
     if (tap(1) || tap(9)) $("help-dialog").close();
+    else nav($("help-dialog"));
+  } else if (drawerSidebar() && sidebarOpen) {
+    if (tap(1) || tap(9)) closeSidebar();
+    else nav($("game-sidebar"));
   } else if (view === "arena" && phase === "playing") {
     if (tap(0)) doPass();
     if (tap(2)) toggleBank();
     if (tap(9)) pause();
+  } else if (view === "arena" && !$("game-overlay").hidden) {
+    if ((tap(9) || tap(1)) && phase === "paused") resume();
+    else nav($("game-overlay"), () => $("start-button").click());
+  } else if (view === "home") {
+    nav($("home-view"), () => $("home-continue").click());
   } else {
-    if (tap(9) && phase === "paused" && view === "arena") resume();
-    menuRepeat -= dt;
-    const direction =
-      pressed[13] || pressed[15] || pad.axes[1] > 0.6
-        ? 1
-        : pressed[12] || pressed[14] || pad.axes[1] < -0.6
-          ? -1
-          : 0;
-    if (direction && menuRepeat <= 0) {
-      const elements = [
-        ...document.querySelectorAll(
-          "button:not(:disabled),select:not(:disabled)",
-        ),
-      ].filter((el) => !el.closest("[hidden]") && el.getClientRects().length);
-      const current = elements.indexOf(document.activeElement);
-      elements[
-        (current + direction + elements.length) % elements.length
-      ]?.focus({ preventScroll: false });
-      menuRepeat = 0.2;
-    } else if (!direction) menuRepeat = 0;
-    if (tap(0)) {
-      const el = document.activeElement;
-      if (el instanceof HTMLSelectElement) {
-        const options = [...el.options].filter((option) => !option.disabled);
-        const current = options.indexOf(el.selectedOptions[0]);
-        el.value = options[(current + 1) % options.length].value;
-        el.dispatchEvent(new Event("change"));
-      } else if (el instanceof HTMLButtonElement) el.click();
-      else if (view === "arena") $("start-button").click();
-      else $("home-continue").click();
-    }
-    if (tap(1) && phase === "paused" && view === "arena") resume();
+    nav(document.body);
   }
   padPrevious = pressed;
 }

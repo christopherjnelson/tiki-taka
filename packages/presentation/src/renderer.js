@@ -7,6 +7,40 @@ import {
 import { getVenue } from "../../engine/src/venues.js";
 
 const FONT = '"Tiki Signage","Arial Narrow","Arial Black",sans-serif';
+// Badge popups (score, focus, one-touch) can land on the same pass at nearly
+// the same spot. Newcomers are lifted a row at a time so every reward stays
+// readable instead of hiding the one before it.
+const BADGE_STACK_STEP = 34,
+  BADGE_STACK_MAX = 4 * BADGE_STACK_STEP,
+  BADGE_STACK_SPREAD = 170;
+const isStackedBadge = (e) =>
+  e &&
+  (e.type === "score" ||
+    e.type === "focus" ||
+    (e.type === "one-touch" && !e.milestone));
+const badgeAnchorY = (e) =>
+  (Number.isFinite(e.y) ? e.y : 310) +
+  (e.type === "one-touch" ? -54 : e.type === "focus" ? 11 : -16) -
+  (e.stackOffset || 0);
+function stackOffsetFor(effects, e) {
+  if (!isStackedBadge(e)) return 0;
+  const live = effects.filter((o) => isStackedBadge(o) && o.age < o.life);
+  if (!live.length) return 0;
+  const x = Number.isFinite(e.x) ? e.x : 500;
+  for (let offset = 0; offset <= BADGE_STACK_MAX; offset += BADGE_STACK_STEP) {
+    const y = badgeAnchorY({ ...e, stackOffset: offset });
+    if (
+      !live.some(
+        (o) =>
+          Math.abs((Number.isFinite(o.x) ? o.x : 500) - x) <
+            BADGE_STACK_SPREAD &&
+          Math.abs(badgeAnchorY(o) - y) < BADGE_STACK_STEP,
+      )
+    )
+      return offset;
+  }
+  return 0;
+}
 const circle = (c, x, y, r) => {
   c.beginPath();
   c.arc(x, y, r, 0, Math.PI * 2);
@@ -437,6 +471,7 @@ export class Renderer {
     if (!e || e.type === "end") return;
     this.effects.push({
       ...e,
+      stackOffset: stackOffsetFor(this.effects, e),
       age: 0,
       life:
         e.type === "turnover"
@@ -863,7 +898,9 @@ export class Renderer {
       const milestone = Boolean(e.milestone),
         rise = this.reducedMotion ? 0 : t * 24,
         worldX = milestone ? 285 : Math.max(120, Math.min(880, e.x || 500)),
-        worldY = milestone ? 505 : Math.max(100, (e.y || 310) - 54 - rise);
+        worldY = milestone
+          ? 505
+          : Math.max(100, (e.y || 310) - 54 - rise - (e.stackOffset || 0));
       if (milestone) {
         c.globalAlpha = Math.min(1, (1 - t) * 4);
         c.strokeStyle = this.venue.accent;
@@ -903,11 +940,7 @@ export class Renderer {
       }
       const portraitScreenX = Math.max(74, Math.min(546, HEIGHT - worldY)),
         portraitScreenY = Math.max(23, Math.min(977, worldX)),
-        badgeX = c._tikiPortrait
-          ? milestone
-            ? 135
-            : portraitScreenY
-          : worldX,
+        badgeX = c._tikiPortrait ? (milestone ? 135 : portraitScreenY) : worldX,
         badgeY = c._tikiPortrait
           ? milestone
             ? 310
@@ -949,13 +982,18 @@ export class Renderer {
               900,
             );
         };
-      if (c._tikiPortrait)
-        this.upright(badgeX, badgeY, drawBadge);
+      if (c._tikiPortrait) this.upright(badgeX, badgeY, drawBadge);
       else drawBadge();
     } else if (e.type === "score" || e.type === "focus") {
       const focus = e.type === "focus",
-        worldY =
-          e.y - (this.reducedMotion ? 10 : t * 38) - 16 + (focus ? 27 : 0);
+        worldY = Math.max(
+          40,
+          e.y -
+            (this.reducedMotion ? 10 : t * 38) -
+            16 +
+            (focus ? 27 : 0) -
+            (e.stackOffset || 0),
+        );
       c.font = `800 ${focus ? 12 : 15}px ${FONT}`;
       const w = c.measureText(e.text).width + 28,
         worldX = Math.max(55 + w / 2, Math.min(945 - w / 2, e.x)),
