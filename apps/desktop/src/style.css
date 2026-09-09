@@ -646,9 +646,9 @@ kbd {
   display: none;
 }
 dialog {
-  width: min(800px, calc(100vw - 28px));
+  width: min(980px, calc(100vw - 28px));
   max-height: calc(100svh - 32px);
-  padding: 27px 31px;
+  padding: 22px 31px;
   overflow: auto;
   color: var(--ink);
   background: var(--surface);
@@ -716,7 +716,7 @@ dialog::backdrop {
   font-size: 10px;
 }
 .settings-audio {
-  padding: 13px 0;
+  padding: 9px 0;
   border-block-start: 1px solid var(--line);
 }
 .settings-audio-heading {
@@ -770,7 +770,7 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 13px 0;
+  padding: 9px 0;
   border-block: 1px solid var(--line);
   font: 700 10px var(--sign);
 }
@@ -785,10 +785,15 @@ dialog::backdrop {
   color: var(--muted);
   font-size: 11px;
 }
+/* Thirteen bindings in one column ran the dialog to ~1370px, which meant
+   scrolling inside it on a 1080x1024 screen. auto-fit gives two columns
+   wherever there is room for them and falls back to one on a phone, with no
+   media query to keep in step with the dialog's own width. */
 .bindings-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
   gap: 7px;
-  margin: 17px 0;
+  margin: 12px 0;
 }
 .binding-row {
   display: grid;
