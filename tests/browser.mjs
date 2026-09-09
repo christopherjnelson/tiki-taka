@@ -99,11 +99,20 @@ async function waitForPassToSettle(page, previousPasses = 0) {
   }, previousPasses);
 }
 
-async function pulsePad(page, button) {
+// Button activation is edge-triggered (`tap()` compares against the previous
+// poll) and polling happens once per animation frame. An 80ms press could begin
+// and end between two frames on a slow runner and never be observed, which made
+// this the only test failing in CI while passing locally. Hold long enough that
+// several frames must see the press, then several more must see the release.
+// Menu navigation is level-triggered and was never affected - and it must keep
+// the short press, because holding a direction past the 0.2s repeat gate moves
+// focus twice.
+const isDpad = button => button >= 12 && button <= 15;
+async function pulsePad(page, button, hold = isDpad(button) ? 80 : 250) {
   await page.evaluate(index => window.__setTestPad({ button: index, pressed: true }), button);
-  await page.waitForTimeout(80);
+  await page.waitForTimeout(hold);
   await page.evaluate(index => window.__setTestPad({ button: index, pressed: false }), button);
-  await page.waitForTimeout(80);
+  await page.waitForTimeout(hold);
 }
 
 async function observeGame(page) {
