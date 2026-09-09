@@ -152,7 +152,7 @@ await check('a browser that blocks audio gets a hint, and one keypress clears bo
   await context.close();
 });
 
-await check('the packaged autoplay policy never shows the hint', async () => {
+await check('a relaxed autoplay policy never shows the hint', async () => {
   const context = await relaxedBrowser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
   await context.addInitScript(countEffects);
   const page = await context.newPage();
