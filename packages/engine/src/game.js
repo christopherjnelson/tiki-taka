@@ -2,7 +2,13 @@ export const WIDTH = 1000,
   HEIGHT = 620;
 export const LIMITS = { left: 50, right: 950, top: 50, bottom: 570 };
 export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, wall: 0.5 };
-export const SPLIT_PRESS = { radius: 65, base: 50, tight: 50, perDefender: 0.3 };
+export const SPLIT_PRESS = {
+  narrow: 70,
+  wide: 200,
+  base: 50,
+  tight: 50,
+  perDefender: 0.3,
+};
 // Ordered by precedence: the label a pass shows is the first bonus it earned.
 export const BONUS_LABELS = {
   split: "SPLIT THE PRESS",
@@ -134,17 +140,43 @@ export function segmentDistance(p, a, b) {
   );
   return distance(p, { x: a.x + t * dx, y: a.y + t * dy });
 }
+// Signed area of the triangle o->a->b: positive when b sits left of o->a.
+const orient = (o, a, b) =>
+  (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+// A proper crossing: each segment has one endpoint strictly either side of the
+// other. Strict inequalities so touching at a point or lying collinear is not a
+// crossing.
+export function segmentsCross(p1, p2, p3, p4) {
+  const d1 = orient(p3, p4, p1);
+  const d2 = orient(p3, p4, p2);
+  const d3 = orient(p1, p2, p3);
+  const d4 = orient(p1, p2, p4);
+  return (
+    ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+    ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+  );
+}
+// The pass splits a pair when it passes between them: the lane crosses the
+// segment joining the two defenders. Difficulty is how narrow that pair is, so
+// among every crossed pair we keep the tightest gap threaded.
 export function splitTightness(defenders, lane) {
-  const gaps = defenders
-    .map((d) =>
-      Math.min(
-        ...lane.slice(1).map((end, i) => segmentDistance(d, lane[i], end)),
-      ),
-    )
-    .filter((gap) => gap < SPLIT_PRESS.radius)
-    .sort((a, b) => a - b);
-  if (gaps.length < 2) return null;
-  return clamp(1 - (gaps[0] + gaps[1]) / (2 * SPLIT_PRESS.radius), 0, 1);
+  let separation = null;
+  for (let s = 0; s < lane.length - 1; s++) {
+    for (let a = 0; a < defenders.length; a++) {
+      for (let b = a + 1; b < defenders.length; b++) {
+        if (!segmentsCross(lane[s], lane[s + 1], defenders[a], defenders[b]))
+          continue;
+        const gap = distance(defenders[a], defenders[b]);
+        if (separation === null || gap < separation) separation = gap;
+      }
+    }
+  }
+  if (separation === null) return null;
+  return clamp(
+    (SPLIT_PRESS.wide - separation) / (SPLIT_PRESS.wide - SPLIT_PRESS.narrow),
+    0,
+    1,
+  );
 }
 export function bankPoint(a, b) {
   const { left, right, top, bottom } = LIMITS;

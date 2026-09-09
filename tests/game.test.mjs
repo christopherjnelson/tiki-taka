@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, COURTS, TACTICS, FOCUS_REWARDS, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance } from '../src/game.js';
+import { Game, COURTS, TACTICS, FOCUS_REWARDS, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -540,12 +540,29 @@ function threadingGame(defenders) {
   return game;
 }
 
-test('a lane with fewer than two close defenders is not a split', () => {
+test('segmentsCross is a proper crossing: strict, so touching and collinear are not', () => {
+  // A horizontal bar and a vertical bar through its middle: a clean X.
+  assert.equal(segmentsCross({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: -5 }, { x: 5, y: 5 }), true);
+  // The vertical bar lifted clear above the horizontal one: no crossing.
+  assert.equal(segmentsCross({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 5 }, { x: 5, y: 10 }), false);
+  // The vertical bar merely resting its endpoint on the horizontal one: a touch.
+  assert.equal(segmentsCross({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }), false);
+  // Both segments lie on the same line and overlap: collinear, never a split.
+  assert.equal(segmentsCross({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 0 }, { x: 15, y: 0 }), false);
+  // Segments that would cross only if extended past their endpoints.
+  assert.equal(segmentsCross({ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 5, y: -5 }, { x: 5, y: 5 }), false);
+});
+
+// Every threading test passes along the horizontal line y = 300, from x = 200
+// to x = 700. So a defender with y < 300 is ABOVE the pass and one with y > 300
+// is BELOW it, and a pair straddles the pass exactly when it has one of each.
+test('a pass with no pair to thread is not a split', () => {
   const empty = threadingGame([]);
   completePass(empty, 1);
   assert.equal(empty.splits, 0);
   assert.equal(empty.score, 12);
-  const single = threadingGame([{ x: 450, y: 343 }, { x: 450, y: 520 }]);
+  // A lone defender near the lane has nobody to be split from.
+  const single = threadingGame([{ x: 450, y: 257 }]);
   completePass(single, 1);
   assert.equal(single.turnovers, 0);
   assert.equal(single.splits, 0);
@@ -553,44 +570,71 @@ test('a lane with fewer than two close defenders is not a split', () => {
   assert.equal(single.focus, 0);
 });
 
-test('splitting two defenders earns the bonus, focus and its own label', () => {
-  const game = threadingGame([{ x: 450, y: 343 }, { x: 450, y: 257 }]);
+test('two defenders hugging the lane on the SAME side are not split', () => {
+  // Both defenders sit ABOVE y = 300 and both are tight to the lane. The old
+  // proximity rule paid this out; passing outside a pair splits nothing, so the
+  // crossing rule must refuse it.
+  const game = threadingGame([{ x: 430, y: 245 }, { x: 470, y: 257 }]);
   assert.equal(game.pass(1), true);
-  assert.ok(Math.abs(game.ball.split - 22 / 65) < 1e-9, 'the split is measured when the pass is struck');
+  assert.equal(game.ball.split, null, 'nothing is threaded when both defenders are one side of the pass');
+  for (let frame = 0; game.ball && frame < 600 && game.status === 'playing'; frame++) game.update(STEP);
+  assert.equal(game.carrier, 1);
+  assert.equal(game.splits, 0);
+  assert.equal(game.focus, 0);
+  assert.equal(game.score, 12, 'a pass that skirts a pair pays the plain pass only');
+  // The mirrored case: both defenders BELOW the lane, equally close.
+  const below = threadingGame([{ x: 430, y: 355 }, { x: 470, y: 343 }]);
+  completePass(below, 1);
+  assert.equal(below.splits, 0);
+  assert.equal(below.score, 12);
+});
+
+test('a pass threaded between two defenders earns the bonus, focus and its own label', () => {
+  // One defender 40 above the lane, one 40 below it: the pass goes straight
+  // between them through a gap of 80.
+  const game = threadingGame([{ x: 450, y: 260 }, { x: 450, y: 340 }]);
+  assert.equal(game.pass(1), true);
+  assert.ok(Math.abs(game.ball.split - (200 - 80) / (200 - 70)) < 1e-9, 'tightness comes from the 80-wide gap that was threaded');
   game.defenders[0].y = 40; game.defenders[1].y = 560;
   for (let frame = 0; game.ball && frame < 600 && game.status === 'playing'; frame++) game.update(STEP);
   assert.equal(game.ball, null);
   assert.equal(game.carrier, 1);
   assert.equal(game.turnovers, 0);
   assert.equal(game.splits, 1, 'defenders scattering during flight cannot erase the split that was aimed through');
-  assert.equal(game.score, 12 + 67);
+  assert.equal(game.score, 12 + 96);
   assert.equal(game.focus, FOCUS_REWARDS.split);
-  assert.ok(game.events.some(event => event.type === 'score' && event.text === 'SPLIT THE PRESS +79'));
+  assert.ok(game.events.some(event => event.type === 'score' && event.text === 'SPLIT THE PRESS +108'));
   assert.ok(FOCUS_REWARDS.split > FOCUS_REWARDS.triangle, 'splitting the press pays the most focus in the game');
 });
 
-test('tighter splits outscore looser ones and top the bonus ladder', () => {
-  const bonus = gap => {
-    const game = threadingGame([{ x: 450, y: 300 + gap }, { x: 450, y: 300 - gap }]);
+test('a narrower pair outscores a wider one and tops the bonus ladder', () => {
+  // Both pairs straddle the lane; only the gap between them changes.
+  const bonus = half => {
+    const game = threadingGame([{ x: 450, y: 300 - half }, { x: 450, y: 300 + half }]);
     completePass(game, 1);
     assert.equal(game.splits, 1);
     return game.score - 12;
   };
-  const tight = bonus(22), loose = bonus(62);
-  assert.ok(tight > loose, `tight ${tight} must beat loose ${loose}`);
-  assert.equal(tight, 83);
-  assert.equal(loose, 52);
-  assert.ok(loose > 35, 'even the loosest split outscores a triangle');
+  const tight = bonus(40), loose = bonus(90);
+  assert.ok(tight > loose, `a 80-wide gap (${tight}) must beat a 180-wide gap (${loose})`);
+  assert.equal(tight, 96);
+  assert.equal(loose, 58);
+  assert.ok(loose > 35, 'even the laziest split outscores a triangle');
   assert.equal(SPLIT_PRESS.base, 50);
   assert.equal(SPLIT_PRESS.base + SPLIT_PRESS.tight, 100);
-  assert.equal(SPLIT_PRESS.radius, 65);
-  assert.ok(bonus(21) === 84 && 84 <= SPLIT_PRESS.base + SPLIT_PRESS.tight, 'the tightest survivable split stays under the ceiling');
+  assert.equal(SPLIT_PRESS.narrow, 70);
+  assert.equal(SPLIT_PRESS.wide, 200);
+  // A pair at or inside `narrow` pays the ceiling; at or beyond `wide`, the floor.
+  assert.equal(bonus(30), SPLIT_PRESS.base + SPLIT_PRESS.tight, 'a 60-wide gap is already maxed out');
+  assert.equal(bonus(110), SPLIT_PRESS.base, 'a 220-wide gap is a split in name only');
 });
 
 test('the same split pays more on a court with more defenders', () => {
-  const pair = [{ x: 450, y: 343 }, { x: 450, y: 257 }];
+  // The threaded pair straddles the lane 80 apart.
+  const pair = [{ x: 450, y: 260 }, { x: 450, y: 340 }];
   const bonus = extra => {
-    // The spare defenders sit far off the lane: identical geometry, busier court.
+    // The spare defenders sit far away, so no pair they form is narrower than 80
+    // and the reward still comes from the 80-wide gap: identical geometry, busier court.
     const game = threadingGame([...pair, ...extra]);
     completePass(game, 1);
     assert.equal(game.splits, 1);
@@ -599,23 +643,38 @@ test('the same split pays more on a court with more defenders', () => {
   };
   const two = bonus([]), three = bonus([{ x: 200, y: 60 }]);
   const four = bonus([{ x: 200, y: 60 }, { x: 800, y: 560 }]);
-  assert.equal(two, 67);
-  assert.equal(three, 87);
-  assert.equal(four, 107);
+  assert.equal(two, 96);
+  assert.equal(three, 125);
+  assert.equal(four, 154);
   assert.ok(three > two, `three defenders (${three}) must beat two (${two}) for the same split`);
   assert.ok(four > three, `four defenders (${four}) must beat three (${three})`);
   assert.equal(SPLIT_PRESS.perDefender, 0.3);
 });
 
+test('with several crossed pairs the narrowest one sets the reward', () => {
+  // Three defenders: A above the lane, B and C below it. The pass crosses both
+  // A-B (gap 130) and A-C (gap 250), so the tightest thread, A-B, must pay.
+  const a = { x: 450, y: 250 }, b = { x: 450, y: 380 }, c = { x: 450, y: 500 };
+  const game = threadingGame([a, b, c]);
+  assert.equal(game.pass(1), true);
+  assert.ok(Math.abs(distance(a, b) - 130) < 1e-9);
+  assert.ok(Math.abs(distance(a, c) - 250) < 1e-9);
+  assert.ok(Math.abs(game.ball.split - (200 - 130) / (200 - 70)) < 1e-9, 'the 130 gap, not the 250 one, is the split that was made');
+  for (let frame = 0; game.ball && frame < 600 && game.status === 'playing'; frame++) game.update(STEP);
+  assert.equal(game.splits, 1, 'one pass through a crowd is still one split');
+  // (50 + 50 * 70/130) * 1.3 for the three-defender court.
+  assert.equal(game.score - 12, 100);
+});
+
 test('splits scale with the combo multiplier like other bonuses', () => {
-  const game = threadingGame([{ x: 450, y: 343 }, { x: 450, y: 257 }]);
+  const game = threadingGame([{ x: 450, y: 260 }, { x: 450, y: 340 }]);
   game.combo = 7;
   completePass(game, 1);
   assert.equal(game.splits, 1);
-  assert.equal(game.score, (12 + 67) * 3);
+  assert.equal(game.score, (12 + 96) * 3);
 });
 
-test('bank passes are split across both of their segments without double counting', () => {
+test('a bank pass can split on its second segment, after the wall', () => {
   const bankGame = defenders => {
     const game = openGame({ speed: 0 });
     game.players[0].x = 200; game.players[0].y = 200;
@@ -625,23 +684,24 @@ test('bank passes are split across both of their segments without double countin
   };
   const wall = bankPoint({ x: 200, y: 200 }, { x: 600, y: 200 });
   assert.ok(distance(wall, { x: 400, y: 50 }) < 1e-8);
-  const second = bankGame([{ x: 482, y: 149 }, { x: 518, y: 101 }]);
-  for (const d of second.defenders) {
-    assert.ok(segmentDistance(d, { x: 200, y: 200 }, wall) > SPLIT_PRESS.radius);
-    assert.ok(segmentDistance(d, wall, { x: 600, y: 200 }) < SPLIT_PRESS.radius);
-  }
+  // The lane is (200,200) -> (400,50) -> (600,200). This pair straddles the
+  // SECOND leg around its midpoint (500,125), and sits entirely to the right of
+  // the first leg, which never gets past x = 400.
+  const second = bankGame([{ x: 524, y: 93 }, { x: 476, y: 157 }]);
+  for (const d of second.defenders) assert.ok(d.x > 400, 'both defenders are clear of the outgoing leg');
+  assert.equal(segmentsCross({ x: 200, y: 200 }, wall, second.defenders[0], second.defenders[1]), false);
+  assert.equal(segmentsCross(wall, { x: 600, y: 200 }, second.defenders[0], second.defenders[1]), true);
   completePass(second, 1, true);
   assert.equal(second.turnovers, 0);
   assert.equal(second.banks, 1);
   assert.equal(second.splits, 1);
   assert.equal(second.focus, FOCUS_REWARDS.wall + FOCUS_REWARDS.split);
   assert.ok(second.events.some(event => event.type === 'score' && event.text.startsWith('SPLIT THE PRESS')));
-  const corner = bankGame([{ x: 400, y: 80 }, { x: 200, y: 520 }]);
-  assert.ok(segmentDistance(corner.defenders[0], { x: 200, y: 200 }, wall) < SPLIT_PRESS.radius);
-  assert.ok(segmentDistance(corner.defenders[0], wall, { x: 600, y: 200 }) < SPLIT_PRESS.radius);
-  completePass(corner, 1, true);
-  assert.equal(corner.splits, 0, 'one defender near both segments counts once');
-  assert.equal(corner.banks, 1);
+  // A pair that both legs merely pass close to, on the same side of each: no split.
+  const beside = bankGame([{ x: 430, y: 300 }, { x: 480, y: 320 }]);
+  completePass(beside, 1, true);
+  assert.equal(beside.splits, 0, 'running alongside a pair is not threading it');
+  assert.equal(beside.banks, 1);
 });
 
 test('a plain pass carries an empty bonus list', () => {
@@ -673,14 +733,14 @@ test('a pass that splits and completes a triangle shows the split and pays both'
   pass(1);
   pass(2);
   assert.equal(game.score, 24);
-  game.defenders = [{ x: 500, y: 343, id: 0 }, { x: 500, y: 257, id: 1 }];
+  game.defenders = [{ x: 500, y: 340, id: 0 }, { x: 500, y: 260, id: 1 }];
   pass(0);
   assert.equal(game.splits, 1);
   assert.equal(game.triangles, 1);
-  assert.equal(game.score, 24 + 12 + 67 + 35, 'the triangle and the split both pay in full');
+  assert.equal(game.score, 24 + 12 + 96 + 35, 'the triangle and the split both pay in full');
   assert.equal(game.focus, FOCUS_REWARDS.split + FOCUS_REWARDS.triangle);
   const scored = game.events.filter(event => event.type === 'score').at(-1);
-  assert.equal(scored.text, 'SPLIT THE PRESS +114', 'the rarest bonus owns the label');
+  assert.equal(scored.text, 'SPLIT THE PRESS +143', 'the rarest bonus owns the label');
   assert.deepEqual(scored.bonuses, ['split', 'triangle']);
   assert.equal(scored.x, game.players[0].x);
   assert.equal(scored.y, game.players[0].y - 25);
