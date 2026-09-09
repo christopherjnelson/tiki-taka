@@ -33,10 +33,6 @@ import { createLocalDataAdapter } from "../../../packages/data/src/index.js";
 import { createMusic } from "./music.js";
 import { TRACKS } from "./playlist.js";
 const $ = (id) => document.getElementById(id);
-// Running inside the Electron shell rather than a browser tab. window.close()
-// only ends the app for a window the shell opened itself, so Quit is offered
-// nowhere else.
-const inShell = location.protocol === "tiki:";
 let storage;
 try {
   storage = window.localStorage;
@@ -72,14 +68,13 @@ let progress = initialData.progress;
 let settings = initialData.settings;
 let accountStats = initialData.stats;
 let profile = (await dataAdapter.getSession())?.profile || null;
-// One switch used to cover everything, and it lived on `progress.sound` so
-// Android could share it. Effects and music now have a switch and a level
-// each, in settings. A player who had turned the old switch off must not be
-// blasted on the next launch, so the first run after the split folds the old
-// boolean into all four fields; `audioMigrated` makes that a one-time step so a
-// later "music off, effects on" is never overwritten by it. `progress.sound`
-// stays live for apps/mobile, which still reads it, and the shell keeps it in
-// step with "is anything audible".
+// One switch used to cover everything, and it lived on `progress.sound`.
+// Effects and music now have a switch and a level each, in settings. A player
+// who had turned the old switch off must not be blasted on the next launch, so
+// the first run after the split folds the old boolean into all four fields;
+// `audioMigrated` makes that a one-time step so a later "music off, effects on"
+// is never overwritten by it. `progress.sound` is still written so an older
+// saved profile keeps a value that agrees with "is anything audible".
 if (!settings.audioMigrated) {
   settings.effectsOn = progress.sound;
   settings.musicOn = progress.sound;
@@ -138,8 +133,8 @@ let padPrevious = [],
   focusEarnedTimeout;
 let capture = null;
 let padFocusElement = null;
-// The pause menu is the shell's one in-round menu. It owns Resume, Restart,
-// Courts, Settings and Quit so nothing important hides behind a drawer.
+// The pause menu is the one in-round menu. It owns Resume, Restart, Courts
+// and Settings so nothing important hides behind a drawer.
 let menuOpen = false;
 let menuReturnFocus = null;
 // A turnover freezes the round until the player asks for it back, so putting
@@ -200,7 +195,7 @@ function openMenu() {
   padFocus($("pause-resume"));
 }
 // Pausing always lands on the menu; from a ready or finished court the menu is
-// still the way to reach Courts, Settings and Quit.
+// still the way to reach Courts and Settings.
 function openPauseMenu() {
   if (view !== "arena") return;
   if (phase === "playing") pause();
@@ -747,16 +742,6 @@ function togglePause() {
   if (menuOpen) dismissPauseMenu();
   else openPauseMenu();
 }
-function quitGame() {
-  if (!inShell) {
-    toast("Close the browser tab to leave the game.");
-    return;
-  }
-  persist();
-  // The renderer has no Node bridge by design. window.close() ends a window
-  // the shell opened, and apps/electron/main.mjs quits on window-all-closed.
-  window.close();
-}
 function queuedSmartTarget() {
   if (!game.ball) return game.bestTarget(aim);
   return game.bestQueuedTarget(aim);
@@ -956,8 +941,8 @@ function applyAudioSettings() {
   sound.setVolume(settings.effectsVolume);
   music.setEnabled(settings.musicOn);
   music.setVolume(settings.musicVolume);
-  // apps/mobile still reads progress.sound, and a shared profile would look
-  // broken if it disagreed with the desktop switches.
+  // progress.sound is the legacy single switch. Keep it in step so a profile
+  // written before the audio split never disagrees with the current settings.
   progress.sound = settings.effectsOn || settings.musicOn;
   unlockAudio();
   syncAudioChrome();
@@ -1262,17 +1247,8 @@ $("theme-button").addEventListener("click", () => {
   persistSettings();
   syncSettingChrome();
 });
-// The desktop shell opens its window fullscreen without the page ever calling
-// requestFullscreen, and Electron reports no display-mode change for it. In the
-// shell a fullscreen window fills the screen exactly; a maximised one does not.
-const shellFullscreen = () =>
-  location.protocol === "tiki:" &&
-  window.innerWidth >= screen.width &&
-  window.innerHeight >= screen.height;
 function syncFullscreen() {
-  const active =
-    document.fullscreenElement === document.documentElement ||
-    shellFullscreen();
+  const active = document.fullscreenElement === document.documentElement;
   document.body.classList.toggle("fullscreen-game", active);
   $("fullscreen-button").setAttribute("aria-pressed", String(active));
   $("fullscreen-button").innerHTML =
@@ -1304,7 +1280,6 @@ function playFromMenu() {
 }
 $("title-play").addEventListener("click", playFromMenu);
 $("title-courts").addEventListener("click", () => applyView("courts"));
-$("title-quit").addEventListener("click", quitGame);
 $("courts-back").addEventListener("click", () => applyView("title"));
 $("pause-resume").addEventListener("click", dismissPauseMenu);
 $("pause-restart").addEventListener("click", () => {
@@ -1319,10 +1294,6 @@ $("pause-courts").addEventListener("click", () => {
   applyView("courts");
 });
 $("pause-settings").addEventListener("click", openSettings);
-$("pause-quit").addEventListener("click", quitGame);
-// Quit only appears in the packaged shell: window.close() does nothing for a
-// normal browser tab, and a dead menu item is worse than no menu item.
-for (const id of ["title-quit", "pause-quit"]) $(id).hidden = !inShell;
 document.querySelectorAll("[data-home-mode]").forEach((button) => {
   button.addEventListener("click", () =>
     switchMode(button.dataset.homeMode, courtIndex),
@@ -1871,9 +1842,8 @@ function frame(now) {
         announce(event.text || `${event.streak} ONE-TOUCH PASSES`);
         announcementTime = now;
       }
-      // The engine is shared with Android and still resumes on its own timer;
-      // the desktop shell holds the round on top of that instead of changing
-      // packages/engine.
+      // The engine resumes on its own timer; the interface holds the round on
+      // top of that instead of changing packages/engine.
       if (
         event.type === "score" &&
         !turnoverEvent &&
@@ -1944,11 +1914,7 @@ setInterval(syncMusicState, 500);
 requestAnimationFrame(frame);
 if (storageFallback)
   toast("Browser storage is unavailable. Progress will last for this session.");
-if (
-  import.meta.env?.PROD &&
-  "serviceWorker" in navigator &&
-  location.protocol !== "tiki:"
-) {
+if (import.meta.env?.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register(`${import.meta.env.BASE_URL}sw.js`)

@@ -1,7 +1,7 @@
-// Looping soundtrack for the desktop shell.
+// Looping soundtrack for the game.
 //
-// packages/presentation/src/audio.js is inside the mobile freeze and is
-// procedural Web Audio only, so streamed music lives here instead. A decoded
+// packages/presentation/src/audio.js is procedural Web Audio only, so streamed
+// music lives here instead. A decoded
 // AudioBuffer is used rather than <audio>, because the element re-opens the
 // decoder at a loop point and leaves an audible gap; a buffer source is
 // sample-accurate.
@@ -16,9 +16,8 @@
 // of megabytes as float PCM, so caching all six would cost hundreds of
 // megabytes of resident memory for no benefit.
 //
-// Everything is same-origin, so `default-src 'self'` (the shell's CSP, served
-// over tiki://) covers both the fetch and the playback with no media-src of
-// its own.
+// Everything is same-origin, so `default-src 'self'` covers both the fetch and
+// the playback with no media-src of its own.
 
 const FADE = 0.35;
 

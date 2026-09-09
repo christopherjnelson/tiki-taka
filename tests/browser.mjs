@@ -390,7 +390,7 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   const menuButtons = await page.evaluate(() => [...document.querySelectorAll('#pause-menu button')]
     .filter(el => !el.disabled && !el.closest('[hidden]') && el.getClientRects().length).map(el => el.id));
   assert.deepEqual(menuButtons, ['pause-resume', 'pause-restart', 'pause-courts', 'pause-settings'],
-    'the pause menu should offer resume, restart, courts and settings (quit is shell only)');
+    'the pause menu should offer resume, restart, courts and settings');
   await page.evaluate(() => document.activeElement?.blur());
   const visited = [];
   for (let step = 0; step < 4; step++) {

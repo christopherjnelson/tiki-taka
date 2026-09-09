@@ -108,7 +108,7 @@ await check(
           .map((el) => el.id),
       ),
       ["title-play", "title-courts", "settings-button"],
-      "the browser build hides Quit, which only works in the shell",
+      "the title menu offers Play, Courts and Settings and nothing else",
     );
     // Keyboard and controller both start on the menu with no clicking first.
     assert.equal(
@@ -259,7 +259,7 @@ await check(
 );
 
 await check(
-  "the pause menu reaches Courts, Settings and Quit two presses from pausing",
+  "the pause menu reaches Courts and Settings two presses from pausing",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },

@@ -15,12 +15,10 @@ const types = {
   ".png": "image/png",
   ".ttf": "font/ttf",
   ".txt": "text/plain",
-  ".apk": "application/vnd.android.package-archive",
 };
-// Kept identical to the policy apps/electron/main.mjs attaches to tiki://
-// responses. The desktop page also carries a CSP meta tag, but a meta element
-// cannot deliver frame-ancestors, so only this header gives the browser and
-// preview builds clickjacking protection.
+// The page also carries a CSP meta tag, but a meta element cannot deliver
+// frame-ancestors, so only this header gives dev and preview builds
+// clickjacking protection.
 const securityHeaders = {
   "Content-Security-Policy":
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
@@ -53,7 +51,6 @@ const publicFile = (relative) =>
   relative.startsWith(`src${path.sep}`) ||
   relative.startsWith(`public${path.sep}`) ||
   appSource(relative, "desktop") ||
-  appSource(relative, "mobile") ||
   relative.startsWith(path.join("packages", "engine", "src") + path.sep) ||
   relative.startsWith(
     path.join("packages", "presentation", "src") + path.sep,
@@ -65,14 +62,6 @@ http
       const pathname = decodeURIComponent(
         new URL(req.url, "http://localhost").pathname,
       );
-      if (!servingBuild && (pathname === "/apk" || pathname === "/apk/")) {
-        res.writeHead(302, {
-          ...securityHeaders,
-          Location: "/public/downloads/tiki-taka-debug.apk",
-          "Cache-Control": "no-store",
-        }).end();
-        return;
-      }
       // The dev server hosts the desktop page at /apps/desktop/, so its
       // page-relative asset links arrive prefixed; the build serves them from
       // the root beside index.html and needs no alias.
@@ -82,14 +71,7 @@ http
             (name) =>
               pathname === `/${name}` || pathname === `/apps/desktop/${name}`,
           );
-      const aliasedPath =
-        pathname === "/mobile" || pathname === "/mobile/"
-          ? "/apps/mobile/index.html"
-          : pathname.startsWith("/mobile/")
-            ? `/apps/mobile/${pathname.slice(8)}`
-            : devAsset
-              ? `/public/${devAsset}`
-              : pathname;
+      const aliasedPath = devAsset ? `/public/${devAsset}` : pathname;
       const requestPath =
         aliasedPath === "/"
           ? "/index.html"

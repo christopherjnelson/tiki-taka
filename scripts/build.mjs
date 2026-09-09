@@ -6,7 +6,6 @@ import { TRACK_FILES } from "../apps/desktop/src/playlist.js";
 
 await rm("dist", { recursive: true, force: true });
 await build({ configFile: path.resolve("vite.desktop.config.js") });
-await build({ configFile: path.resolve("vite.mobile.config.js") });
 for (const asset of [
   "manifest.webmanifest",
   "icon.svg",
@@ -16,8 +15,8 @@ for (const asset of [
   await cp(path.join("public", asset), path.join("dist/desktop", asset));
 // The soundtrack lives in a subdirectory, so it needs the folder made first.
 // The list comes from apps/desktop/src/playlist.js rather than being repeated
-// here: this copy step and the one in scripts/electron-web.mjs drifted apart
-// once and the packaged app shipped with no audio at all.
+// here: a duplicated list drifted from it once and shipped a build with no
+// audio at all.
 await mkdir("dist/desktop/audio", { recursive: true });
 for (const track of TRACK_FILES)
   await cp(
@@ -25,17 +24,11 @@ for (const track of TRACK_FILES)
     path.join("dist/desktop/audio", track),
   );
 await mkdir("dist/desktop/licenses", { recursive: true });
-await mkdir("dist/mobile/licenses", { recursive: true });
-for (const license of ["Poppins-LICENSE.txt", "Roboto-LICENSE.txt"]) {
+for (const license of ["Poppins-LICENSE.txt", "Roboto-LICENSE.txt"])
   await cp(
     path.join("public/fonts", license),
     path.join("dist/desktop/licenses", license),
   );
-  await cp(
-    path.join("public/fonts", license),
-    path.join("dist/mobile/licenses", license),
-  );
-}
 
 async function filesAt(directory, prefix = "") {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -66,9 +59,4 @@ self.addEventListener("activate", event => event.waitUntil(caches.keys().then(ke
 self.addEventListener("fetch", event => { if (event.request.method !== "GET" || new URL(event.request.url).origin !== self.location.origin) return; event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request).then(response => { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put(event.request, copy)); return response; }).catch(() => event.request.mode === "navigate" ? caches.match("./index.html") : Response.error()))); });
 `;
 await writeFile("dist/desktop/sw.js", serviceWorker);
-await rm("apps/mobile/www", { recursive: true, force: true });
-await mkdir("apps/mobile/www", { recursive: true });
-await cp("dist/mobile", "apps/mobile/www", { recursive: true });
-console.log(
-  "Built desktop → dist/desktop and mobile → dist/mobile + apps/mobile/www",
-);
+console.log("Built → dist/desktop");

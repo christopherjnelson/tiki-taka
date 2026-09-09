@@ -2,11 +2,11 @@
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
-    <!-- Mirrors the header injected by apps/electron/main.mjs, minus
-    frame-ancestors, which a meta element cannot deliver: browser deployments
-    must send that one as a real HTTP response header. media-src is not listed
-    because default-src 'self' already covers the soundtrack, which is served
-    from the app origin. -->
+    <!-- Mirrors the header scripts/serve.mjs sends, minus frame-ancestors,
+    which a meta element cannot deliver: deployments must send that one as a
+    real HTTP response header. media-src is not listed because default-src
+    'self' already covers the soundtrack, which is served from the app
+    origin. -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'"
@@ -57,9 +57,6 @@
                 aria-haspopup="dialog"
               >
                 <span class="menu-key" aria-hidden="true">▸</span> Settings
-              </button>
-              <button id="title-quit" type="button" class="menu-item" hidden>
-                <span class="menu-key" aria-hidden="true">▸</span> Quit
               </button>
             </nav>
             <p id="title-play-copy" class="title-note">
@@ -337,14 +334,6 @@
                     >
                       <span class="menu-key" aria-hidden="true">▸</span>
                       Settings
-                    </button>
-                    <button
-                      id="pause-quit"
-                      type="button"
-                      class="menu-item"
-                      hidden
-                    >
-                      <span class="menu-key" aria-hidden="true">▸</span> Quit
                     </button>
                   </nav>
                 </div>

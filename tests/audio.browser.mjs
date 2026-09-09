@@ -41,9 +41,9 @@ const launch = args => playwright.chromium.launch({
   ...(executablePath && { executablePath }),
   args,
 });
-// The default policy is what a player's browser does. The relaxed one is what
-// apps/electron/main.mjs asks for with autoplayPolicy, so the packaged shell's
-// behaviour is covered by the same assertions rather than by reasoning.
+// The default policy is what a player's browser does. The relaxed one covers a
+// browser configured to allow autoplay without a user gesture, so both paths
+// are asserted rather than reasoned about.
 const browser = await launch([]);
 const relaxedBrowser = await launch(['--autoplay-policy=no-user-gesture-required']);
 let failures = 0;
