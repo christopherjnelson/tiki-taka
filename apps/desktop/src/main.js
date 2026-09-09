@@ -1534,6 +1534,7 @@ function pollGamepad(dt) {
     padNavigate($("settings-dialog"), {
       dt,
       direction,
+      horizontal,
       activate: tap(0) && !capture,
     });
   } else if (menuOpen) {
