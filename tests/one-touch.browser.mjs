@@ -69,6 +69,10 @@ try {
     const update = Game.prototype.update;
     const queuePass = Game.prototype.queuePass;
     Game.prototype.update = function (dt, input) {
+      // The title screen's attract demo is a Game too. Leave it alone: this
+      // fixture strips defenders and slows the ball, which would be wrong for
+      // the demo and would point the probe at the wrong round.
+      if (this.config.attract) return update.call(this, dt, input);
       window.__oneTouch.game = this;
       // Isolated UI fixture: remove interceptions and slow only this game's
       // ball so real pointer/key input has a stable in-flight queue window.

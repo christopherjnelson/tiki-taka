@@ -302,6 +302,11 @@ function startAttract() {
     {
       ...COURTS[1],
       name: "Attract",
+      // Marks this instance as the demo. Two Games can be alive across a view
+      // change, and anything watching from outside — a test probe on
+      // Game.prototype.update, a debugging session — needs to be able to tell
+      // the player's round from the one running behind the menu.
+      attract: true,
       // Practice rules: unlimited possessions, so a demo left running on the
       // title screen can never stall on a turnover it has no way to dismiss.
       practice: true,
@@ -633,6 +638,18 @@ function syncAudioHint() {
   if (!hint) return;
   hint.hidden = !(view === "title" && audioBlocked());
 }
+// Mirrors the hold gate onto <body data-resume-ready> so "is a fresh press
+// accepted yet" is observable from outside. It is written wherever holdElapsed
+// changes, not only once a frame: resume() puts the gate back to zero, and a
+// flag that still said "1" until the next frame was a lie anyone reading it in
+// that window would act on.
+function syncResumeGate() {
+  if (!awaitingResume) {
+    delete document.body.dataset.resumeReady;
+    return;
+  }
+  document.body.dataset.resumeReady = holdElapsed < 0.3 ? "0" : "1";
+}
 function syncResumePrompt() {
   const showing = awaitingResume && view === "arena" && !menuOpen;
   $("resume-prompt").hidden = !showing;
@@ -645,6 +662,7 @@ function beginHold(reason) {
   if (awaitingResume) return;
   awaitingResume = true;
   holdElapsed = 0;
+  syncResumeGate();
   // The hold overlay owns the message from here. Anything the announcement
   // strip is still showing would sit underneath #resume-reason and read as a
   // second, smaller copy of the same words.
@@ -663,7 +681,7 @@ function beginHold(reason) {
 function endHold() {
   if (!awaitingResume) return;
   awaitingResume = false;
-  delete document.body.dataset.resumeReady;
+  syncResumeGate();
   holdKeys.clear();
   holdPointers.clear();
   syncResumePrompt();
@@ -713,7 +731,12 @@ function resume() {
   setPauseState(false);
   // A round paused mid-hold comes back to the hold, not straight into play.
   setControlsEnabled(!awaitingResume);
-  if (awaitingResume) holdElapsed = 0;
+  if (awaitingResume) {
+    holdElapsed = 0;
+    // Straight away, not next frame: coming back from the pause menu closes
+    // the gate again, and anything that reads it in between must see that.
+    syncResumeGate();
+  }
   syncResumePrompt();
   $("court").focus({ preventScroll: true });
 }
@@ -1790,7 +1813,7 @@ function frame(now) {
     // dt is clamped per frame, so the hold advances at a frame-rate-dependent
     // rate and no wall-clock wait can predict when it opens. Expose the state
     // so tests can wait on the gate itself rather than race a stopwatch.
-    document.body.dataset.resumeReady = holdElapsed < 0.3 ? "0" : "1";
+    syncResumeGate();
   }
   if (view === "arena" && phase === "playing" && !awaitingResume) {
     let x =

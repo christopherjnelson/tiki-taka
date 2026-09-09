@@ -113,7 +113,9 @@ async function observeGame(page) {
     const update = Game.prototype.update;
     const pass = Game.prototype.pass;
     Game.prototype.update = function(dt, input) {
-      window.__observedGame.game = this;
+      // The title screen's attract demo is a Game too; this probe must follow
+      // the player's round, not the one running behind the menu.
+      if (!this.config.attract) window.__observedGame.game = this;
       window.__observedGame.input = { ...input };
       const carrier = this.carrier, before = { ...this.players[carrier] };
       const result = update.call(this, dt, input);
@@ -518,26 +520,38 @@ await check('service worker serves a complete app reload offline', async () => {
 
 async function offlineReload(baseURL) {
   const context = await browser.newContext({ serviceWorkers: 'allow' });
-  const page = await context.newPage();
-  const errors = watchErrors(page);
-  await gotoArena(page, baseURL, { waitUntil: 'networkidle' });
-  await page.evaluate(async () => {
-    await navigator.serviceWorker.ready;
-    if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
-  });
-  await page.reload({ waitUntil: 'networkidle' });
-  await context.setOffline(true);
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  // Play view hides the court heading, so read the arena's live labels instead.
-  assert.match(await page.locator('#court-title').textContent(), /Courtyard/);
-  await expectText(page.locator('#overlay-kicker'), /FOUR PLAYERS/i);
-  await page.locator('#start-button').click();
-  assert.equal(await page.locator('#game-overlay').isHidden(), true);
-  // The soundtrack is precached with everything else, so it plays offline too.
-  await page.waitForFunction(() => document.body.dataset.music !== 'unavailable');
-  assert.deepEqual(errors, []);
-  await context.setOffline(false);
-  await context.close();
+  try {
+    const page = await context.newPage();
+    const errors = watchErrors(page);
+    await gotoArena(page, baseURL, { waitUntil: 'networkidle' });
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+      if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
+    });
+    await page.reload({ waitUntil: 'networkidle' });
+    await context.setOffline(true);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    // A reload is a cold load, and cold loads open the title screen whatever
+    // the hash says, so the way to the arena offline is the same menu a player
+    // would use. That the menu renders at all is itself the precache working.
+    await page.locator('#title-view').waitFor({ state: 'visible' });
+    await page.locator('#title-play').click();
+    await page.locator('#arena-view').waitFor({ state: 'visible' });
+    // Play view hides the court heading, so read the arena's live labels instead.
+    assert.match(await page.locator('#court-title').textContent(), /Courtyard/);
+    await expectText(page.locator('#overlay-kicker'), /FOUR PLAYERS/i);
+    await page.locator('#start-button').click();
+    assert.equal(await page.locator('#game-overlay').isHidden(), true);
+    // Every track is precached with everything else, so the soundtrack plays
+    // offline too.
+    await page.waitForFunction(() => document.body.dataset.music !== 'unavailable');
+    assert.deepEqual(errors, []);
+    await context.setOffline(false);
+  } finally {
+    // A failure here used to leave an offline context open for the rest of the
+    // suite, which starved every test that ran after it.
+    await context.close();
+  }
 }
 
 
@@ -600,6 +614,50 @@ await check('losing possession holds the round until a fresh button press', asyn
   await page.locator('#game-overlay').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#resume-prompt').isHidden(), true,
     'the end of a round must not leave a press-any-button prompt behind');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+await check('a turnover says its piece exactly once', async () => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
+  // Every string the game draws on a canvas is recorded, which is how the
+  // renderer's floating copy of the turnover text gets caught: it is painted
+  // on the court, not in the DOM, so nothing else here would see it.
+  await context.addInitScript(() => {
+    window.__drawnText = [];
+    const fillText = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) {
+      window.__drawnText.push(String(text));
+      return fillText.call(this, text, ...rest);
+    };
+  });
+  const page = await context.newPage();
+  const errors = watchErrors(page);
+  await gotoArena(page, baseURL);
+  await page.locator('#start-button').click();
+  await observeGame(page);
+  // A milestone announcement is already on screen when possession is lost. The
+  // hold has to take the screen over, not stack a bigger message on top of one
+  // that is still sitting there.
+  await page.evaluate(() => window.__observedGame.game.emit(
+    'one-touch', 'THREE ONE-TOUCH PASSES', 500, 310, { milestone: true, streak: 3 }));
+  await expectText(page.locator('#game-announcement'), /ONE-TOUCH/i);
+  await page.evaluate(() => { window.__drawnText.length = 0; });
+  await page.evaluate(() => window.__observedGame.game.turnover('PASS INTERCEPTED'));
+  await page.locator('#resume-prompt').waitFor({ state: 'visible' });
+  // Once, in the hold overlay — which is also the live region a screen reader
+  // hears, since #resume-reason is role=status aria-live=assertive.
+  await expectText(page.locator('#resume-reason'), /INTERCEPTED/i);
+  await page.waitForTimeout(500);
+  assert.equal((await page.locator('#game-announcement').textContent()).trim(), '',
+    'the hold overlay owns the message, so the announcement strip must be empty');
+  const painted = await page.evaluate(() => window.__drawnText.filter(text => /INTERCEPTED/i.test(text)));
+  assert.deepEqual(painted, [],
+    'the renderer must not float the same words across the court under the hold overlay');
+  const shown = await page.evaluate(() => [...document.querySelectorAll('body *')]
+    .filter(el => !el.children.length && /INTERCEPTED/i.test(el.textContent) && el.getClientRects().length)
+    .map(el => el.id || el.className));
+  assert.equal(shown.length, 1, `the turnover message must appear once, found ${JSON.stringify(shown)}`);
   assert.deepEqual(errors, []);
   await context.close();
 });

@@ -191,7 +191,10 @@ await check(
       const update = Game.prototype.update;
       window.__navGame = null;
       Game.prototype.update = function (...args) {
-        window.__navGame = this;
+        // The title screen runs its own Game behind the menu, and it updates
+        // too. Skip it, or this probe would follow the demo instead of the
+        // round the player actually started.
+        if (!this.config.attract) window.__navGame = this;
         return update.apply(this, args);
       };
     });
@@ -558,6 +561,131 @@ await check(
         true,
         `${suffix} courts screen must not overflow horizontally`,
       );
+      assert.deepEqual(errors, []);
+      await context.close();
+    }
+  },
+);
+
+await check(
+  "a cold load opens the title screen even when the URL still says #play",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage();
+    const errors = errorsFor(page);
+    // #play is pushed into history the moment a round starts, so it survives a
+    // bookmark, a reopened tab and a refresh. A returning player must still
+    // land on the menu rather than in the arena on a ready-state overlay.
+    await page.goto(`${baseURL}/#play`);
+    await page.locator("#title-view").waitFor({ state: "visible" });
+    assert.equal(
+      await page.locator("#arena-view").isHidden(),
+      true,
+      "a stale #play must not open the arena on a cold load",
+    );
+    assert.equal(
+      new URL(page.url()).hash,
+      "",
+      "the URL must not claim a view the player is not looking at",
+    );
+    // Hash navigation inside the session is untouched.
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    assert.equal(page.url().endsWith("#play"), true);
+    await page.goBack();
+    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.goForward();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    // ...but a reload from the arena is a cold load, and cold loads open the
+    // title screen.
+    await page.reload();
+    await page.locator("#title-view").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#arena-view").isHidden(), true);
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
+  "nothing scrolls at 1080x1024, and the court keeps its share of the window",
+  async () => {
+    for (const [width, height] of [
+      [1080, 1024],
+      [1280, 720],
+      [1920, 1080],
+    ]) {
+      const context = await browser.newContext({
+        viewport: { width, height },
+        serviceWorkers: "block",
+      });
+      const page = await context.newPage();
+      const errors = errorsFor(page);
+      await page.goto(`${baseURL}/`);
+      await page.locator("#title-view").waitFor({ state: "visible" });
+      const noScroll = async (where) => {
+        await settled(page);
+        const box = await page.evaluate(() => ({
+          scrollWidth: document.documentElement.scrollWidth,
+          scrollHeight: document.documentElement.scrollHeight,
+          clientWidth: document.documentElement.clientWidth,
+          clientHeight: document.documentElement.clientHeight,
+        }));
+        assert.ok(
+          box.scrollWidth <= box.clientWidth,
+          `${where} scrolls sideways at ${width}x${height}: ${box.scrollWidth} > ${box.clientWidth}`,
+        );
+        assert.ok(
+          box.scrollHeight <= box.clientHeight,
+          `${where} scrolls down at ${width}x${height}: ${box.scrollHeight} > ${box.clientHeight}`,
+        );
+      };
+      await noScroll("the title screen");
+      await page.locator("#title-courts").click();
+      await page.locator("#courts-view").waitFor({ state: "visible" });
+      await noScroll("the courts screen");
+      await page.locator("#courts-back").click();
+      await page.locator("#title-view").waitFor({ state: "visible" });
+      await page.locator("#settings-button").click();
+      await page.locator("#settings-dialog").waitFor({ state: "visible" });
+      await noScroll("the settings screen");
+      // A dialog that fits the page but scrolls inside itself still hides the
+      // controls at the bottom of it, which is the thing being asked for here.
+      if (height >= 1024) {
+        const dialog = await page
+          .locator("#settings-dialog")
+          .evaluate((el) => ({
+            scrollHeight: el.scrollHeight,
+            clientHeight: el.clientHeight,
+          }));
+        assert.ok(
+          dialog.scrollHeight <= dialog.clientHeight,
+          `the settings dialog needs ${dialog.scrollHeight}px inside ${dialog.clientHeight}px at ${width}x${height}`,
+        );
+      }
+      await page.locator("#close-settings").click();
+      await page.locator("#title-play").click();
+      await page.locator("#arena-view").waitFor({ state: "visible" });
+      await noScroll("the arena");
+      // The side rails are drawn from the letterbox the canvas did not take,
+      // so they must never cost the court width. 90.7% is what a 1000:620
+      // court gets from a 16:9 window.
+      const court = await page.locator("#court").boundingBox();
+      if (width / height > 1000 / 620)
+        assert.ok(
+          (court.width / width) * 100 > 90,
+          `the court must keep its share of a ${width}x${height} window, got ${((court.width / width) * 100).toFixed(1)}%`,
+        );
+      for (const id of ["brand-rail", "music-rail"]) {
+        const rail = await page.locator(`#${id}`).boundingBox();
+        assert.ok(
+          rail.x + rail.width <= court.x + 0.5 ||
+            rail.x + 0.5 >= court.x + court.width,
+          `${id} must sit beside the court, not over it, at ${width}x${height}`,
+        );
+      }
       assert.deepEqual(errors, []);
       await context.close();
     }

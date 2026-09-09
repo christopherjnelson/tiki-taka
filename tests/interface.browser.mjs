@@ -82,6 +82,9 @@ async function observeGame(page) {
     const update = Game.prototype.update,
       pass = Game.prototype.pass;
     Game.prototype.update = function (dt, input) {
+      // The title screen's attract demo is a Game too; follow the player's
+      // round, not the one running behind the menu.
+      if (this.config.attract) return update.call(this, dt, input);
       window.__interfaceGame.game = this;
       window.__interfaceGame.input = { ...input };
       return update.call(this, dt, input);
@@ -401,10 +404,16 @@ await check(
       .evaluate((el) => getComputedStyle(el).getPropertyValue("--bg"));
     assert.notEqual(light, dark);
     await page.reload();
+    // The theme is remembered across the reload; the view is not, because a
+    // cold load always opens the title screen. Walk back to the arena for the
+    // Play-view assertions below.
     assert.equal(
       await page.locator("html").getAttribute("data-theme"),
       "light",
     );
+    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
     await useSettingsControl(page, "#theme-button");
     assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
 
@@ -430,6 +439,19 @@ await check(
     );
     await closePauseMenu(page);
     await page.reload();
+    // A reload is a cold load, so it opens the title screen rather than
+    // dropping straight back into the arena. Once the player asks for the
+    // arena again it is still Play view, which is what this is checking.
+    await page.locator("#title-view").waitFor({ state: "visible" });
+    assert.equal(
+      await page
+        .locator("body")
+        .evaluate((el) => el.classList.contains("play-view")),
+      false,
+      "a cold load lands on the title screen, not in Play view",
+    );
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
     assert.equal(
       await page
         .locator("body")
