@@ -229,7 +229,7 @@
           </section>
 
           <section class="game-panel" aria-label="Possession game">
-            <div class="scoreboard" aria-label="Match statistics">
+            <div id="scoreboard" class="scoreboard" aria-label="Match statistics">
               <div class="stat score-stat">
                 <span id="score-label" class="stat-label">FLOW SCORE</span
                 ><strong id="score-value">000</strong>
@@ -270,6 +270,29 @@
               >
               <div class="court-corner-label" aria-hidden="true">
                 TIKI-TAKA SOCIAL CLUB
+              </div>
+              <!-- The one-touch streak used to be painted on the canvas at
+              the top right of the court, directly underneath the MULTIPLIER
+              and POSSESSIONS readouts of the floating scoreboard, which cover
+              that corner in play view. It is a DOM element now so it can be
+              laid out relative to the scoreboard instead of guessing: it sits
+              below the band (--scoreboard-height, measured live), and the
+              overlap is asserted against in tests/one-touch.browser.mjs. -->
+              <div
+                id="one-touch-readout"
+                class="one-touch-readout"
+                role="status"
+                aria-live="off"
+                hidden
+              >
+                <div class="one-touch-pill">
+                  <span id="one-touch-label" class="one-touch-label"
+                    >ONE TOUCH ×0</span
+                  >
+                  <span class="one-touch-track"
+                    ><span id="one-touch-fill" class="one-touch-fill"></span
+                  ></span>
+                </div>
               </div>
               <div id="game-overlay" class="game-overlay">
                 <div class="invitation">

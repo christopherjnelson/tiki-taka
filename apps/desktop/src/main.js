@@ -785,7 +785,45 @@ function syncFocusButtons() {
   $("focus-button").setAttribute("aria-pressed", String(focusToggle));
   $("touch-focus").setAttribute("aria-pressed", String(focusToggle));
 }
+// The scoreboard floats over the top of the court in play view and reflows
+// with the window, so nothing else can be positioned under it from a constant.
+// Its measured height is published as --scoreboard-height and the olé readout
+// starts below it; see .one-touch-readout in style.css.
+let lastScoreboardHeight = -1;
+function publishScoreboardHeight() {
+  const board = $("scoreboard");
+  if (!board) return;
+  const height = document.body.classList.contains("play-view")
+    ? Math.round(board.getBoundingClientRect().height)
+    : 0;
+  if (height === lastScoreboardHeight) return;
+  lastScoreboardHeight = height;
+  document.documentElement.style.setProperty(
+    "--scoreboard-height",
+    `${height}px`,
+  );
+}
+if (typeof ResizeObserver === "function") {
+  const observer = new ResizeObserver(() => publishScoreboardHeight());
+  const board = $("scoreboard");
+  if (board) observer.observe(board);
+}
+// A streak of 0 hides the readout; every tenth pass is a milestone, which is
+// the pink state the canvas badge used to paint.
+function syncOneTouchReadout() {
+  const streak = game?.oneTouchStreak || 0,
+    readout = $("one-touch-readout");
+  if (!readout) return;
+  readout.hidden = !streak;
+  if (!streak) return;
+  const step = streak % 10,
+    progress = step === 0 ? 1 : step / 10;
+  readout.classList.toggle("is-milestone", streak >= 10);
+  $("one-touch-label").textContent = `ONE TOUCH ×${streak}`;
+  $("one-touch-fill").style.width = `${progress * 100}%`;
+}
 function syncHud() {
+  syncOneTouchReadout();
   $("score-value").textContent = String(game.score).padStart(3, "0");
   $("time-value").textContent =
     `${Math.floor(Math.ceil(game.time) / 60)}:${String(Math.max(0, Math.ceil(game.time) % 60)).padStart(2, "0")}`;
@@ -1075,6 +1113,7 @@ function syncSettingChrome() {
   document.documentElement.dataset.theme = settings.theme;
   document.body.classList.toggle("play-view", view === "arena");
   document.body.dataset.view = view;
+  publishScoreboardHeight();
   $("theme-button").setAttribute(
     "aria-pressed",
     String(settings.theme === "light"),

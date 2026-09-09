@@ -164,7 +164,60 @@ try {
       window.__oneTouch.queues.some((entry) => entry.accepted),
     ),
   );
+  // The olé readout used to be painted on the canvas at the court's top right,
+  // underneath the floating scoreboard, so MULTIPLIER and POSSESSIONS covered
+  // it. It is a DOM element now, which means the overlap is a box test rather
+  // than a screenshot: no intersection at any supported size.
+  const overlaps = (a, b) =>
+    a.right > b.left && b.right > a.left && a.bottom > b.top && b.bottom > a.top;
+  for (const size of [
+    { width: 1920, height: 1080 },
+    { width: 1280, height: 720 },
+    { width: 1080, height: 1024 },
+  ]) {
+    await page.setViewportSize(size);
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
+    // Drive the streak straight in: this is a layout assertion, and the chain
+    // above already proved the streak itself is earned by real input.
+    await page.evaluate(() => {
+      window.__oneTouch.game.oneTouchStreak = 12;
+    });
+    await page.waitForFunction(
+      () => !document.querySelector("#one-touch-readout").hidden,
+    );
+    const boxes = await page.evaluate(() => {
+      const box = (selector, closest) => {
+        const node = document.querySelector(selector);
+        const element = closest ? node.closest(closest) : node;
+        const { left, top, right, bottom, width, height } =
+          element.getBoundingClientRect();
+        return { left, top, right, bottom, width, height };
+      };
+      return {
+        ole: box("#one-touch-readout .one-touch-pill"),
+        multiplier: box("#combo-value", ".stat"),
+        possessions: box("#lives-value", ".stat"),
+      };
+    });
+    const label = `${size.width}x${size.height}`;
+    assert.ok(
+      boxes.ole.width > 0 && boxes.ole.height > 0,
+      `olé readout has no box at ${label}`,
+    );
+    assert.ok(
+      !overlaps(boxes.ole, boxes.multiplier),
+      `olé readout overlaps the multiplier at ${label}: ${JSON.stringify(boxes)}`,
+    );
+    assert.ok(
+      !overlaps(boxes.ole, boxes.possessions),
+      `olé readout overlaps possessions at ${label}: ${JSON.stringify(boxes)}`,
+    );
+  }
+  assert.deepEqual(errors, []);
   console.log("✓ real keyboard and pointer input queue a ten-pass one-touch chain; pause clears it while muted");
+  console.log("✓ the olé readout clears the multiplier and possessions at 1920x1080, 1280x720 and 1080x1024");
   await context.close();
 } finally {
   await browser.close();

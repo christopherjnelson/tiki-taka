@@ -404,6 +404,62 @@ h1 span {
   touch-action: none;
   outline-offset: -4px !important;
 }
+/* The one-touch (ole) readout. It hugs the court's top-right corner but
+   starts below the floating scoreboard band, whose measured height main.js
+   publishes as --scoreboard-height, so MULTIPLIER and POSSESSIONS can never
+   cover it however the band reflows. */
+.one-touch-readout {
+  position: absolute;
+  z-index: 5;
+  top: calc(var(--scoreboard-height, 0px) + 8px);
+  left: 50%;
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  padding: 0 18px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.one-touch-readout[hidden] {
+  display: none;
+}
+.one-touch-pill {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 12px;
+  color: #fff;
+  font: 900 11px/1 var(--sign);
+  letter-spacing: 1.5px;
+  background: rgba(7, 10, 30, 0.9);
+  border: 1.5px solid var(--venue-accent);
+  border-radius: 14px;
+  text-shadow: 0 1px 6px #05021a;
+}
+.one-touch-readout.is-milestone .one-touch-pill {
+  border-color: var(--pink);
+}
+.one-touch-track {
+  display: block;
+  overflow: hidden;
+  width: 76px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 4px;
+}
+.one-touch-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--venue-accent);
+  border-radius: 4px;
+}
+.one-touch-readout.is-milestone .one-touch-fill {
+  background: var(--pink);
+}
+body.play-view .one-touch-readout {
+  width: min(100cqw, 161.2903cqh);
+}
 .court-corner-label {
   position: absolute;
   bottom: 12px;
