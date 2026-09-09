@@ -407,6 +407,110 @@ await check('the kick renders as a pitch-dropping thud at the same level as the 
   await context.close();
 });
 
+// The sampled-effect path, with no sample files in the tree: a decoded buffer
+// must play through the same effects master (so the switch and the slider
+// govern it), and a sample that cannot be loaded must leave the synthesised
+// voice in place rather than going silent or throwing.
+await check('a sampled effect plays through the effects master, and a missing one falls back', async () => {
+  const context = await browser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const errors = errorsFor(page);
+  await page.goto(`${baseURL}/`);
+  const result = await page.evaluate(async () => {
+    const { Sound } = await import('/src/audio.js');
+    const sampleRate = 44100;
+    const peakOf = data => {
+      let peak = 0;
+      for (const v of data) peak = Math.max(peak, Math.abs(v));
+      return peak;
+    };
+    const render = async (volume, prepare, play) => {
+      const ctx = new OfflineAudioContext(1, sampleRate * 0.5, sampleRate);
+      const sound = new Sound(true, volume);
+      sound.context = ctx;
+      let oscillators = 0;
+      const made = ctx.createOscillator.bind(ctx);
+      ctx.createOscillator = (...args) => { oscillators++; return made(...args); };
+      await prepare(sound, ctx);
+      play(sound);
+      const data = (await ctx.startRendering()).getChannelData(0);
+      return { peak: peakOf(data), oscillators };
+    };
+    // A real 16-bit WAV built in the page and served by a stubbed fetch: this
+    // walks the whole path the dropped-in files will walk — fetch, decode,
+    // cache, play — without committing an audio file to the tree.
+    const wav = seconds => {
+      const frames = Math.round(sampleRate * seconds);
+      const bytes = new ArrayBuffer(44 + frames * 2);
+      const view = new DataView(bytes);
+      const ascii = (offset, text) => {
+        for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+      };
+      ascii(0, 'RIFF');
+      view.setUint32(4, 36 + frames * 2, true);
+      ascii(8, 'WAVEfmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      ascii(36, 'data');
+      view.setUint32(40, frames * 2, true);
+      for (let i = 0; i < frames; i++)
+        view.setInt16(44 + i * 2, Math.round(0.5 * Math.sin((2 * Math.PI * 300 * i) / sampleRate) * 32767), true);
+      return bytes;
+    };
+    const withSample = (name, gain = 1) => async sound => {
+      const real = window.fetch;
+      window.fetch = async () => new Response(wav(0.2), { status: 200 });
+      try {
+        sound.useSamples([{ name, url: '/public/audio/effects/stand-in.wav', gain }]);
+        await sound.loadSamples();
+      } finally {
+        window.fetch = real;
+      }
+    };
+    const sampled = await render(0.3, withSample('kick'), s => s.play('kick'));
+    const trimmed = await render(0.15, withSample('kick'), s => s.play('kick'));
+    const perSample = await render(0.3, withSample('kick', 0.5), s => s.play('kick'));
+    const disabled = await render(0.3, async sound => {
+      await withSample('kick')(sound);
+      sound.enabled = false;
+    }, s => s.play('kick'));
+    // A URL that will not load: the decode fails, the entry is marked dead and
+    // the synthesised kick plays instead.
+    const missing = await render(0.3, async (sound) => {
+      sound.useSamples([{ name: 'kick', url: '/public/audio/effects/not-here.ogg' }]);
+      await sound.loadSamples();
+    }, s => s.play('kick'));
+    return {
+      sampled: sampled.peak,
+      sampledOscillators: sampled.oscillators,
+      trimmed: trimmed.peak,
+      perSample: perSample.peak,
+      disabled: disabled.peak,
+      missing: missing.peak,
+      missingOscillators: missing.oscillators,
+    };
+  });
+  assert.ok(result.sampled > 0.1,
+    `a registered sample must be heard, got peak ${result.sampled}`);
+  assert.equal(result.sampledOscillators, 0,
+    'a sample replaces the synthesised voice rather than doubling it');
+  assert.ok(Math.abs(result.trimmed - result.sampled / 2) < 0.01,
+    `the effects slider must trim samples, got ${result.trimmed} against ${result.sampled}`);
+  assert.ok(Math.abs(result.perSample - result.sampled / 2) < 0.01,
+    `a per-sample gain must trim that one sample, got ${result.perSample}`);
+  assert.equal(result.disabled, 0, 'the effects switch must silence samples too');
+  assert.ok(result.missing > 0.001 && result.missingOscillators > 0,
+    `a sample that cannot load must fall back to the synthesised effect, got peak ${result.missing}`);
+  // A 404 for the absent sample is expected; nothing else is.
+  assert.deepEqual(errors.filter(entry => !/not-here\.ogg|404/.test(entry)), []);
+  await context.close();
+});
+
 await browser.close();
 await relaxedBrowser.close();
 if (server) server.kill();

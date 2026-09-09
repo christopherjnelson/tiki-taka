@@ -19,6 +19,10 @@ export class Sound {
     this.master = null;
     this.scheduled = new Set();
     this.lastCrowd = -Infinity;
+    // name -> { url, gain, buffer, pending, failed }. Empty until useSamples()
+    // is called, and every lookup falls through to the synthesised voice, so
+    // the game sounds exactly as it does today until real files arrive.
+    this.samples = new Map();
   }
 
   get enabled() {
@@ -62,6 +66,8 @@ export class Sound {
       this.context ||= new (window.AudioContext || window.webkitAudioContext)();
       if (this.context.state === "suspended")
         void this.context.resume().catch(() => {});
+      // The context is what the decode was waiting for.
+      void this.loadSamples();
     } catch {}
   }
 
@@ -83,6 +89,95 @@ export class Sound {
         source.disconnect();
       } catch {}
     });
+  }
+
+  // Sampled effects.
+  //
+  // Recorded cheers and olés drop in here without a rewrite: register a name
+  // and a URL, and play(name) prefers the sample over the synthesised voice.
+  // It decodes once into an AudioBuffer and plays it from a buffer source,
+  // the same approach apps/desktop/src/music.js takes with the soundtrack —
+  // an <audio> element re-opens its decoder on every hit, which is audible on
+  // a fast one-touch chain — and it connects to this class's own master gain,
+  // so the effects switch and the effects slider govern samples exactly as
+  // they govern the oscillators.
+  //
+  // Failure is never fatal and never noisy: a missing file, a 404, a codec the
+  // browser will not decode, or a context that does not exist yet all leave
+  // the synthesised sound in place. A dead entry is marked and never retried.
+  //
+  // `entries` is [{ name, url, gain }]; gain is an optional per-sample trim so
+  // a hot recording can be matched to the mix without touching the master.
+  useSamples(entries = []) {
+    for (const entry of entries) {
+      if (!entry || !entry.name || !entry.url) continue;
+      this.samples.set(entry.name, {
+        url: entry.url,
+        gain: clampVolume(entry.gain, 1),
+        buffer: null,
+        pending: null,
+        failed: false,
+      });
+    }
+    this.loadSamples();
+    return this.samples.size;
+  }
+
+  // Decoding needs a context, which only exists after unlock(), so this is
+  // called both when samples are registered and on unlock. It resolves when
+  // every registered sample has settled one way or the other.
+  loadSamples() {
+    return Promise.all([...this.samples.keys()].map((name) => this.loadSample(name)));
+  }
+
+  loadSample(name) {
+    const entry = this.samples.get(name),
+      ctx = this.context;
+    if (!entry || entry.failed || !ctx) return Promise.resolve(null);
+    if (entry.buffer && entry.context === ctx) return Promise.resolve(entry.buffer);
+    if (entry.pending) return entry.pending;
+    entry.pending = (async () => {
+      const response = await fetch(entry.url);
+      if (!response.ok) throw new Error(`sample ${response.status}`);
+      return await ctx.decodeAudioData(await response.arrayBuffer());
+    })()
+      .then((buffer) => {
+        // A context swap (or a rebuild after one) leaves the decode useless.
+        if (this.context !== ctx) return null;
+        entry.buffer = buffer;
+        entry.context = ctx;
+        return buffer;
+      })
+      .catch(() => {
+        entry.failed = true;
+        return null;
+      })
+      .finally(() => {
+        entry.pending = null;
+      });
+    return entry.pending;
+  }
+
+  // True when the sample carried the sound. False means "nothing was played" —
+  // the caller falls back to the synthesised voice, including on the very
+  // first hit, which is what starts the decode.
+  playSample(name, start) {
+    const entry = this.samples.get(name);
+    if (!entry || entry.failed) return false;
+    if (!entry.buffer || entry.context !== this.context) {
+      void this.loadSample(name);
+      return false;
+    }
+    const ctx = this.context,
+      source = ctx.createBufferSource(),
+      gain = ctx.createGain();
+    source.buffer = entry.buffer;
+    gain.gain.value = entry.gain;
+    source.connect(gain);
+    gain.connect(this.destination());
+    this.track(source);
+    source.start(start);
+    return true;
   }
 
   // A shared quarter-second of white noise, made once per context. The kick's
@@ -216,12 +311,21 @@ export class Sound {
 
   play(type, event = {}) {
     if (!this.enabled || !this.context) return;
+    const ctx = this.context,
+      start = ctx.currentTime;
+    // The crowd's olé: a recorded one is registered as "ole" and takes the
+    // same rate limit as the synthesised chant, so a ten-pass chain cannot
+    // stack five copies of a two-second cheer on top of each other.
     if (type === "one-touch" && (event.milestone || event.streak >= 10)) {
+      if (start - this.lastCrowd < 0.42) return;
+      if (this.playSample("ole", start)) {
+        this.lastCrowd = start;
+        return;
+      }
       this.crowdOle(event);
       return;
     }
-    const ctx = this.context,
-      start = ctx.currentTime;
+    if (this.playSample(type, start)) return;
     if (type === "kick") {
       this.kick(start);
       return;

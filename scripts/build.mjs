@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { TRACK_FILES } from "../apps/desktop/src/playlist.js";
+import { SAMPLE_FILES } from "../apps/desktop/src/samples.js";
 
 await rm("dist", { recursive: true, force: true });
 await build({ configFile: path.resolve("vite.desktop.config.js") });
@@ -23,6 +24,25 @@ for (const track of TRACK_FILES)
     path.join("public/audio", track),
     path.join("dist/desktop/audio", track),
   );
+// Sampled effects, from the same kind of list for the same reason
+// (apps/desktop/src/samples.js). The list is normally empty; a file named
+// there but missing from public/audio/effects is reported and skipped rather
+// than failing the build, so a half-finished drop still produces a playable
+// build — the game falls back to the synthesised effect.
+if (SAMPLE_FILES.length) {
+  await mkdir("dist/desktop/audio/effects", { recursive: true });
+  for (const sample of SAMPLE_FILES)
+    try {
+      await cp(
+        path.join("public/audio/effects", sample),
+        path.join("dist/desktop/audio/effects", sample),
+      );
+    } catch {
+      console.warn(
+        `! public/audio/effects/${sample} is listed in apps/desktop/src/samples.js but missing; the synthesised effect stays`,
+      );
+    }
+}
 await mkdir("dist/desktop/licenses", { recursive: true });
 for (const license of ["Poppins-LICENSE.txt", "Roboto-LICENSE.txt"])
   await cp(

@@ -32,6 +32,7 @@ import {
 import { createLocalDataAdapter } from "../../../packages/data/src/index.js";
 import { createMusic } from "./music.js";
 import { TRACKS } from "./playlist.js";
+import { SAMPLES } from "./samples.js";
 const $ = (id) => document.getElementById(id);
 let storage;
 try {
@@ -81,6 +82,18 @@ if (!settings.audioMigrated) {
   settings.audioMigrated = true;
 }
 const sound = new Sound(settings.effectsOn, settings.effectsVolume);
+// Sampled effects, if any are listed. The URL is resolved exactly the way the
+// soundtrack's is — copied next to index.html by a build, served from public/
+// in the source tree — and an empty list (the default) leaves every effect on
+// its synthesised voice with no fetch at all. See apps/desktop/src/samples.js.
+sound.useSamples(
+  SAMPLES.map((sample) => ({
+    ...sample,
+    url: import.meta.env?.PROD
+      ? new URL(`./audio/effects/${sample.file}`, document.baseURI).href
+      : new URL(`/public/audio/effects/${sample.file}`, location.origin).href,
+  })),
+);
 const music = createMusic({
   tracks: TRACKS,
   // A build copies the tracks next to index.html (scripts/build.mjs); the
