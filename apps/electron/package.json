@@ -1,9 +1,0 @@
-{
-  "name": "tiki-taka-electron",
-  "version": "1.1.1",
-  "private": true,
-  "description": "Desktop shell for the tiki-taka possession game",
-  "desktopName": "tiki-taka.desktop",
-  "type": "module",
-  "main": "main.mjs"
-}

@@ -1,7 +1,18 @@
+// The per-effect constants below are the mix balance and the ceiling: they are
+// set so the loudest effect just fills the headroom, and they are deliberately
+// not re-tuned per player. The master gain is the trim. At 1.0 effects peak
+// between -8 and -16 dBFS, which is too loud beside the soundtrack; the default
+// below is -10.5 dB, which lands a typical effect at about -22 dBFS peak and
+// the loudest (turnover) at about -18.7 dBFS. Anything the player prefers is a
+// slider move away, and the balance between effects is untouched by it.
+export const DEFAULT_EFFECTS_VOLUME = 0.3;
+
 export class Sound {
-  constructor(enabled = true) {
+  constructor(enabled = true, volume = DEFAULT_EFFECTS_VOLUME) {
     this._enabled = Boolean(enabled);
+    this._volume = clampVolume(volume, DEFAULT_EFFECTS_VOLUME);
     this.context = null;
+    this.master = null;
     this.scheduled = new Set();
     this.lastCrowd = -Infinity;
   }
@@ -13,6 +24,32 @@ export class Sound {
   set enabled(value) {
     this._enabled = Boolean(value);
     if (!this._enabled) this.stopScheduled();
+  }
+
+  get volume() {
+    return this._volume;
+  }
+
+  // A gain node rather than a rewrite of the constants, so the slider is a
+  // master trim and the mix balance survives it.
+  setVolume(value) {
+    this._volume = clampVolume(value, this._volume);
+    if (this.master) this.master.gain.value = this._volume;
+    return this._volume;
+  }
+
+  // Callers (and the offline measurement harness) may swap `context` in after
+  // construction, so the master gain is built lazily and rebuilt whenever the
+  // context it belongs to changes.
+  destination() {
+    const ctx = this.context;
+    if (!ctx) return null;
+    if (!this.master || this.master.context !== ctx) {
+      this.master = ctx.createGain();
+      this.master.connect(ctx.destination);
+    }
+    this.master.gain.value = this._volume;
+    return this.master;
   }
 
   unlock() {
@@ -54,7 +91,7 @@ export class Sound {
     gain.gain.linearRampToValueAtTime(volume, start + 0.012);
     gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
     oscillator.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(this.destination());
     this.track(oscillator);
     oscillator.start(start);
     oscillator.stop(start + duration + 0.02);
@@ -72,7 +109,7 @@ export class Sound {
       this.crowdVoice(
         now + 0.025 + voice * 0.013,
         1 + spread * 0.021,
-        emphatic ? 0.055 : 0.042,
+        emphatic ? 0.32 : 0.24,
       );
     }
   }
@@ -104,7 +141,7 @@ export class Sound {
     source.connect(vowelE);
     vowelO.connect(voiceGain);
     vowelE.connect(voiceGain);
-    voiceGain.connect(ctx.destination);
+    voiceGain.connect(this.destination());
     this.track(source);
     source.start(start);
     source.stop(start + 0.84);
@@ -137,8 +174,14 @@ export class Sound {
         notes[i],
         start + i * 0.07,
         0.14,
-        type === "turnover" ? 0.09 : type === "focus" ? 0.025 : 0.045,
+        type === "turnover" ? 0.4 : type === "focus" ? 0.15 : 0.25,
         type === "kick" ? "triangle" : "sine",
       );
   }
+}
+
+function clampVolume(value, fallback) {
+  const volume = Number(value);
+  if (!Number.isFinite(volume)) return fallback;
+  return Math.min(1, Math.max(0, volume));
 }

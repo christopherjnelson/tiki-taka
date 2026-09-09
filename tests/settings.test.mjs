@@ -64,6 +64,32 @@ test("invalid stored values normalize themes, booleans, actions, lengths, and du
   assert.deepEqual(loadSettings({ getItem: () => "{bad" }), defaultSettings());
 });
 
+test("audio settings default to on, clamp levels, and never read old data as silence", () => {
+  const defaults = defaultSettings();
+  assert.equal(defaults.effectsOn, true);
+  assert.equal(defaults.musicOn, true);
+  assert.equal(defaults.effectsVolume, 0.3);
+  assert.equal(defaults.musicVolume, 1);
+  // Absent is what every settings blob written before the split looks like.
+  const old = normalizeSettings({ theme: "light", preset: "arrows" });
+  assert.equal(old.effectsOn, true);
+  assert.equal(old.musicOn, true);
+  assert.equal(old.effectsVolume, 0.3);
+  assert.equal(old.musicVolume, 1);
+  assert.equal(old.audioMigrated, false, "old data must still be waiting for the one-time fold");
+  // Explicitly off stays off, and a zero level is a real setting, not absence.
+  const quiet = normalizeSettings({ effectsOn: false, musicOn: false, effectsVolume: 0, musicVolume: 0 });
+  assert.equal(quiet.effectsOn, false);
+  assert.equal(quiet.musicOn, false);
+  assert.equal(quiet.effectsVolume, 0);
+  assert.equal(quiet.musicVolume, 0);
+  const junk = normalizeSettings({ effectsVolume: "loud", musicVolume: 4, audioMigrated: true });
+  assert.equal(junk.effectsVolume, 0.3, "an unreadable level falls back to the default");
+  assert.equal(junk.musicVolume, 1, "levels above unity clamp to the ceiling");
+  assert.equal(normalizeSettings({ musicVolume: -3 }).musicVolume, 0);
+  assert.equal(junk.audioMigrated, true);
+});
+
 test("presets return independent bindings and resolve held actions", () => {
   const left = presetBindings("left-hand");
   assert.deepEqual(left.moveUp, ["KeyI"]);

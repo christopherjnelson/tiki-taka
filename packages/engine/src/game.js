@@ -1,7 +1,21 @@
 export const WIDTH = 1000,
   HEIGHT = 620;
 export const LIMITS = { left: 50, right: 950, top: 50, bottom: 570 };
-export const FOCUS_REWARDS = { triangle: 1.5, zone: 1, wall: 0.5 };
+export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, wall: 0.5 };
+export const SPLIT_PRESS = {
+  narrow: 70,
+  wide: 200,
+  base: 50,
+  tight: 50,
+  perDefender: 0.3,
+};
+// Ordered by precedence: the label a pass shows is the first bonus it earned.
+export const BONUS_LABELS = {
+  split: "SPLIT THE PRESS",
+  triangle: "TRIANGLE",
+  zone: "ZONE BONUS",
+  wall: "WALL PLAY",
+};
 export const ONE_TOUCH = {
   window: 0.35,
   moveTolerance: 8,
@@ -126,6 +140,44 @@ export function segmentDistance(p, a, b) {
   );
   return distance(p, { x: a.x + t * dx, y: a.y + t * dy });
 }
+// Signed area of the triangle o->a->b: positive when b sits left of o->a.
+const orient = (o, a, b) =>
+  (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+// A proper crossing: each segment has one endpoint strictly either side of the
+// other. Strict inequalities so touching at a point or lying collinear is not a
+// crossing.
+export function segmentsCross(p1, p2, p3, p4) {
+  const d1 = orient(p3, p4, p1);
+  const d2 = orient(p3, p4, p2);
+  const d3 = orient(p1, p2, p3);
+  const d4 = orient(p1, p2, p4);
+  return (
+    ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+    ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+  );
+}
+// The pass splits a pair when it passes between them: the lane crosses the
+// segment joining the two defenders. Difficulty is how narrow that pair is, so
+// among every crossed pair we keep the tightest gap threaded.
+export function splitTightness(defenders, lane) {
+  let separation = null;
+  for (let s = 0; s < lane.length - 1; s++) {
+    for (let a = 0; a < defenders.length; a++) {
+      for (let b = a + 1; b < defenders.length; b++) {
+        if (!segmentsCross(lane[s], lane[s + 1], defenders[a], defenders[b]))
+          continue;
+        const gap = distance(defenders[a], defenders[b]);
+        if (separation === null || gap < separation) separation = gap;
+      }
+    }
+  }
+  if (separation === null) return null;
+  return clamp(
+    (SPLIT_PRESS.wide - separation) / (SPLIT_PRESS.wide - SPLIT_PRESS.narrow),
+    0,
+    1,
+  );
+}
 export function bankPoint(a, b) {
   const { left, right, top, bottom } = LIMITS;
   const candidates = [
@@ -185,6 +237,7 @@ export class Game {
     this.triangles = 0;
     this.banks = 0;
     this.zones = 0;
+    this.splits = 0;
     this.focus = 0;
     this.focusActive = false;
     this.focusNeedsRelease = false;
@@ -231,8 +284,8 @@ export class Game {
     this.oneTouchEligible = false;
     this.queuedPass = null;
   }
-  emit(type, text, x, y) {
-    this.events.push({ type, text, x, y });
+  emit(type, text, x, y, extra) {
+    this.events.push({ type, text, x, y, ...extra });
   }
   bestTarget(aim) {
     const from = this.players[this.carrier];
@@ -282,6 +335,17 @@ export class Game {
     this.oneTouchEligible = false;
     const from = this.players[this.carrier],
       to = this.players[id];
+    const waypoint = bank ? bankPoint(from, to) : null;
+    const lane = waypoint
+      ? [
+          { x: from.x, y: from.y },
+          { ...waypoint },
+          { x: to.x, y: to.y },
+        ]
+      : [
+          { x: from.x, y: from.y },
+          { x: to.x, y: to.y },
+        ];
     this.ball = {
       x: from.x,
       y: from.y,
@@ -289,7 +353,8 @@ export class Game {
       to: id,
       bank,
       bounced: false,
-      waypoint: bank ? bankPoint(from, to) : null,
+      waypoint,
+      split: splitTightness(this.defenders, lane),
       focusUsed: false,
       oneTouch,
       trail: [],
@@ -327,14 +392,27 @@ export class Game {
     const multiplier = 1 + Math.min(4, Math.floor(this.combo / 4));
     const repeat = this.history.at(-2) === this.carrier;
     let points = (repeat ? 6 : 12) * multiplier;
-    let label = `+${points}`;
+    const bonuses = [];
     const p = this.players[this.carrier];
     let focusReward = 0;
     if (ball.bank) {
       this.banks++;
       points += 18 * multiplier;
-      label = "WALL PLAY";
+      bonuses.push("wall");
       focusReward += FOCUS_REWARDS.wall;
+    }
+    if (ball.split !== null) {
+      // Splitting two of three is far harder than two of two, so the reward
+      // scales with how crowded the court is. Focus stays flat.
+      const countScale =
+        1 + SPLIT_PRESS.perDefender * (this.defenders.length - 2);
+      points +=
+        Math.round(
+          (SPLIT_PRESS.base + SPLIT_PRESS.tight * ball.split) * countScale,
+        ) * multiplier;
+      this.splits++;
+      bonuses.push("split");
+      focusReward += FOCUS_REWARDS.split;
     }
     this.history.push(this.carrier);
     if (this.history.length > 4) this.history.shift();
@@ -345,14 +423,14 @@ export class Game {
     ) {
       points += 35 * multiplier;
       this.triangles++;
-      label = "TRIANGLE";
+      bonuses.push("triangle");
       focusReward += FOCUS_REWARDS.triangle;
       if (this.config.endless) this.time += 5;
     }
     if (distance(p, this.zone) < this.zone.r) {
       points += 25 * multiplier;
       this.zones++;
-      label = "ZONE BONUS";
+      bonuses.push("zone");
       focusReward += FOCUS_REWARDS.zone;
       this.rotateZone();
     }
@@ -367,11 +445,15 @@ export class Game {
       points += oneTouchBonus;
     }
     this.score += points;
+    // Several bonuses can land on one pass; the label shows the best of them
+    // while `bonuses` carries the full list for the popup stack.
+    const best = Object.keys(BONUS_LABELS).find((key) => bonuses.includes(key));
     this.emit(
       "score",
-      `${label.startsWith("+") ? "PASS" : label} +${points}`,
+      `${best ? BONUS_LABELS[best] : "PASS"} +${points}`,
       p.x,
       p.y - 25,
+      { bonuses },
     );
     if (!ball.focusUsed && focusReward > 0) {
       const gained = Math.min(focusReward, this.tactic.focus - this.focus);

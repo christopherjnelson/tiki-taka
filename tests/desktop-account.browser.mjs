@@ -65,9 +65,17 @@ try {
       }),
     ),
   );
+  // The sidebar drawer that used to hold the profile button is gone: every
+  // utility lives in the settings dialog now, so the dialog has to be open
+  // before the profile button can be clicked.
+  const openAccount = async () => {
+    if (!(await page.locator("#settings-dialog").evaluate((el) => el.open)))
+      await page.locator("#settings-button").click();
+    await page.locator("#account-button").click();
+  };
   await page.goto(baseURL);
   assert.equal(await page.locator("#xp-label").textContent(), "180 / 300 XP");
-  await page.locator("#account-button").click();
+  await openAccount();
   await page.locator("#register-email").fill("demo@example.com");
   await page
     .locator("#register-username")
@@ -79,7 +87,7 @@ try {
   assert.equal(await page.locator("#xp-label").textContent(), "0 / 300 XP");
   assert.equal(await page.locator("#account-button img").count(), 0);
   assert.equal(await page.evaluate(() => window.__injected), undefined);
-  await page.locator("#account-button").click();
+  await openAccount();
   await page.locator("#logout-button").click();
   await page.waitForFunction(
     () => !document.querySelector("#account-dialog").open,

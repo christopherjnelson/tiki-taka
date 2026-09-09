@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { accessSync, constants, statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { freePort } from "./free-port.mjs";
+import { gotoArena } from "./open-arena.mjs";
 
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -60,7 +61,7 @@ try {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(`${baseURL}/#play`);
+  await gotoArena(page, baseURL);
   await page.locator("#start-button").click();
   await page.evaluate(async () => {
     const { Game } = await import("/src/game.js");
@@ -68,6 +69,10 @@ try {
     const update = Game.prototype.update;
     const queuePass = Game.prototype.queuePass;
     Game.prototype.update = function (dt, input) {
+      // The title screen's attract demo is a Game too. Leave it alone: this
+      // fixture strips defenders and slows the ball, which would be wrong for
+      // the demo and would point the probe at the wrong round.
+      if (this.config.attract) return update.call(this, dt, input);
       window.__oneTouch.game = this;
       // Isolated UI fixture: remove interceptions and slow only this game's
       // ball so real pointer/key input has a stable in-flight queue window.

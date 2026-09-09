@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { accessSync, constants, statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { freePort } from "./free-port.mjs";
+import { gotoArena } from "./open-arena.mjs";
 
 const playwright = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -81,6 +82,9 @@ async function observeGame(page) {
     const update = Game.prototype.update,
       pass = Game.prototype.pass;
     Game.prototype.update = function (dt, input) {
+      // The title screen's attract demo is a Game too; follow the player's
+      // round, not the one running behind the menu.
+      if (this.config.attract) return update.call(this, dt, input);
       window.__interfaceGame.game = this;
       window.__interfaceGame.input = { ...input };
       return update.call(this, dt, input);
@@ -105,20 +109,34 @@ async function settle(page, passes = 0) {
     );
   }, passes);
 }
+// Settings has two doors now: the title menu on the way in, and the pause menu
+// once a court is on screen. Both must work, so this helper takes whichever is
+// on screen rather than a single fixed route.
 async function openSettings(page) {
-  if (!(await page.locator("#settings-button").isVisible())) {
-    await page.locator("#sidebar-toggle").click();
-    await page.locator("#settings-button").waitFor({ state: "visible" });
+  if (await page.locator("#settings-button").isVisible())
+    await page.locator("#settings-button").click();
+  else {
+    await openPauseMenu(page);
+    await page.locator("#pause-settings").click();
   }
-  await page.locator("#settings-button").click();
   await page.locator("#settings-dialog").waitFor({ state: "visible" });
 }
-
-async function useSidebarControl(page, selector) {
-  if (!(await page.locator(selector).isVisible())) {
-    await page.locator("#sidebar-toggle").click();
-    await page.locator(selector).waitFor({ state: "visible" });
+async function openPauseMenu(page) {
+  if (!(await page.locator("#pause-menu").isVisible())) {
+    await page.keyboard.press("Escape");
+    await page.locator("#pause-menu").waitFor({ state: "visible" });
   }
+}
+async function closePauseMenu(page) {
+  if (await page.locator("#pause-menu").isVisible()) {
+    await page.keyboard.press("Escape");
+    await page.locator("#pause-menu").waitFor({ state: "hidden" });
+  }
+}
+// The utility buttons the sidebar used to hold now live in the settings
+// dialog, so reaching one means opening settings first.
+async function useSettingsControl(page, selector) {
+  if (!(await page.locator(selector).isVisible())) await openSettings(page);
   await page.locator(selector).click();
 }
 async function bind(page, action, slot, key) {
@@ -171,7 +189,7 @@ await check(
     });
     const page = await context.newPage(),
       errors = errorsFor(page);
-    await page.goto(`${baseURL}/#play`);
+    await gotoArena(page, baseURL);
     await page.locator("#start-button").click();
     await observeGame(page);
     const timeBefore = await page.evaluate(
@@ -213,7 +231,7 @@ await check(
       "gamepad Start closes settings",
     );
     assert.equal(
-      await page.locator("#game-overlay").isVisible(),
+      await page.locator("#pause-menu").isVisible(),
       true,
       "gamepad modal close must not resume behind it",
     );
@@ -268,17 +286,13 @@ await check(
     assert.equal(await page.locator("#preset-select").inputValue(), "custom");
     await page.locator("#close-settings").click();
     assert.equal(
-      await page.locator("#game-overlay").isVisible(),
+      await page.locator("#pause-menu").isVisible(),
       true,
-      "closing settings leaves the round paused",
+      "closing settings leaves the round paused on the pause menu",
     );
-    if (
-      await page
-        .locator("body")
-        .evaluate((el) => el.classList.contains("sidebar-open"))
-    )
-      await page.keyboard.press("Escape");
-    await page.locator("#start-button").click();
+    await closePauseMenu(page);
+    if (await page.locator("#game-overlay").isVisible())
+      await page.locator("#start-button").click();
 
     const before = await page.evaluate(() => ({
       ...window.__interfaceGame.game.players[
@@ -375,12 +389,12 @@ await check(
     });
     const page = await context.newPage(),
       errors = errorsFor(page);
-    await page.goto(`${baseURL}/#play`);
+    await gotoArena(page, baseURL);
     assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
     const dark = await page
       .locator("html")
       .evaluate((el) => getComputedStyle(el).getPropertyValue("--bg"));
-    await useSidebarControl(page, "#theme-button");
+    await useSettingsControl(page, "#theme-button");
     assert.equal(
       await page.locator("html").getAttribute("data-theme"),
       "light",
@@ -390,27 +404,54 @@ await check(
       .evaluate((el) => getComputedStyle(el).getPropertyValue("--bg"));
     assert.notEqual(light, dark);
     await page.reload();
+    // The theme is remembered across the reload; the view is not, because a
+    // cold load always opens the title screen. Walk back to the arena for the
+    // Play-view assertions below.
     assert.equal(
       await page.locator("html").getAttribute("data-theme"),
       "light",
     );
-    await useSidebarControl(page, "#theme-button");
+    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    await useSettingsControl(page, "#theme-button");
     assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
 
-    await useSidebarControl(page, "#play-view-button");
     assert.equal(
       await page
         .locator("body")
         .evaluate((el) => el.classList.contains("play-view")),
       true,
+      "the arena is always presented in Play view",
     );
-    assert.equal(await page.locator(".sidebar").isHidden(), true);
+    assert.equal(await page.locator("#play-view-button").count(), 0);
+    // The navigation drawer is gone entirely; the pause menu replaces it.
+    assert.equal(await page.locator(".sidebar").count(), 0);
+    assert.equal(await page.locator("#sidebar-toggle").count(), 0);
+    if (await page.locator("#settings-dialog").evaluate((el) => el.open))
+      await page.locator("#close-settings").click();
+    await closePauseMenu(page);
+    await openPauseMenu(page);
     assert.equal(
-      await page.locator("#sidebar-toggle").isVisible(),
+      await page.locator("#pause-settings").isVisible(),
       true,
-      "menu toggle remains accessible in Play view",
+      "settings remain reachable mid-round through the pause menu",
     );
+    await closePauseMenu(page);
     await page.reload();
+    // A reload is a cold load, so it opens the title screen rather than
+    // dropping straight back into the arena. Once the player asks for the
+    // arena again it is still Play view, which is what this is checking.
+    await page.locator("#title-view").waitFor({ state: "visible" });
+    assert.equal(
+      await page
+        .locator("body")
+        .evaluate((el) => el.classList.contains("play-view")),
+      false,
+      "a cold load lands on the title screen, not in Play view",
+    );
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
     assert.equal(
       await page
         .locator("body")
@@ -477,8 +518,17 @@ await check(
     await page.screenshot({
       path: new URL("interface-play-view.png", outputDir).pathname,
     });
-    await useSidebarControl(page, "#play-view-button");
-    assert.equal(await page.locator(".sidebar").isVisible(), true);
+    // Pause -> Courts leaves the play-view presentation for the courts screen.
+    await openPauseMenu(page);
+    await page.locator("#pause-courts").click();
+    await page.locator("#courts-view").waitFor({ state: "visible" });
+    assert.equal(
+      await page
+        .locator("body")
+        .evaluate((el) => el.classList.contains("play-view")),
+      false,
+    );
+    assert.equal(await page.locator(".court-item").count(), 6);
     assert.deepEqual(errors, []);
     await context.close();
   },
@@ -509,8 +559,8 @@ await check(
     );
     const page = await context.newPage(),
       errors = errorsFor(page);
-    await page.goto(`${baseURL}/#play`);
-    await useSidebarControl(page, "#fullscreen-button");
+    await gotoArena(page, baseURL);
+    await useSettingsControl(page, "#fullscreen-button");
     await page.waitForTimeout(100);
     const fullscreen = await page.evaluate(
       () => document.fullscreenElement === document.documentElement,
@@ -520,7 +570,7 @@ await check(
         await page.locator("#fullscreen-button").getAttribute("aria-pressed"),
         "true",
       );
-      await useSidebarControl(page, "#fullscreen-button");
+      await useSettingsControl(page, "#fullscreen-button");
       await page.waitForFunction(() => !document.fullscreenElement);
     } else {
       assert.match(
@@ -528,14 +578,27 @@ await check(
         /Fullscreen is not available/i,
       );
     }
+    if (await page.locator("#settings-dialog").evaluate((el) => el.open))
+      await page.locator("#close-settings").click();
+    await closePauseMenu(page);
     const ids = [],
       accents = [],
       frames = [];
     for (let i = 0; i < 6; i++) {
-      if (await page.locator("#arena-view").isVisible())
-        await page.locator("#arena-home-button").click();
+      if (await page.locator("#arena-view").isVisible()) {
+        await openPauseMenu(page);
+        await page.locator("#pause-courts").click();
+        await page.locator("#courts-view").waitFor({ state: "visible" });
+      }
       await page.locator(".court-item").nth(i).click();
-      await page.waitForTimeout(80);
+      await page.locator("#arena-view").waitFor({ state: "visible" });
+      await page.evaluate(
+        () =>
+          new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve)),
+          ),
+      );
+      await page.waitForTimeout(250);
       ids.push(await page.locator("html").getAttribute("data-venue"));
       accents.push(
         await page
@@ -580,7 +643,7 @@ await check(
       });
       const page = await context.newPage(),
         errors = errorsFor(page);
-      await page.goto(`${baseURL}/#play`);
+      await gotoArena(page, baseURL);
       assert.equal(
         await page.locator("#touch-pass").isVisible(),
         true,
@@ -599,9 +662,13 @@ await check(
         ),
         true,
       );
-      if (!(await page.locator("#play-view-button").isVisible()))
-        await page.locator("#sidebar-toggle").tap();
-      await page.locator("#play-view-button").tap();
+      assert.equal(
+        await page
+          .locator("body")
+          .evaluate((el) => el.classList.contains("play-view")),
+        true,
+        `${viewport.width}x${viewport.height} play view is always on in the arena`,
+      );
       await page.evaluate(
         () =>
           new Promise((resolve) =>
@@ -614,7 +681,7 @@ await check(
         "#touch-pass",
         "#joystick",
         "#touch-focus",
-        "#sidebar-toggle",
+        "#pause-button",
       ]) {
         const box = await page.locator(selector).boundingBox();
         assert.ok(
@@ -634,8 +701,12 @@ await check(
         Math.abs(court.width / court.height - 1000 / 620) < 0.01,
         `${viewport.width}x${viewport.height} Play view court aspect`,
       );
-      if (!(await page.locator("#theme-button").isVisible()))
-        await page.locator("#sidebar-toggle").tap();
+      if (!(await page.locator("#theme-button").isVisible())) {
+        await page.locator("#pause-button").tap();
+        await page.locator("#pause-menu").waitFor({ state: "visible" });
+        await page.locator("#pause-settings").tap();
+        await page.locator("#settings-dialog").waitFor({ state: "visible" });
+      }
       await page.locator("#theme-button").tap();
       assert.equal(
         await page.locator("html").getAttribute("data-theme"),

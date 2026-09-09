@@ -30,6 +30,8 @@ import {
   captureAllowed,
 } from "../../../packages/engine/src/settings.js";
 import { createLocalDataAdapter } from "../../../packages/data/src/index.js";
+import { createMusic } from "./music.js";
+import { TRACKS } from "./playlist.js";
 const $ = (id) => document.getElementById(id);
 let storage;
 try {
@@ -66,13 +68,50 @@ let progress = initialData.progress;
 let settings = initialData.settings;
 let accountStats = initialData.stats;
 let profile = (await dataAdapter.getSession())?.profile || null;
-const sound = new Sound(progress.sound);
+// One switch used to cover everything, and it lived on `progress.sound`.
+// Effects and music now have a switch and a level each, in settings. A player
+// who had turned the old switch off must not be blasted on the next launch, so
+// the first run after the split folds the old boolean into all four fields;
+// `audioMigrated` makes that a one-time step so a later "music off, effects on"
+// is never overwritten by it. `progress.sound` is still written so an older
+// saved profile keeps a value that agrees with "is anything audible".
+if (!settings.audioMigrated) {
+  settings.effectsOn = progress.sound;
+  settings.musicOn = progress.sound;
+  settings.audioMigrated = true;
+}
+const sound = new Sound(settings.effectsOn, settings.effectsVolume);
+const music = createMusic({
+  tracks: TRACKS,
+  // A build copies the tracks next to index.html (scripts/build.mjs); the
+  // source tree is served straight from public/. Picking one rather than
+  // probing both keeps a 404 out of the console.
+  resolve: (track) =>
+    import.meta.env?.PROD
+      ? new URL(`./audio/${track.file}`, document.baseURI).href
+      : new URL(`/public/audio/${track.file}`, location.origin).href,
+  trim: settings.musicVolume,
+});
+music.setEnabled(settings.musicOn);
 const renderer = new Renderer($("court"));
+const viewForHash = () =>
+  location.hash === "#play"
+    ? "arena"
+    : location.hash === "#courts"
+      ? "courts"
+      : "title";
 let mode = "career",
   courtIndex = progress.lastCourt,
   game,
   phase = "ready",
-  view = location.hash === "#play" ? "arena" : "home",
+  // A cold load always opens the title screen. applyView() pushes #play when a
+  // round starts, so that hash outlives the session in history, bookmarks and
+  // reopened tabs; honouring it on boot drops a returning player straight into
+  // the arena, where the ready-state overlay reads as a pause menu they never
+  // asked for. Within a session the hash still drives the view (see the
+  // hashchange listener), so back and forward behave — only this first paint
+  // ignores it, and the boot below rewrites the URL so it cannot then lie.
+  view = "title",
   bank = false,
   focusToggle = false;
 let keys = new Set(),
@@ -84,6 +123,7 @@ let keys = new Set(),
 let padPrevious = [],
   padConnected = false,
   menuRepeat = 0,
+  sliderRepeat = 0,
   finished = false,
   roundCleared = false,
   lastTime = 0,
@@ -92,8 +132,17 @@ let padPrevious = [],
   announcementTime = 0,
   focusEarnedTimeout;
 let capture = null;
-let sidebarOpen = false;
-let sidebarReturnFocus = null;
+let padFocusElement = null;
+// The pause menu is the one in-round menu. It owns Resume, Restart, Courts
+// and Settings so nothing important hides behind a drawer.
+let menuOpen = false;
+let menuReturnFocus = null;
+// A turnover freezes the round until the player asks for it back, so putting
+// the controller down for a moment never costs the next possession.
+let awaitingResume = false,
+  holdKeys = new Set(),
+  holdPointers = new Set(),
+  holdElapsed = 0;
 let pointerId = null,
   joystickId = null,
   joystickOrigin = null;
@@ -122,64 +171,66 @@ function toast(text) {
   clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => $("toast").classList.remove("visible"), 4000);
 }
-const mobileSidebar = () => matchMedia("(max-width: 900px)").matches;
-const drawerSidebar = () =>
-  mobileSidebar() || (view === "arena" && settings.playView);
-function syncSidebar() {
-  const expanded = drawerSidebar() ? sidebarOpen : !settings.sidebarCollapsed;
-  document.body.classList.toggle(
-    "sidebar-open",
-    drawerSidebar() && sidebarOpen,
-  );
-  document.body.classList.toggle(
-    "sidebar-collapsed",
-    !drawerSidebar() && settings.sidebarCollapsed,
-  );
-  $("sidebar-toggle").setAttribute("aria-expanded", String(expanded));
-  $("sidebar-toggle").textContent = expanded ? "Hide sidebar" : "Show sidebar";
-  $("sidebar-backdrop").hidden = !(drawerSidebar() && sidebarOpen);
-  if ($("arena-view")) $("arena-view").inert = drawerSidebar() && sidebarOpen;
-  if ($("home-view")) $("home-view").inert = drawerSidebar() && sidebarOpen;
+const anyDialogOpen = () =>
+  $("settings-dialog").open ||
+  $("help-dialog").open ||
+  $("account-dialog").open;
+// Any menu that must swallow gameplay input before it reaches the court.
+const menuBlocking = () => menuOpen || anyDialogOpen();
+function syncPauseMenu() {
+  const open = menuOpen && view === "arena";
+  $("pause-menu").hidden = !open;
+  document.body.classList.toggle("menu-open", open);
+  // The pause menu covers the court, so the start/finish overlay and the
+  // resume prompt step aside rather than stacking underneath it.
+  $("game-overlay").inert = open;
+  syncResumePrompt();
 }
-function closeSidebar({ restoreFocus = true } = {}) {
-  sidebarOpen = false;
-  syncSidebar();
-  if (restoreFocus) sidebarReturnFocus?.focus({ preventScroll: true });
-  sidebarReturnFocus = null;
+function openMenu() {
+  if (view !== "arena" || menuOpen) return;
+  clearInput();
+  menuReturnFocus = document.activeElement;
+  menuOpen = true;
+  syncPauseMenu();
+  padFocus($("pause-resume"));
 }
-function toggleSidebar() {
-  if (drawerSidebar()) {
-    if (sidebarOpen) closeSidebar();
-    else {
-      if (phase === "playing") pause();
-      clearInput();
-      sidebarReturnFocus = document.activeElement;
-      sidebarOpen = true;
-      syncSidebar();
-      $("home-button")?.focus({ preventScroll: true });
-    }
-  } else {
-    const opening = settings.sidebarCollapsed;
-    if (opening) {
-      if (phase === "playing") pause();
-      clearInput();
-    }
-    settings.sidebarCollapsed = !settings.sidebarCollapsed;
-    persistSettings();
-    syncSidebar();
-  }
+// Pausing always lands on the menu; from a ready or finished court the menu is
+// still the way to reach Courts and Settings.
+function openPauseMenu() {
+  if (view !== "arena") return;
+  if (phase === "playing") pause();
+  else openMenu();
 }
-function syncHome() {
-  const resumable = phase === "paused";
+function closePauseMenu({ restoreFocus = true } = {}) {
+  if (!menuOpen) return;
+  menuOpen = false;
+  syncPauseMenu();
+  if (restoreFocus)
+    (menuReturnFocus?.isConnected ? menuReturnFocus : $("court"))?.focus({
+      preventScroll: true,
+    });
+  menuReturnFocus = null;
+}
+// Leaving the menu resumes the round when there was one to resume.
+function dismissPauseMenu() {
+  const wasPaused = phase === "paused";
+  closePauseMenu({ restoreFocus: !wasPaused });
+  if (wasPaused) resume();
+}
+function syncTitle() {
+  const resumable = phase === "paused" || phase === "playing";
   const court = COURTS[resumable ? courtIndex : progress.lastCourt];
-  $("home-continue").textContent = resumable
-    ? "Resume round"
+  $("title-play").lastChild.textContent = resumable
+    ? " Resume"
     : progress.xp > 0
-      ? "Continue World Tour"
-      : "Start World Tour";
-  $("home-continue-copy").textContent = resumable
+      ? " Continue"
+      : " Play";
+  $("title-play-copy").textContent = resumable
     ? `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`
     : `${court.name} · ${court.place}`;
+}
+function syncHome() {
+  if ($("title-view")) syncTitle();
   const courtProgress = Object.values(progress.courts || {});
   $("home-stars").textContent = String(
     courtProgress.reduce((total, item) => total + (item.stars || 0), 0),
@@ -192,51 +243,118 @@ function syncHome() {
   $("home-total-passes").textContent = String(accountStats.totalPasses);
   $("home-best-one-touch").textContent = String(accountStats.bestOneTouch);
 }
-function arenaWorkspaceLabel() {
-  const modeName =
-    mode === "career"
-      ? "WORLD TOUR"
-      : mode === "daily"
-        ? "DAILY CIRCUIT"
-        : mode === "endless"
-          ? "ENDLESS FLOW"
-          : "FREE PRACTICE";
-  return `${modeName} / ${game?.config?.name || COURTS[courtIndex].name}`;
-}
 function applyView(next, { updateHash = true } = {}) {
-  if (next === "home" && phase === "playing") pause();
   view = next;
-  $("home-view").hidden = view !== "home";
+  if (next !== "arena" && phase === "playing") pause();
+  $("title-view").hidden = view !== "title";
+  $("courts-view").hidden = view !== "courts";
   $("arena-view").hidden = view !== "arena";
-  $("arena-home-button").hidden = view !== "arena";
-  $("workspace-label").textContent =
-    view === "arena" ? arenaWorkspaceLabel() : "HOME";
-  $("home-button").setAttribute(
-    "aria-current",
-    view === "home" ? "page" : "false",
-  );
-  if (view === "home") {
-    closeSidebar({ restoreFocus: false });
-    syncHome();
-  }
+  if (view !== "arena") closePauseMenu({ restoreFocus: false });
+  // Exactly one game is live at a time: the demo is built on the way into the
+  // title screen and dropped on the way out, before the arena starts drawing.
+  if (view === "title") startAttract();
+  else stopAttract();
   syncProgress();
   syncSettingChrome();
-  syncSidebar();
+  syncPauseMenu();
   requestAnimationFrame(() => {
-    if ($("settings-dialog").open || $("help-dialog").open || sidebarOpen)
-      return;
-    if (view === "home") {
-      $("home-title").tabIndex = -1;
-      $("home-title").focus({ preventScroll: true });
-    } else if ($("game-overlay").hidden)
+    if (anyDialogOpen() || menuOpen) return;
+    if (view === "title") padFocus($("title-play"));
+    else if (view === "courts") padFocus($("courts-back"));
+    else if ($("game-overlay").hidden)
       $("court").focus({ preventScroll: true });
-    else $("start-button").focus({ preventScroll: true });
+    else padFocus($("start-button"));
   });
   if (updateHash) {
-    const hash = view === "arena" ? "#play" : "";
+    const hash =
+      view === "arena" ? "#play" : view === "courts" ? "#courts" : "";
     if (location.hash !== hash)
       history.pushState(null, "", hash || location.pathname + location.search);
   }
+}
+// --- The title screen's attract demo -------------------------------------
+//
+// A second Game and a second Renderer, with the bots keeping the ball among
+// themselves, so the first thing a player sees is the game and not a
+// description of it. Three rules hold it in its place:
+//
+//   * one loop. It is stepped from the shell's existing rAF loop rather than
+//     starting a second one, so it cannot outlive the screen it belongs to or
+//     run alongside the arena;
+//   * it owns nothing. Its events feed its own renderer for the flourish and
+//     are then dropped: no progress, no records, no round stats, no sound;
+//   * it is invisible to input. The canvas is aria-hidden and not focusable,
+//     and nothing here touches `game`, `phase` or the key state.
+const attractCanvas = $("attract-court");
+let attractGame = null,
+  attractRenderer = null,
+  attractPassIn = 0;
+function startAttract() {
+  if (!attractCanvas || attractGame) return;
+  attractRenderer ||= new Renderer(attractCanvas);
+  attractRenderer.effects.length = 0;
+  attractGame = new Game(
+    {
+      ...COURTS[1],
+      name: "Attract",
+      // Marks this instance as the demo. Two Games can be alive across a view
+      // change, and anything watching from outside — a test probe on
+      // Game.prototype.update, a debugging session — needs to be able to tell
+      // the player's round from the one running behind the menu.
+      attract: true,
+      // Practice rules: unlimited possessions, so a demo left running on the
+      // title screen can never stall on a turnover it has no way to dismiss.
+      practice: true,
+      target: 0,
+      time: 120,
+      speed: 74,
+      defenders: 3,
+      seed: (Date.now() >>> 0) || 1,
+    },
+    "balanced",
+  );
+  attractPassIn = 0.9;
+}
+function stopAttract() {
+  attractGame = null;
+  if (attractRenderer) attractRenderer.effects.length = 0;
+}
+function updateAttract(dt) {
+  if (!attractGame || !attractRenderer) return;
+  const demo = attractGame,
+    carrier = demo.players[demo.carrier];
+  // Drift the carrier off the nearest defender and back towards the middle, so
+  // the demo reads as play rather than as four statues. The engine moves the
+  // teammates and the press on its own.
+  let x = 0,
+    y = 0;
+  const nearest = demo.defenders
+    .map((defender) => ({ defender, gap: distance(defender, carrier) }))
+    .sort((a, b) => a.gap - b.gap)[0];
+  if (nearest && nearest.gap > 0.001) {
+    x = (carrier.x - nearest.defender.x) / nearest.gap;
+    y = (carrier.y - nearest.defender.y) / nearest.gap;
+  }
+  x += (500 - carrier.x) / 900;
+  y += (310 - carrier.y) / 560;
+  demo.update(dt, { x, y, focus: false });
+  attractPassIn -= dt;
+  if (!demo.ball && attractPassIn <= 0) {
+    // bestTarget(null) is the same smart pass the pass button gives a player,
+    // so the demo plays the game the way the game means it to be played.
+    demo.pass(demo.bestTarget(null));
+    attractPassIn = 0.55 + Math.random() * 0.5;
+  }
+  for (const event of demo.events) attractRenderer.addEvent(event);
+  demo.events = [];
+  if (demo.status !== "playing") {
+    // The clock ran out. Nothing is scored or saved; another round simply
+    // starts, and the next frame renders that one instead.
+    attractGame = null;
+    startAttract();
+    return;
+  }
+  attractRenderer.render(demo, { preview: false });
 }
 function config() {
   if (mode === "daily") return dailyConfig();
@@ -297,12 +415,12 @@ function syncProgress() {
     btn.addEventListener("click", () => switchMode("career", i));
     $("court-list").append(btn);
   });
-  document.querySelectorAll("[data-mode]").forEach((btn) => {
-    const active = view === "arena" && btn.dataset.mode === mode;
+  document.querySelectorAll("[data-home-mode]").forEach((btn) => {
+    const active = view === "arena" && btn.dataset.homeMode === mode;
     btn.classList.toggle("active", active);
     btn.setAttribute("aria-pressed", String(active));
   });
-  if ($("home-view")) syncHome();
+  syncHome();
 }
 function setOverlay(kicker, title, copy, primary, secondary = "") {
   $("game-overlay").hidden = false;
@@ -335,16 +453,28 @@ function setPauseState(paused) {
     settings.bindings.pause.map(readableKey).join(" / ") || "unbound";
   $("pause-button").title = `${paused ? "Resume" : "Pause"} (${pauseKeys})`;
 }
+// Every announcement carries a sequence number so the deferred paint and the
+// 2.5s wipe belong to one specific call. Without it a later announcement (or a
+// clearAnnouncement) could be undone a frame afterwards by an earlier call's
+// pending rAF, which is how a stale line ends up sitting under a newer one.
+let announcementSeq = 0;
 function announce(text) {
   clearTimeout(announcementTimeout);
+  const seq = ++announcementSeq;
   $("game-announcement").textContent = "";
   requestAnimationFrame(() => {
+    if (seq !== announcementSeq) return;
     $("game-announcement").textContent = text;
   });
-  announcementTimeout = setTimeout(
-    () => ($("game-announcement").textContent = ""),
-    2500,
-  );
+  announcementTimeout = setTimeout(() => {
+    if (seq !== announcementSeq) return;
+    $("game-announcement").textContent = "";
+  }, 2500);
+}
+function clearAnnouncement() {
+  announcementSeq++;
+  clearTimeout(announcementTimeout);
+  $("game-announcement").textContent = "";
 }
 function prepare() {
   renderer.effects.length = 0;
@@ -362,11 +492,10 @@ function prepare() {
   roundCleared = false;
   bank = false;
   focusToggle = false;
+  endHold();
   clearInput();
   $("eyebrow").textContent = game.config.place;
   $("court-title").textContent = game.config.name;
-  if (view === "arena")
-    $("workspace-label").textContent = arenaWorkspaceLabel();
   $("court-description").textContent = game.config.description;
   $("mode-label").textContent =
     mode === "career"
@@ -382,7 +511,10 @@ function prepare() {
   $("tactic-select").disabled = false;
   $("tactic-select").value = progress.tactic;
   $("tactic-description").textContent = TACTICS[progress.tactic].label;
-  $("pause-button").disabled = true;
+  // With the sidebar gone this button is the only pointer-driven way into the
+  // menu, so it stays live for the whole time the arena is on screen rather
+  // than only while a round is running. Touch players need it before kickoff.
+  $("pause-button").disabled = false;
   setPauseState(false);
   setControlsEnabled(false);
   $("bank-button").setAttribute("aria-pressed", "false");
@@ -413,7 +545,7 @@ function prepare() {
   syncHud();
 }
 function switchMode(next, index = courtIndex) {
-  if (sidebarOpen) closeSidebar({ restoreFocus: false });
+  closePauseMenu({ restoreFocus: false });
   if (phase === "playing" || phase === "paused") {
     pause();
     applyView("arena");
@@ -436,8 +568,8 @@ function switchMode(next, index = courtIndex) {
 }
 let pendingSwitch = null;
 function start() {
-  if ($("settings-dialog").open || $("help-dialog").open || sidebarOpen) return;
-  sound.unlock();
+  if (menuBlocking()) return;
+  unlockAudio();
   if (
     phase === "ready" &&
     mode === "daily" &&
@@ -468,11 +600,106 @@ function start() {
       : `Keep it moving. Click a teammate or use ${settings.bindings.smartPass.map(readableKey).join(" / ")} for a smart pass.`,
   );
 }
+// The court only takes movement and aim while a round is actually running and
+// is not waiting for the player to pick the ball back up.
+const acceptingPlayInput = () =>
+  view === "arena" && phase === "playing" && !awaitingResume;
+// One gesture unlocks both the effects engine and the soundtrack. Browsers
+// block audio until a real user interaction, so every entry point routes here.
+function unlockAudio() {
+  sound.unlock();
+  music.unlock();
+  syncMusicState();
+}
+function syncMusicState() {
+  document.body.dataset.music = music.state;
+  syncAudioHint();
+  // The playlist advances on its own when a track ends, so the rail's title is
+  // refreshed on this poll rather than waiting for a player to press something.
+  syncMusicRail();
+}
+// A browser will not resume an AudioContext until a real user activation
+// gesture lands, and a gamepad button is not one, so a controller player can
+// sit on the title screen in silence with nothing to tell them why. Blocked
+// means: the player asked for this sound, nothing failed, and the context is
+// still not running. Muted audio and unavailable audio are both "not blocked".
+function audioBlocked() {
+  const effectsBlocked =
+    settings.effectsOn && (!sound.context || sound.context.state !== "running");
+  return Boolean((settings.musicOn && music.blocked) || effectsBlocked);
+}
+function syncAudioHint() {
+  const hint = $("audio-hint");
+  if (!hint) return;
+  hint.hidden = !(view === "title" && audioBlocked());
+}
+// Mirrors the hold gate onto <body data-resume-ready> so "is a fresh press
+// accepted yet" is observable from outside. It is written wherever holdElapsed
+// changes, not only once a frame: resume() puts the gate back to zero, and a
+// flag that still said "1" until the next frame was a lie anyone reading it in
+// that window would act on.
+function syncResumeGate() {
+  if (!awaitingResume) {
+    delete document.body.dataset.resumeReady;
+    return;
+  }
+  document.body.dataset.resumeReady = holdElapsed < 0.3 ? "0" : "1";
+}
+function syncResumePrompt() {
+  const showing = awaitingResume && view === "arena" && !menuOpen;
+  $("resume-prompt").hidden = !showing;
+  $("court-wrap").classList.toggle("is-held", showing);
+}
+// A turnover holds the round. The buttons and keys that were already down when
+// the hold started are remembered so the press the player was still making
+// cannot dismiss the message they need to read.
+function beginHold(reason) {
+  if (awaitingResume) return;
+  awaitingResume = true;
+  holdElapsed = 0;
+  syncResumeGate();
+  // The hold overlay owns the message from here. Anything the announcement
+  // strip is still showing would sit underneath #resume-reason and read as a
+  // second, smaller copy of the same words.
+  clearAnnouncement();
+  holdKeys = new Set(keys);
+  holdPointers = new Set(
+    [pointerId, joystickId].filter((id) => id !== null && id !== undefined),
+  );
+  $("resume-reason").textContent = reason || "POSSESSION LOST";
+  focusToggle = false;
+  clearInput();
+  setControlsEnabled(false);
+  syncFocusButtons();
+  syncResumePrompt();
+}
+function endHold() {
+  if (!awaitingResume) return;
+  awaitingResume = false;
+  syncResumeGate();
+  holdKeys.clear();
+  holdPointers.clear();
+  syncResumePrompt();
+  if (phase === "playing") {
+    setControlsEnabled(true);
+    $("court").focus({ preventScroll: true });
+  }
+}
+// Any *fresh* press releases the hold: a button still held from before does
+// not count, and a short grace period covers a press that straddles the event.
+function releaseHold() {
+  if (!awaitingResume || menuOpen || anyDialogOpen()) return false;
+  if (phase !== "playing") return false;
+  if (holdElapsed < 0.3) return false;
+  endHold();
+  return true;
+}
 function clearInput() {
   keys.clear();
   stick = { x: 0, y: 0 };
   gamepadMove = { x: 0, y: 0 };
   pointerMove = null;
+  aim = null;
   gamepadFocus = false;
   pointerId = null;
   joystickId = null;
@@ -488,42 +715,40 @@ function pause() {
   $("focus-button").setAttribute("aria-pressed", "false");
   $("touch-focus").setAttribute("aria-pressed", "false");
   setPauseState(true);
-  setOverlay(
-    "TAKE A BREATH",
-    "The ball can wait.",
-    "Your round is paused. Come back when you’re ready.",
-    "Keep playing",
-    "Restart round",
-  );
+  syncResumePrompt();
+  openMenu();
 }
 function resume() {
-  if (
-    phase !== "paused" ||
-    view !== "arena" ||
-    $("settings-dialog").open ||
-    $("help-dialog").open ||
-    sidebarOpen
-  )
-    return;
+  if (phase !== "paused" || view !== "arena" || menuBlocking()) return;
   phase = "playing";
   pendingSwitch = null;
   $("game-overlay").hidden = true;
   setPauseState(false);
-  setControlsEnabled(true);
+  // A round paused mid-hold comes back to the hold, not straight into play.
+  setControlsEnabled(!awaitingResume);
+  if (awaitingResume) {
+    holdElapsed = 0;
+    // Straight away, not next frame: coming back from the pause menu closes
+    // the gate again, and anything that reads it in between must see that.
+    syncResumeGate();
+  }
+  syncResumePrompt();
   $("court").focus({ preventScroll: true });
 }
+// Start / Esc / the HUD pause button all land here: it is the one route into
+// the pause menu, and the one route back out of it.
 function togglePause() {
   if (view !== "arena") return;
-  if (phase === "playing") pause();
-  else if (phase === "paused") resume();
+  if (menuOpen) dismissPauseMenu();
+  else openPauseMenu();
 }
 function queuedSmartTarget() {
   if (!game.ball) return game.bestTarget(aim);
   return game.bestQueuedTarget(aim);
 }
 function doPass(id, forceBank = false) {
-  if (phase !== "playing") return;
-  sound.unlock();
+  if (phase !== "playing" || awaitingResume) return;
+  unlockAudio();
   const target = id ?? queuedSmartTarget();
   const useBank =
     forceBank || bank || actionDown(settings.bindings, keys, "wallHold");
@@ -608,7 +833,8 @@ function finish() {
   phase = "finished";
   focusToggle = false;
   clearInput();
-  $("pause-button").disabled = true;
+  endHold();
+  $("pause-button").disabled = false;
   setPauseState(false);
   setControlsEnabled(false);
   const result = awardMatch(progress, game, mode, courtIndex);
@@ -704,42 +930,140 @@ $("tactic-select").addEventListener("change", (e) => {
   persist();
   prepare();
 });
-$("sound-button").setAttribute("aria-pressed", String(progress.sound));
-function soundLabel() {
-  $("sound-button").textContent = progress.sound ? "Sound on" : "Sound off";
+// #sound-button survives the split as the master mute: one press silences
+// both buses, the next brings back exactly what was on before. The per-bus
+// switches below it are what a player reaches for to keep one and drop the
+// other.
+const percent = (value) => `${Math.round(value * 100)}%`;
+let mutedState = null;
+function applyAudioSettings() {
+  sound.enabled = settings.effectsOn;
+  sound.setVolume(settings.effectsVolume);
+  music.setEnabled(settings.musicOn);
+  music.setVolume(settings.musicVolume);
+  // progress.sound is the legacy single switch. Keep it in step so a profile
+  // written before the audio split never disagrees with the current settings.
+  progress.sound = settings.effectsOn || settings.musicOn;
+  unlockAudio();
+  syncAudioChrome();
 }
-soundLabel();
+function syncAudioChrome() {
+  const anyOn = settings.effectsOn || settings.musicOn;
+  $("sound-button").setAttribute("aria-pressed", String(anyOn));
+  $("sound-button").textContent = anyOn ? "Sound on" : "Sound off";
+  $("effects-button").setAttribute("aria-pressed", String(settings.effectsOn));
+  $("effects-button").textContent = settings.effectsOn
+    ? "Effects on"
+    : "Effects off";
+  $("music-button").setAttribute("aria-pressed", String(settings.musicOn));
+  $("music-button").textContent = settings.musicOn ? "Music on" : "Music off";
+  $("effects-volume").value = String(Math.round(settings.effectsVolume * 100));
+  $("music-volume").value = String(Math.round(settings.musicVolume * 100));
+  $("effects-volume-value").textContent = percent(settings.effectsVolume);
+  $("music-volume-value").textContent = percent(settings.musicVolume);
+  $("effects-volume").disabled = !settings.effectsOn;
+  $("music-volume").disabled = !settings.musicOn;
+  syncAudioHint();
+  syncMusicRail();
+}
 $("sound-button").addEventListener("click", () => {
-  progress.sound = !progress.sound;
-  sound.enabled = progress.sound;
-  sound.unlock();
-  $("sound-button").setAttribute("aria-pressed", String(progress.sound));
-  soundLabel();
+  const anyOn = settings.effectsOn || settings.musicOn;
+  if (anyOn) {
+    // Remember the shape of the mute so unmuting restores it rather than
+    // turning on a bus the player had deliberately switched off.
+    mutedState = { effects: settings.effectsOn, music: settings.musicOn };
+    settings.effectsOn = false;
+    settings.musicOn = false;
+  } else {
+    settings.effectsOn = mutedState?.effects ?? true;
+    settings.musicOn = mutedState?.music ?? true;
+    mutedState = null;
+  }
+  applyAudioSettings();
   persist();
+  persistSettings();
 });
-function syncSettingChrome() {
-  document.documentElement.dataset.theme = settings.theme;
-  document.body.classList.toggle(
-    "play-view",
-    view === "arena" && settings.playView,
+$("effects-button").addEventListener("click", () => {
+  settings.effectsOn = !settings.effectsOn;
+  mutedState = null;
+  applyAudioSettings();
+  persist();
+  persistSettings();
+});
+function toggleMusic() {
+  settings.musicOn = !settings.musicOn;
+  mutedState = null;
+  applyAudioSettings();
+  persist();
+  persistSettings();
+}
+$("music-button").addEventListener("click", toggleMusic);
+// The side-rail player. It is the same switch as the settings dialog's Music
+// button plus a skip, so there is one notion of "music on" and the volume and
+// on/off settings keep governing it.
+function syncMusicRail() {
+  const toggle = $("music-toggle"),
+    skip = $("music-skip");
+  if (!toggle) return;
+  toggle.setAttribute("aria-pressed", String(settings.musicOn));
+  toggle.firstElementChild.textContent = settings.musicOn ? "▮▮" : "▶";
+  toggle.setAttribute(
+    "aria-label",
+    settings.musicOn ? "Pause the soundtrack" : "Play the soundtrack",
   );
+  skip.setAttribute("aria-label", "Skip to the next track");
+  skip.disabled = music.trackCount < 2;
+  const title = music.trackTitle;
+  $("music-track").textContent = title || "—";
+  $("music-track").title = title
+    ? `${title} · track ${music.trackIndex + 1} of ${music.trackCount}`
+    : "";
+}
+// A rail button is a real button, so activating it takes DOM focus off the
+// court — and then Space would press the button again instead of making a
+// pass. Handing focus straight back is what keeps the player out of the way
+// of play; during a pause or a menu the focus belongs where it is.
+function returnFocusToCourt() {
+  if (phase === "playing" && !menuBlocking())
+    $("court").focus({ preventScroll: true });
+}
+$("music-toggle").addEventListener("click", () => {
+  toggleMusic();
+  syncMusicRail();
+  returnFocusToCourt();
+});
+$("music-skip").addEventListener("click", () => {
+  unlockAudio();
+  music.skip(1);
+  syncMusicRail();
+  returnFocusToCourt();
+});
+// "input" fires for a mouse drag, an arrow key and the gamepad steps below
+// alike, so the level follows the control live and is written once it settles.
+for (const [id, key] of [
+  ["effects-volume", "effectsVolume"],
+  ["music-volume", "musicVolume"],
+]) {
+  $(id).addEventListener("input", () => {
+    settings[key] = Number($(id).value) / 100;
+    if (key === "effectsVolume") sound.setVolume(settings[key]);
+    else music.setVolume(settings[key]);
+    $(`${id}-value`).textContent = percent(settings[key]);
+    unlockAudio();
+  });
+  $(id).addEventListener("change", () => persistSettings());
+}
+function syncSettingChrome() {
+  syncAudioChrome();
+  document.documentElement.dataset.theme = settings.theme;
+  document.body.classList.toggle("play-view", view === "arena");
+  document.body.dataset.view = view;
   $("theme-button").setAttribute(
     "aria-pressed",
     String(settings.theme === "light"),
   );
   $("theme-button").innerHTML =
     `<span aria-hidden="true">◐</span> ${settings.theme === "dark" ? "Light" : "Dark"}`;
-  const playViewAvailable = view === "arena";
-  $("play-view-button").disabled = !playViewAvailable;
-  $("play-view-button").title = playViewAvailable
-    ? "Toggle distraction-free Play view"
-    : "Open a court to use Play view";
-  $("play-view-button").setAttribute(
-    "aria-pressed",
-    String(playViewAvailable && settings.playView),
-  );
-  $("play-view-button").innerHTML =
-    `<span aria-hidden="true">◇</span> ${playViewAvailable && settings.playView ? "Exit play view" : "Play view"}`;
   if ($("preset-select")) $("preset-select").value = settings.preset;
   document.querySelectorAll("[data-binding]").forEach((element) => {
     const codes = settings.bindings[element.dataset.binding] || [];
@@ -832,7 +1156,15 @@ async function switchDataContext(nextProfile) {
   accountStats = data.stats;
   mode = "career";
   courtIndex = progress.lastCourt;
-  sound.enabled = progress.sound;
+  // A switched-to profile brings its own audio settings, and may never have
+  // seen the split, so it gets the same one-time fold as the first load did.
+  if (!settings.audioMigrated) {
+    settings.effectsOn = progress.sound;
+    settings.musicOn = progress.sound;
+    settings.audioMigrated = true;
+  }
+  mutedState = null;
+  applyAudioSettings();
   prepare();
   syncProgress();
   syncSettingChrome();
@@ -915,13 +1247,6 @@ $("theme-button").addEventListener("click", () => {
   persistSettings();
   syncSettingChrome();
 });
-$("play-view-button").addEventListener("click", () => {
-  settings.playView = !settings.playView;
-  sidebarOpen = false;
-  persistSettings();
-  syncSettingChrome();
-  syncSidebar();
-});
 function syncFullscreen() {
   const active = document.fullscreenElement === document.documentElement;
   document.body.classList.toggle("fullscreen-game", active);
@@ -932,6 +1257,8 @@ function syncFullscreen() {
 $("fullscreen-button").addEventListener("click", async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
+    else if (shellFullscreen())
+      toast("Already fullscreen. Press F11 to play in a window.");
     else await document.documentElement.requestFullscreen();
   } catch {
     toast("Fullscreen is not available in this browser.");
@@ -939,12 +1266,9 @@ $("fullscreen-button").addEventListener("click", async () => {
   syncFullscreen();
 });
 document.addEventListener("fullscreenchange", syncFullscreen);
-$("sidebar-toggle").addEventListener("click", toggleSidebar);
-$("sidebar-close")?.addEventListener("click", () => closeSidebar());
-$("sidebar-backdrop").addEventListener("click", () => closeSidebar());
-$("home-button").addEventListener("click", () => applyView("home"));
-$("arena-home-button").addEventListener("click", () => applyView("home"));
-$("home-continue").addEventListener("click", () => {
+// F11 is handled by the shell, which only tells the page by resizing it.
+window.addEventListener("resize", syncFullscreen);
+function playFromMenu() {
   const resumeRound = phase === "paused";
   if (!resumeRound) {
     mode = "career";
@@ -953,34 +1277,30 @@ $("home-continue").addEventListener("click", () => {
   }
   applyView("arena");
   if (resumeRound) resume();
+}
+$("title-play").addEventListener("click", playFromMenu);
+$("title-courts").addEventListener("click", () => applyView("courts"));
+$("courts-back").addEventListener("click", () => applyView("title"));
+$("pause-resume").addEventListener("click", dismissPauseMenu);
+$("pause-restart").addEventListener("click", () => {
+  closePauseMenu({ restoreFocus: false });
+  // Every round begins from the invitation card, so restarting lands there
+  // rather than throwing the player straight back into a live press.
+  prepare();
+  padFocus($("start-button"));
 });
-$("game-sidebar")
-  .querySelector(".brand")
-  ?.addEventListener("click", (event) => {
-    if (
-      event.button === 0 &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.shiftKey &&
-      !event.altKey
-    ) {
-      event.preventDefault();
-      applyView("home");
-    }
-  });
+$("pause-courts").addEventListener("click", () => {
+  closePauseMenu({ restoreFocus: false });
+  applyView("courts");
+});
+$("pause-settings").addEventListener("click", openSettings);
 document.querySelectorAll("[data-home-mode]").forEach((button) => {
   button.addEventListener("click", () =>
     switchMode(button.dataset.homeMode, courtIndex),
   );
 });
 addEventListener("hashchange", () => {
-  applyView(location.hash === "#play" ? "arena" : "home", {
-    updateHash: false,
-  });
-});
-addEventListener("resize", () => {
-  if (!drawerSidebar()) sidebarOpen = false;
-  syncSidebar();
+  applyView(viewForHash(), { updateHash: false });
 });
 $("help-button").addEventListener("click", () => {
   pause();
@@ -999,11 +1319,6 @@ $("help-dialog").addEventListener("click", (e) => {
       e.target.close();
   }
 });
-document
-  .querySelectorAll("[data-mode]")
-  .forEach((btn) =>
-    btn.addEventListener("click", () => switchMode(btn.dataset.mode)),
-  );
 window.addEventListener("keydown", (e) => {
   if (capture) {
     e.preventDefault();
@@ -1050,31 +1365,33 @@ window.addEventListener("keydown", (e) => {
     syncSettingChrome();
     return;
   }
-  if ($("settings-dialog").open) return;
-  if ($("help-dialog").open) return;
-  if (e.code === "Escape" && sidebarOpen) {
-    e.preventDefault();
-    closeSidebar();
-    return;
-  }
-  if (e.code === "Tab" && drawerSidebar() && sidebarOpen) {
-    const elements = [
-      ...$("game-sidebar").querySelectorAll(
-        "button:not(:disabled),a[href],select:not(:disabled)",
-      ),
-    ].filter((element) => element.getClientRects().length);
-    if (elements.length) {
+  if (anyDialogOpen()) return;
+  if (menuOpen) {
+    const action = actionForCode(settings.bindings, e.code);
+    if (e.code === "Escape" || action === "pause") {
       e.preventDefault();
-      const current = elements.indexOf(document.activeElement);
-      const direction = e.shiftKey ? -1 : 1;
-      elements[
-        (current + direction + elements.length) % elements.length
-      ].focus();
+      dismissPauseMenu();
+      return;
     }
+    // Tab cycles the menu only; gameplay keys must not leak to the court.
+    if (e.code === "Tab") {
+      const elements = padFocusables([$("pause-menu"), $("music-rail")]);
+      if (elements.length) {
+        e.preventDefault();
+        const current = elements.indexOf(document.activeElement);
+        const direction = e.shiftKey ? -1 : 1;
+        padFocus(
+          elements[(current + direction + elements.length) % elements.length],
+        );
+      }
+      return;
+    }
+    if (action) e.preventDefault();
     return;
   }
-  if (drawerSidebar() && sidebarOpen) {
-    if (actionForCode(settings.bindings, e.code)) e.preventDefault();
+  if (e.code === "Escape" && view === "courts") {
+    e.preventDefault();
+    applyView("title");
     return;
   }
   const action = actionForCode(settings.bindings, e.code);
@@ -1084,6 +1401,16 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (phase !== "playing" || e.target instanceof HTMLSelectElement) return;
+  // The press that was still down when possession was lost is remembered, so
+  // only a genuinely new key wakes the round back up.
+  if (awaitingResume) {
+    if (!holdKeys.has(e.code) && !e.repeat) {
+      if (action) e.preventDefault();
+      releaseHold();
+    }
+    keys.add(e.code);
+    return;
+  }
   if (action) e.preventDefault();
   keys.add(e.code);
   if (e.repeat) return;
@@ -1091,7 +1418,10 @@ window.addEventListener("keydown", (e) => {
   if (action === "smartPass") doPass();
   if (action === "wallToggle") toggleBank();
 });
-window.addEventListener("keyup", (e) => keys.delete(e.code));
+window.addEventListener("keyup", (e) => {
+  keys.delete(e.code);
+  holdKeys.delete(e.code);
+});
 window.addEventListener("blur", () => {
   if (capture) cancelCapture("Binding cancelled when the window lost focus.");
   if (phase === "playing") pause();
@@ -1116,9 +1446,23 @@ $("court").addEventListener("pointermove", (e) => {
   };
   if (e.pointerId === pointerId) pointerMove = p;
 });
+// A pointer press anywhere also picks the ball back up, which keeps touch and
+// mouse players on the same footing as the controller.
+document.addEventListener(
+  "pointerdown",
+  (e) => {
+    if (!awaitingResume) return;
+    if (holdPointers.has(e.pointerId)) return;
+    if (releaseHold()) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  },
+  true,
+);
 $("court").addEventListener("pointerdown", (e) => {
-  if (phase !== "playing") return;
-  sound.unlock();
+  if (phase !== "playing" || awaitingResume) return;
+  unlockAudio();
   const p = courtPoint(e),
     radius = e.pointerType === "touch" ? 70 : 46;
   const target = game.players
@@ -1173,6 +1517,92 @@ function releaseJoystick(e) {
 $("joystick").addEventListener("pointerup", releaseJoystick);
 $("joystick").addEventListener("pointercancel", releaseJoystick);
 $("joystick").addEventListener("lostpointercapture", releaseJoystick);
+document.addEventListener("focusout", (event) => {
+  if (event.target === padFocusElement) {
+    padFocusElement.classList.remove("pad-focus");
+    padFocusElement = null;
+  }
+});
+// `root` may be one element or several. Several is what lets the pause menu
+// and the music rail — which are siblings on screen, not nested — be walked as
+// one list by the d-pad, without giving either a wrapper it does not want.
+const padRoots = (root) => (Array.isArray(root) ? root : [root]).filter(Boolean);
+const padWithin = (root, el) =>
+  Boolean(el) && padRoots(root).some((node) => node.contains(el));
+function padFocusables(root) {
+  return padRoots(root)
+    .flatMap((node) => [
+      ...node.querySelectorAll(
+        "button:not(:disabled),select:not(:disabled),input:not(:disabled)",
+      ),
+    ])
+    .filter((el) => !el.closest("[hidden]") && el.getClientRects().length);
+}
+const isRange = (el) => el instanceof HTMLInputElement && el.type === "range";
+function padFocus(el) {
+  if (!el) return;
+  if (padFocusElement && padFocusElement !== el)
+    padFocusElement.classList.remove("pad-focus");
+  padFocusElement = el;
+  el.classList.add("pad-focus");
+  el.focus({ preventScroll: false });
+}
+function padActivate(el) {
+  if (el instanceof HTMLSelectElement) {
+    const options = [...el.options].filter((option) => !option.disabled);
+    if (!options.length) return true;
+    const current = options.indexOf(el.selectedOptions[0]);
+    el.value = options[(current + 1) % options.length].value;
+    el.dispatchEvent(new Event("change"));
+    return true;
+  }
+  if (el instanceof HTMLButtonElement) {
+    el.click();
+    return true;
+  }
+  // A slider has nothing to activate; A on one must not fall through to the
+  // menu's default action and, say, start a round from behind the dialog.
+  if (isRange(el)) return true;
+  return false;
+}
+// One place for "collect the controls of whatever is actually on screen, move
+// focus with the d-pad or left stick, activate with A". A focused slider takes
+// left and right as a level change instead of as navigation, which is the only
+// way the volume controls are reachable without a mouse.
+function padNavigate(root, { dt, direction, horizontal = 0, activate, fallback }) {
+  if (!root) return;
+  const focused = document.activeElement;
+  const slider = padWithin(root, focused) && isRange(focused) ? focused : null;
+  if (slider && horizontal) {
+    direction = 0;
+    sliderRepeat -= dt;
+    if (sliderRepeat <= 0) {
+      const step = Number(slider.step) || 1;
+      const next = Number(slider.value) + horizontal * step;
+      slider.value = String(
+        Math.min(Number(slider.max), Math.max(Number(slider.min), next)),
+      );
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
+      sliderRepeat = 0.11;
+    }
+  } else sliderRepeat = 0;
+  menuRepeat -= dt;
+  if (direction && menuRepeat <= 0) {
+    const elements = padFocusables(root);
+    if (elements.length) {
+      const current = elements.indexOf(document.activeElement);
+      padFocus(
+        elements[(current + direction + elements.length) % elements.length],
+      );
+    }
+    menuRepeat = 0.2;
+  } else if (!direction) menuRepeat = 0;
+  if (activate) {
+    const el = document.activeElement;
+    if (!padActivate(padWithin(root, el) ? el : null) && fallback) fallback();
+  }
+}
 function pollGamepad(dt) {
   const pad = Array.from(navigator.getGamepads?.() || []).find(
     (p) => p?.connected,
@@ -1190,125 +1620,173 @@ function pollGamepad(dt) {
   }
   if (!padConnected) {
     padConnected = true;
-    toast("Controller connected. A to pass · X for wall pass · LT to focus.");
+    toast(
+      "Controller connected. Right stick picks the pass · A plays it · X arms the wall · LT focuses.",
+    );
   }
   const pressed = pad.buttons.map((b) => b.pressed),
     tap = (i) => pressed[i] && !padPrevious[i];
+  // A gamepad press is not a user activation gesture, so this will not unblock
+  // a browser on its own. It costs nothing, it does unblock the packaged shell
+  // and any browser whose policy is relaxed, and on the rest it keeps the
+  // context ready so the first key or click starts audio instantly.
+  if (pressed.some((down, i) => down && !padPrevious[i])) unlockAudio();
+  // Any button at all resumes after a turnover, but only on a fresh press:
+  // tap() is edge-triggered, so a button still held from before is ignored.
+  if (awaitingResume && !menuOpen && !anyDialogOpen()) {
+    const anyTap = pressed.some((down, i) => down && !padPrevious[i]);
+    if (anyTap && !tap(9) && releaseHold()) {
+      padPrevious = pressed;
+      return;
+    }
+  }
   const dead = (v) => (Math.abs(v || 0) > 0.18 ? v : 0);
-  gamepadMove = { x: dead(pad.axes[0]), y: dead(pad.axes[1]) };
-  gamepadFocus = !!pressed[6];
-  if (Math.hypot(dead(pad.axes[2]), dead(pad.axes[3])) > 0.2)
-    aim = { x: pad.axes[2], y: pad.axes[3] };
-  else if (Math.hypot(gamepadMove.x, gamepadMove.y) > 0.2)
-    aim = { ...gamepadMove };
-  if (
-    drawerSidebar() &&
-    sidebarOpen &&
-    !$("settings-dialog").open &&
-    !$("help-dialog").open
-  ) {
-    if (tap(1) || tap(9)) closeSidebar();
-    menuRepeat -= dt;
-    const direction =
-      pressed[13] || pressed[15] || pad.axes[1] > 0.6
-        ? 1
-        : pressed[12] || pressed[14] || pad.axes[1] < -0.6
-          ? -1
-          : 0;
-    if (direction && menuRepeat <= 0) {
-      const elements = [
-        ...$("game-sidebar").querySelectorAll(
-          "button:not(:disabled),select:not(:disabled)",
-        ),
-      ].filter((el) => el.getClientRects().length);
-      const current = elements.indexOf(document.activeElement);
-      elements[
-        (current + direction + elements.length) % elements.length
-      ]?.focus({ preventScroll: false });
-      menuRepeat = 0.2;
-    } else if (!direction) menuRepeat = 0;
-    if (tap(0)) document.activeElement?.click?.();
+  // Sticks only drive the court while the round is actually accepting play.
+  // Otherwise a nudge behind the pause overlay would keep repainting aim lanes.
+  if (acceptingPlayInput()) {
+    gamepadMove = { x: dead(pad.axes[0]), y: dead(pad.axes[1]) };
+    gamepadFocus = !!pressed[6];
+    if (Math.hypot(dead(pad.axes[2]), dead(pad.axes[3])) > 0.2)
+      aim = { x: pad.axes[2], y: pad.axes[3] };
+    else if (Math.hypot(gamepadMove.x, gamepadMove.y) > 0.2)
+      aim = { ...gamepadMove };
+  } else {
+    gamepadMove = { x: 0, y: 0 };
+    gamepadFocus = false;
+  }
+  const direction =
+    pressed[13] || pressed[15] || pad.axes[1] > 0.6
+      ? 1
+      : pressed[12] || pressed[14] || pad.axes[1] < -0.6
+        ? -1
+        : 0;
+  // Left and right are read separately and used only by a focused slider,
+  // which takes them as a level change and swallows the navigation. With no
+  // slider in focus nothing here applies and menu movement is unchanged: the
+  // d-pad's left and right still walk the list and the left stick's horizontal
+  // axis is still ignored outside play.
+  const horizontal =
+    pressed[15] || pad.axes[0] > 0.6
+      ? 1
+      : pressed[14] || pad.axes[0] < -0.6
+        ? -1
+        : 0;
+  const nav = (root, fallback) =>
+    padNavigate(root, { dt, direction, horizontal, activate: tap(0), fallback });
+  // Most modal context first: navigation is scoped to whatever is actually on
+  // screen so the d-pad never wanders into controls the player cannot see.
+  if ($("help-dialog").open) {
+    if (tap(1) || tap(9)) $("help-dialog").close();
+    else nav($("help-dialog"));
+  } else if ($("account-dialog").open) {
+    if (tap(1) || tap(9)) $("account-dialog").close();
+    else nav($("account-dialog"));
   } else if ($("settings-dialog").open) {
     if (tap(1) || tap(9)) {
       if (capture) cancelCapture();
       else $("settings-dialog").close();
     }
-    menuRepeat -= dt;
-    const direction =
-      pressed[13] || pressed[15] || pad.axes[1] > 0.6
-        ? 1
-        : pressed[12] || pressed[14] || pad.axes[1] < -0.6
-          ? -1
-          : 0;
-    if (direction && menuRepeat <= 0) {
-      const elements = [
-        ...$("settings-dialog").querySelectorAll(
-          "button:not(:disabled),select:not(:disabled)",
-        ),
-      ].filter((el) => el.getClientRects().length);
-      const current = elements.indexOf(document.activeElement);
-      elements[
-        (current + direction + elements.length) % elements.length
-      ]?.focus({ preventScroll: false });
-      menuRepeat = 0.2;
-    } else if (!direction) menuRepeat = 0;
-    if (tap(0) && !capture) {
-      const el = document.activeElement;
-      if (el instanceof HTMLSelectElement) {
-        const options = [...el.options].filter((option) => !option.disabled);
-        const current = options.indexOf(el.selectedOptions[0]);
-        const next = options[(current + 1) % options.length];
-        el.value = next.value;
-        el.dispatchEvent(new Event("change"));
-      } else if (el instanceof HTMLButtonElement) el.click();
-    }
-  } else if ($("help-dialog").open) {
-    if (tap(1) || tap(9)) $("help-dialog").close();
-  } else if (view === "arena" && phase === "playing") {
+    padNavigate($("settings-dialog"), {
+      dt,
+      direction,
+      horizontal,
+      activate: tap(0) && !capture,
+    });
+  } else if (menuOpen) {
+    if (tap(1) || tap(9)) dismissPauseMenu();
+    // The music rail is walked with the pause menu: it is where a controller
+    // player can reach the soundtrack without a mouse, and pausing is the only
+    // time the d-pad is free to leave the court.
+    else
+      nav([$("pause-menu"), $("music-rail")], () => $("pause-resume").click());
+  } else if (view === "arena" && phase === "playing" && !awaitingResume) {
     if (tap(0)) doPass();
-    if (tap(2)) doPass(undefined, true);
-    if (tap(9)) pause();
+    if (tap(2)) toggleBank();
+    if (tap(9)) openPauseMenu();
+  } else if (view === "arena" && awaitingResume) {
+    if (tap(9)) openPauseMenu();
+  } else if (view === "arena" && !$("game-overlay").hidden) {
+    if (tap(9)) openPauseMenu();
+    else nav($("game-overlay"), () => $("start-button").click());
+  } else if (view === "courts") {
+    if (tap(1)) applyView("title");
+    else nav($("courts-view"), () => $("courts-back").click());
+  } else if (view === "title") {
+    nav($("title-menu"), () => $("title-play").click());
   } else {
-    if (tap(9) && phase === "paused" && view === "arena") resume();
-    menuRepeat -= dt;
-    const direction =
-      pressed[13] || pressed[15] || pad.axes[1] > 0.6
-        ? 1
-        : pressed[12] || pressed[14] || pad.axes[1] < -0.6
-          ? -1
-          : 0;
-    if (direction && menuRepeat <= 0) {
-      const elements = [
-        ...document.querySelectorAll(
-          "button:not(:disabled),select:not(:disabled)",
-        ),
-      ].filter((el) => !el.closest("[hidden]") && el.getClientRects().length);
-      const current = elements.indexOf(document.activeElement);
-      elements[
-        (current + direction + elements.length) % elements.length
-      ]?.focus({ preventScroll: false });
-      menuRepeat = 0.2;
-    } else if (!direction) menuRepeat = 0;
-    if (tap(0)) {
-      const el = document.activeElement;
-      if (el instanceof HTMLSelectElement) {
-        const options = [...el.options].filter((option) => !option.disabled);
-        const current = options.indexOf(el.selectedOptions[0]);
-        el.value = options[(current + 1) % options.length].value;
-        el.dispatchEvent(new Event("change"));
-      } else if (el instanceof HTMLButtonElement) el.click();
-      else if (view === "arena") $("start-button").click();
-      else $("home-continue").click();
-    }
-    if (tap(1) && phase === "paused" && view === "arena") resume();
+    nav(document.body);
   }
   padPrevious = pressed;
+}
+// The engine's targetValue() scores lanes by distance from defenders, so the
+// smart pass drifts away from exactly the tight lane SPLIT THE PRESS rewards.
+// The right stick already outweighs that safety term through `aim`; this makes
+// the resulting choice unmistakable, so a controller player can aim a split on
+// purpose instead of hoping for one. The renderer's own selection ring is a
+// 2px circle, which is not enough to steer by.
+function drawTargetHighlight(target) {
+  const c = renderer.ctx;
+  if (!c || !Number.isInteger(target)) return;
+  const player = game?.players?.[target];
+  if (!player || target === (game.ball?.to ?? game.carrier)) return;
+  const pulse = 1 + Math.sin(performance.now() / 150) * 0.06;
+  const accent =
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--venue-accent")
+      .trim() || "#27ead8";
+  c.save();
+  c.globalAlpha = 0.9;
+  c.strokeStyle = accent;
+  c.lineWidth = 4;
+  c.shadowColor = accent;
+  c.shadowBlur = 18;
+  c.beginPath();
+  c.arc(player.x, player.y, 42 * pulse, 0, Math.PI * 2);
+  c.stroke();
+  c.shadowBlur = 0;
+  c.globalAlpha = 1;
+  c.lineWidth = 2;
+  c.strokeStyle = "#fff";
+  c.beginPath();
+  c.arc(player.x, player.y, 50 * pulse, 0, Math.PI * 2);
+  c.stroke();
+  // Four corner brackets read as a reticle even against a busy court.
+  c.lineWidth = 3.5;
+  c.strokeStyle = accent;
+  const r = 56 * pulse,
+    span = Math.PI / 9;
+  for (let i = 0; i < 4; i++) {
+    const mid = Math.PI / 4 + (i * Math.PI) / 2;
+    c.beginPath();
+    c.arc(player.x, player.y, r, mid - span, mid + span);
+    c.stroke();
+  }
+  c.font = '900 15px "Tiki Signage","Arial Narrow",sans-serif';
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillStyle = "rgba(6,12,26,.85)";
+  c.beginPath();
+  c.roundRect(player.x - 40, player.y - 78, 80, 22, 11);
+  c.fill();
+  c.strokeStyle = accent;
+  c.lineWidth = 1.5;
+  c.stroke();
+  c.fillStyle = "#fff";
+  c.fillText(bank ? "WALL ↗" : "PASS ↗", player.x, player.y - 66);
+  c.restore();
 }
 function frame(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000 || 0);
   lastTime = now;
   pollGamepad(dt);
-  if (view === "arena" && phase === "playing") {
+  if (awaitingResume) {
+    holdElapsed += dt;
+    // dt is clamped per frame, so the hold advances at a frame-rate-dependent
+    // rate and no wall-clock wait can predict when it opens. Expose the state
+    // so tests can wait on the gate itself rather than race a stopwatch.
+    syncResumeGate();
+  }
+  if (view === "arena" && phase === "playing" && !awaitingResume) {
     let x =
       Number(actionDown(settings.bindings, keys, "moveRight")) -
       Number(actionDown(settings.bindings, keys, "moveLeft")) +
@@ -1336,8 +1814,16 @@ function frame(now) {
         actionDown(settings.bindings, keys, "focusHold") ||
         gamepadFocus,
     });
+    // Found before the loop rather than during it: the engine can emit a score
+    // and the turnover that ended it in the same batch, in either order, and
+    // the turnover is what decides whether anything else is allowed to speak.
+    const turnoverEvent = game.events.find((e) => e.type === "turnover") || null;
     for (const event of game.events) {
-      renderer.addEvent(event);
+      // The turnover's floating canvas text is deferred until after the loop,
+      // because whether the hold takes over is only known once "end" has had
+      // its chance to finish the round. When it does take over, #resume-reason
+      // is the one place the message appears.
+      if (event !== turnoverEvent) renderer.addEvent(event);
       sound.play(event.type);
       if (event.type === "focus") {
         clearTimeout(focusEarnedTimeout);
@@ -1356,9 +1842,12 @@ function frame(now) {
         announce(event.text || `${event.streak} ONE-TOUCH PASSES`);
         announcementTime = now;
       }
+      // The engine resumes on its own timer; the interface holds the round on
+      // top of that instead of changing packages/engine.
       if (
-        event.type === "turnover" ||
-        (event.type === "score" && now - announcementTime > 3500)
+        event.type === "score" &&
+        !turnoverEvent &&
+        now - announcementTime > 3500
       ) {
         announce(event.text);
         announcementTime = now;
@@ -1366,16 +1855,31 @@ function frame(now) {
       if (event.type === "end") finish();
     }
     game.events = [];
+    if (turnoverEvent) {
+      // A third turnover ends the round outright, and the finish overlay owns
+      // the screen from there: never hold on top of it. In that case the
+      // announcement strip is the only home for the reason, and finish() has
+      // already wiped the renderer's effects, so nothing is re-added.
+      if (phase === "playing") beginHold(turnoverEvent.text);
+      else announce(turnoverEvent.text);
+    }
   }
+  if (view === "title") updateAttract(dt);
   if (view === "arena") {
     syncHud();
+    const target =
+      phase === "playing" && !awaitingResume ? queuedSmartTarget() : null;
     renderer.render(game, {
       preview: phase === "ready",
-      target: phase === "playing" ? queuedSmartTarget() : null,
+      target,
       aim,
       bank: bank || actionDown(settings.bindings, keys, "wallHold"),
-      paused: phase === "paused" || phase === "finished",
+      paused: phase === "paused" || phase === "finished" || awaitingResume,
     });
+    drawTargetHighlight(target);
+    $("court-wrap").dataset.target = Number.isInteger(target)
+      ? String(target)
+      : "";
   }
   requestAnimationFrame(frame);
 }
@@ -1383,16 +1887,34 @@ syncSettingChrome();
 syncFullscreen();
 syncAccountDialog();
 prepare();
-syncSidebar();
+syncPauseMenu();
+// Drop a stale #play or #courts so the address bar agrees with the title screen
+// the player is actually looking at. replaceState, not pushState: the boot must
+// not leave a history entry that Back would return to.
+if (location.hash)
+  history.replaceState(null, "", location.pathname + location.search);
 applyView(view, { updateHash: false });
+// The packaged shell sets autoplayPolicy to no-user-gesture-required, so this
+// first attempt is all it ever needs. A browser tab is likely to refuse it and
+// stay armed until a real activation gesture arrives.
+applyAudioSettings();
+// Write the folded legacy switch down straight away, so the one-time step is
+// actually one time rather than repeating on every launch until the player
+// happens to touch an audio control.
+persistSettings();
+// Every plausible source of a user activation gesture retries the unlock, and
+// they stay attached rather than firing once: a retry after audio is already
+// running is a no-op, and a gamepad press (which grants no activation at all)
+// costs nothing but keeps the door open for the moment the player does reach
+// for the keyboard or mouse. `click` is here as well as `pointerdown` because
+// a keyboard-activated button produces a click with no pointer event.
+for (const type of ["pointerdown", "click", "keydown", "touchstart"])
+  window.addEventListener(type, unlockAudio, { capture: true, passive: true });
+setInterval(syncMusicState, 500);
 requestAnimationFrame(frame);
 if (storageFallback)
   toast("Browser storage is unavailable. Progress will last for this session.");
-if (
-  import.meta.env?.PROD &&
-  "serviceWorker" in navigator &&
-  location.protocol !== "tiki:"
-) {
+if (import.meta.env?.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
       .register(`${import.meta.env.BASE_URL}sw.js`)
