@@ -26,6 +26,27 @@ The user explicitly reopened this freeze on 2026-09-08 to add the split-the-pres
 
 The audio change is a mix level, not a behaviour change. Measured with an `OfflineAudioContext`, every effect peaked between -21 and -32 dBFS, roughly 15-20 dB below normal game levels, which is why the game sounded silent at ordinary listening volumes. Effects now peak between -8 and -16 dBFS and the five-voice crowd cheer at -12 dBFS, with no clipping. Mobile gets the same fix.
 
+The same reopening covers the audio settings that followed, because they are
+the other half of that mix change. Raising the effect gains overcorrected: the
+user playtested it and reported the effects as too loud. The constants are
+right as a ceiling and are unchanged, so instead `packages/presentation/src/audio.js`
+routes every voice through a master gain node and defaults it to 0.3, and
+`packages/engine/src/settings.js` gains four fields — `effectsOn`,
+`effectsVolume`, `musicOn`, `musicVolume` — plus a one-shot `audioMigrated`
+flag that records the fold of the old single `progress.sound` switch into them.
+Both files had their hashes regenerated; the other 45 entries are untouched.
+
+Measured the same way, effects now peak between -18.6 dBFS (turnover, the
+loudest) and -26.9 dBFS (focus, the deliberately quiet cue), with a typical
+effect at -22.5 dBFS and the five-voice crowd cheer at -22.8 dBFS. The mix
+balance between effects is exactly as it was; only the master trim moved.
+
+The settings fields normalise an absent value as "on" at the default level, so
+old stored data is never read as silence, and `progress.sound` stays live
+because `apps/mobile/src/main.js` still reads it. No file under `apps/mobile/`
+changed. Mobile inherits the quieter default effects and is otherwise
+unaffected: it has no UI for the new fields and does not read them.
+
 Mobile gameplay therefore no longer matches the shipped 1.1.1 APK. Scoring, Focus rewards, and the on-court label set all differ from the build in `release/mobile/tiki-taka-1.1.1.apk`. Mobile needs re-verification and a version bump (Android version name and version code) before the next Android release; do not ship the new engine under 1.1.1.
 
 Everything above still applies to the rest of the baseline. This entry authorises one deliberate gameplay change, not a general reopening: further shared-gameplay or mobile edits still require their own explicit reopening, and the manifest must never be regenerated to make an unrelated change pass.

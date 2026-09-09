@@ -1431,10 +1431,7 @@ function padNavigate(root, { dt, direction, horizontal = 0, activate, fallback }
       slider.dispatchEvent(new Event("change", { bubbles: true }));
       sliderRepeat = 0.11;
     }
-  } else {
-    sliderRepeat = 0;
-    direction ||= horizontal;
-  }
+  } else sliderRepeat = 0;
   menuRepeat -= dt;
   if (direction && menuRepeat <= 0) {
     const elements = padFocusables(root);
@@ -1502,15 +1499,17 @@ function pollGamepad(dt) {
     gamepadMove = { x: 0, y: 0 };
     gamepadFocus = false;
   }
-  // Vertical and horizontal are separated so a focused slider can take left
-  // and right as a level change; everywhere else horizontal still walks the
-  // menu, exactly as it did when both axes were folded into one direction.
   const direction =
-    pressed[13] || pad.axes[1] > 0.6
+    pressed[13] || pressed[15] || pad.axes[1] > 0.6
       ? 1
-      : pressed[12] || pad.axes[1] < -0.6
+      : pressed[12] || pressed[14] || pad.axes[1] < -0.6
         ? -1
         : 0;
+  // Left and right are read separately and used only by a focused slider,
+  // which takes them as a level change and swallows the navigation. With no
+  // slider in focus nothing here applies and menu movement is unchanged: the
+  // d-pad's left and right still walk the list and the left stick's horizontal
+  // axis is still ignored outside play.
   const horizontal =
     pressed[15] || pad.axes[0] > 0.6
       ? 1
@@ -1719,6 +1718,10 @@ applyView(view, { updateHash: false });
 // first attempt is all it ever needs. A browser tab is likely to refuse it and
 // stay armed until a real activation gesture arrives.
 applyAudioSettings();
+// Write the folded legacy switch down straight away, so the one-time step is
+// actually one time rather than repeating on every launch until the player
+// happens to touch an audio control.
+persistSettings();
 // Every plausible source of a user activation gesture retries the unlock, and
 // they stay attached rather than firing once: a retry after audio is already
 // running is a no-op, and a gamepad press (which grants no activation at all)
