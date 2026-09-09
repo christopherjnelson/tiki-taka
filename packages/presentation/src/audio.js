@@ -6,6 +6,10 @@
 // the loudest (turnover) at about -18.7 dBFS. Anything the player prefers is a
 // slider move away, and the balance between effects is untouched by it.
 export const DEFAULT_EFFECTS_VOLUME = 0.3;
+// The kick's two halves, in the same units as the tone volumes below: the body
+// carries the level and the noise transient is deliberately far under it.
+const KICK_BODY = 0.26,
+  KICK_TRANSIENT = 0.05;
 
 export class Sound {
   constructor(enabled = true, volume = DEFAULT_EFFECTS_VOLUME) {
@@ -81,6 +85,69 @@ export class Sound {
     });
   }
 
+  // A shared quarter-second of white noise, made once per context. The kick's
+  // transient is a slice of it: allocating a buffer per pass would churn on a
+  // fast one-touch chain.
+  noiseBuffer() {
+    const ctx = this.context;
+    if (this.noise?.context !== ctx) {
+      const buffer = ctx.createBuffer(
+          1,
+          Math.ceil(ctx.sampleRate * 0.25),
+          ctx.sampleRate,
+        ),
+        samples = buffer.getChannelData(0);
+      for (let i = 0; i < samples.length; i++)
+        samples[i] = Math.random() * 2 - 1;
+      this.noise = { context: ctx, buffer };
+    }
+    return this.noise.buffer;
+  }
+
+  // The pass used to be a 180Hz triangle held for 140ms: a beep. A struck ball
+  // is two things at once — a body whose pitch falls away as the ball leaves
+  // the boot, and a very short scrape of noise where foot meets leather. The
+  // body carries the level; the transient is mixed far under it so the result
+  // reads as a soft thud rather than a click or a dance-floor kick drum. The
+  // constants are the mix, like every other effect here: the master gain is
+  // the only trim. Measured through the master at its 0.3 default this peaks
+  // at about -22 dBFS, the same place the other effects sit, and at trim 1.0
+  // it stays clear of full scale.
+  kick(start) {
+    const ctx = this.context,
+      out = this.destination(),
+      body = ctx.createOscillator(),
+      bodyGain = ctx.createGain();
+    body.type = "sine";
+    body.frequency.setValueAtTime(170, start);
+    body.frequency.exponentialRampToValueAtTime(55, start + 0.06);
+    bodyGain.gain.setValueAtTime(0.0001, start);
+    bodyGain.gain.linearRampToValueAtTime(KICK_BODY, start + 0.002);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0006, start + 0.12);
+    body.connect(bodyGain);
+    bodyGain.connect(out);
+    this.track(body);
+    body.start(start);
+    body.stop(start + 0.15);
+    const noise = ctx.createBufferSource(),
+      band = ctx.createBiquadFilter(),
+      noiseGain = ctx.createGain();
+    noise.buffer = this.noiseBuffer();
+    band.type = "bandpass";
+    band.frequency.setValueAtTime(2100, start);
+    band.frequency.exponentialRampToValueAtTime(1500, start + 0.02);
+    band.Q.value = 0.9;
+    noiseGain.gain.setValueAtTime(0.0001, start);
+    noiseGain.gain.linearRampToValueAtTime(KICK_TRANSIENT, start + 0.002);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0004, start + 0.02);
+    noise.connect(band);
+    band.connect(noiseGain);
+    noiseGain.connect(out);
+    this.track(noise);
+    noise.start(start);
+    noise.stop(start + 0.05);
+  }
+
   tone(frequency, start, duration, volume, type = "sine") {
     const ctx = this.context,
       oscillator = ctx.createOscillator(),
@@ -154,28 +221,31 @@ export class Sound {
       return;
     }
     const ctx = this.context,
-      start = ctx.currentTime,
-      notes =
-        type === "score"
-          ? [440, 660]
-          : type === "focus"
-            ? [520]
-            : type === "turnover"
-              ? [150, 100]
-              : type === "end"
-                ? [330, 440, 660]
-                : type === "wall"
-                  ? [300]
-                  : type === "one-touch"
-                    ? [560, 720]
-                    : [180];
+      start = ctx.currentTime;
+    if (type === "kick") {
+      this.kick(start);
+      return;
+    }
+    const notes =
+      type === "score"
+        ? [440, 660]
+        : type === "focus"
+          ? [520]
+          : type === "turnover"
+            ? [150, 100]
+            : type === "end"
+              ? [330, 440, 660]
+              : type === "wall"
+                ? [300]
+                : type === "one-touch"
+                  ? [560, 720]
+                  : [180];
     for (let i = 0; i < notes.length; i++)
       this.tone(
         notes[i],
         start + i * 0.07,
         0.14,
         type === "turnover" ? 0.4 : type === "focus" ? 0.15 : 0.25,
-        type === "kick" ? "triangle" : "sine",
       );
   }
 }

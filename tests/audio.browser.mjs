@@ -318,6 +318,95 @@ await check('the volumes are reachable and operable by gamepad and survive a rel
   await context.close();
 });
 
+// The pass sound cannot be listened to from a test, so it is measured. The
+// graph is rendered through an OfflineAudioContext with the real Sound class
+// and the real master gain, and the numbers stand in for the ear: a body whose
+// pitch falls away, a short bright transient, a length in thud territory, and
+// the same loudness as the other effects with headroom left at trim 1.0.
+await check('the kick renders as a pitch-dropping thud at the same level as the other effects', async () => {
+  const context = await browser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const errors = errorsFor(page);
+  await page.goto(`${baseURL}/`);
+  const measured = await page.evaluate(async () => {
+    const { Sound } = await import('/src/audio.js');
+    const sampleRate = 44100;
+    const render = async (volume, play) => {
+      const ctx = new OfflineAudioContext(1, sampleRate * 0.5, sampleRate);
+      const sound = new Sound(true, volume);
+      sound.context = ctx;
+      play(sound);
+      return (await ctx.startRendering()).getChannelData(0);
+    };
+    const analyse = data => {
+      let peak = 0, sum = 0;
+      for (const v of data) { peak = Math.max(peak, Math.abs(v)); sum += v * v; }
+      // A naive DFT over every other sample: 256 bins to 8kHz is more than a
+      // spectral centroid needs, and it saves pulling in an FFT.
+      let num = 0, den = 0;
+      for (let bin = 1; bin <= 256; bin++) {
+        const f = (bin * 8000) / 256;
+        let re = 0, im = 0;
+        for (let n = 0; n < data.length; n += 2) {
+          const a = (2 * Math.PI * f * n) / sampleRate;
+          re += data[n] * Math.cos(a);
+          im -= data[n] * Math.sin(a);
+        }
+        const mag = Math.hypot(re, im);
+        num += f * mag;
+        den += mag;
+      }
+      const db = v => 20 * Math.log10(v || 1e-9);
+      return { peakDb: db(peak), rmsDb: db(Math.sqrt(sum / data.length)), centroid: den ? num / den : 0 };
+    };
+    // Frequency from the spacing between upward zero crossings rather than a
+    // count per window: at 55Hz a short window holds barely one cycle, and
+    // counting would quantise the sweep away.
+    const pitchAt = (data, from, span) => {
+      const marks = [];
+      const start = Math.round(from * sampleRate), end = Math.round((from + span) * sampleRate);
+      for (let i = start + 1; i < end; i++)
+        if (data[i - 1] <= 0 && data[i] > 0)
+          marks.push(i - 1 + data[i - 1] / (data[i - 1] - data[i]));
+      if (marks.length < 2) return 0;
+      return sampleRate / ((marks.at(-1) - marks[0]) / (marks.length - 1));
+    };
+    const kick = await render(0.3, sound => sound.play('kick'));
+    const hot = await render(1, sound => sound.play('kick'));
+    const wall = await render(0.3, sound => sound.play('wall'));
+    let length = kick.length;
+    while (length > 0 && Math.abs(kick[length - 1]) < 1e-4) length--;
+    return {
+      kick: analyse(kick),
+      wall: analyse(wall),
+      hotPeakDb: analyse(hot).peakDb,
+      lengthMs: (length / sampleRate) * 1000,
+      early: pitchAt(kick, 0, 0.03),
+      late: pitchAt(kick, 0.08, 0.06),
+    };
+  });
+  assert.ok(measured.early > measured.late + 30,
+    `the kick's body must fall in pitch, got ${measured.early.toFixed(0)}Hz then ${measured.late.toFixed(0)}Hz`);
+  assert.ok(measured.late > 40 && measured.late < 80,
+    `the kick should settle near 55Hz, got ${measured.late.toFixed(0)}Hz`);
+  assert.ok(measured.lengthMs > 110 && measured.lengthMs < 170,
+    `a thud is over quickly, got ${measured.lengthMs.toFixed(0)}ms`);
+  // A struck ball is brighter than the wall-pass tone (the transient) but
+  // nowhere near a click: keep it in that band.
+  assert.ok(measured.kick.centroid > measured.wall.centroid,
+    `the kick needs its noise transient, got centroid ${measured.kick.centroid.toFixed(0)}Hz`);
+  assert.ok(measured.kick.centroid < 1400,
+    `the kick must stay a thud, not a click, got centroid ${measured.kick.centroid.toFixed(0)}Hz`);
+  assert.ok(Math.abs(measured.kick.peakDb - measured.wall.peakDb) < 3,
+    `the kick must sit at the other effects' level, got ${measured.kick.peakDb.toFixed(1)} vs ${measured.wall.peakDb.toFixed(1)} dBFS`);
+  assert.ok(measured.kick.peakDb < -18 && measured.kick.peakDb > -28,
+    `effects peak around -22 dBFS at the default trim, got ${measured.kick.peakDb.toFixed(1)}`);
+  assert.ok(measured.hotPeakDb < -1,
+    `the kick must not clip with the trim at 1.0, got ${measured.hotPeakDb.toFixed(1)} dBFS`);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 await browser.close();
 await relaxedBrowser.close();
 if (server) server.kill();
