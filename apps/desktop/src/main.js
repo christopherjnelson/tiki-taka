@@ -553,6 +553,7 @@ function beginHold(reason) {
 function endHold() {
   if (!awaitingResume) return;
   awaitingResume = false;
+  delete document.body.dataset.resumeReady;
   holdKeys.clear();
   holdPointers.clear();
   syncResumePrompt();
@@ -1620,7 +1621,13 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000 || 0);
   lastTime = now;
   pollGamepad(dt);
-  if (awaitingResume) holdElapsed += dt;
+  if (awaitingResume) {
+    holdElapsed += dt;
+    // dt is clamped per frame, so the hold advances at a frame-rate-dependent
+    // rate and no wall-clock wait can predict when it opens. Expose the state
+    // so tests can wait on the gate itself rather than race a stopwatch.
+    document.body.dataset.resumeReady = holdElapsed < 0.3 ? "0" : "1";
+  }
   let turnoverText = null;
   if (view === "arena" && phase === "playing" && !awaitingResume) {
     let x =

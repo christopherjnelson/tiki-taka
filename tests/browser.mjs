@@ -572,8 +572,9 @@ await check('losing possession holds the round until a fresh button press', asyn
     'the pause menu owns the screen while it is open');
   await page.locator('#pause-resume').click();
   await page.locator('#resume-prompt').waitFor({ state: 'visible' });
-  // Any fresh key resumes.
-  await page.waitForTimeout(350);
+  // Any fresh key resumes. Wait on the hold gate itself, not a stopwatch:
+  // holdElapsed accumulates clamped dt, so its rate depends on frame rate.
+  await page.waitForFunction(() => document.body.dataset.resumeReady === "1", null, { timeout: 10000 });
   await page.keyboard.press('KeyW');
   await page.locator('#resume-prompt').waitFor({ state: 'hidden' });
   // The engine still plays out its own 1.2s reset after a turnover, during
@@ -585,7 +586,7 @@ await check('losing possession holds the round until a fresh button press', asyn
   // A pointer press works too, for mouse and touch players.
   await page.evaluate(() => window.__observedGame.game.turnover('CAUGHT IN POSSESSION'));
   await page.locator('#resume-prompt').waitFor({ state: 'visible' });
-  await page.waitForTimeout(350);
+  await page.waitForFunction(() => document.body.dataset.resumeReady === "1", null, { timeout: 10000 });
   await page.mouse.click(200, 400);
   await page.locator('#resume-prompt').waitFor({ state: 'hidden' });
   // The third turnover ends the round outright, so the finish overlay wins and
