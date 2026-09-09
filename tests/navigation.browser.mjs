@@ -218,7 +218,8 @@ await check(
     });
     const page = await context.newPage(),
       errors = errorsFor(page);
-    await page.goto(`${baseURL}/#play`);
+    // Home keeps the docked sidebar, so collapse is exercised there.
+    await page.goto(`${baseURL}/`);
     await page.locator("#sidebar-toggle").click();
     assert.equal(
       await page
@@ -233,14 +234,16 @@ await check(
         .evaluate((el) => el.classList.contains("sidebar-collapsed")),
       true,
     );
-    await openSidebar(page);
-    await page.locator("#play-view-button").click();
+    // The arena is always Play view: no toggle, sidebar becomes a drawer.
+    await page.goto(`${baseURL}/#play`);
     assert.equal(
       await page
         .locator("body")
         .evaluate((el) => el.classList.contains("play-view")),
       true,
     );
+    assert.equal(await page.locator("#play-view-button").count(), 0);
+    assert.equal(await page.locator(".sidebar").isHidden(), true);
     await openSidebar(page);
     await page.screenshot({
       path: new URL("play-view-menu-desktop.png", outputDir).pathname,
@@ -388,7 +391,25 @@ await check(
           Math.abs(court.x + court.width / 2 - (wrap.x + wrap.width / 2)) <= 1,
         `${width}x${height} court centered in wrap`,
       );
-      for (const selector of ["#court", ".court-toolbar", ".below-court"]) {
+      // The arena is always Play view: the below-court panel is put away and
+      // the court owns the space.
+      assert.equal(
+        await page
+          .locator("body")
+          .evaluate((el) => el.classList.contains("play-view")),
+        true,
+        `${width}x${height} play view`,
+      );
+      assert.equal(
+        await page.locator(".below-court").isHidden(),
+        true,
+        `${width}x${height} below-court is hidden in Play view`,
+      );
+      for (const selector of ["#court", ".court-toolbar"]) {
+        // Compact landscape Play view hands the toolbar's job to the touch
+        // controls, so only measure what the presentation actually shows.
+        if (selector !== "#court" && (await page.locator(selector).isHidden()))
+          continue;
         const box = await page.locator(selector).boundingBox();
         assert.ok(
           box && box.x >= -1 && box.x + box.width <= width + 1,
@@ -396,7 +417,7 @@ await check(
         );
       }
       if (width >= 1280) {
-        for (const selector of ["#court", ".court-toolbar", ".below-court"]) {
+        for (const selector of ["#court", ".court-toolbar"]) {
           const box = await page.locator(selector).boundingBox();
           assert.ok(
             box.y >= -1 && box.y + box.height <= height + 1,

@@ -124,8 +124,9 @@ function toast(text) {
   toastTimeout = setTimeout(() => $("toast").classList.remove("visible"), 4000);
 }
 const mobileSidebar = () => matchMedia("(max-width: 900px)").matches;
-const drawerSidebar = () =>
-  mobileSidebar() || (view === "arena" && settings.playView);
+// Play view is the only desktop presentation now, so the arena always drawers
+// the sidebar away rather than docking it beside the court.
+const drawerSidebar = () => mobileSidebar() || view === "arena";
 function syncSidebar() {
   const expanded = drawerSidebar() ? sidebarOpen : !settings.sidebarCollapsed;
   document.body.classList.toggle(
@@ -469,11 +470,14 @@ function start() {
       : `Keep it moving. Click a teammate or use ${settings.bindings.smartPass.map(readableKey).join(" / ")} for a smart pass.`,
   );
 }
+// The court only takes movement and aim while a round is actually running.
+const acceptingPlayInput = () => view === "arena" && phase === "playing";
 function clearInput() {
   keys.clear();
   stick = { x: 0, y: 0 };
   gamepadMove = { x: 0, y: 0 };
   pointerMove = null;
+  aim = null;
   gamepadFocus = false;
   pointerId = null;
   joystickId = null;
@@ -720,27 +724,13 @@ $("sound-button").addEventListener("click", () => {
 });
 function syncSettingChrome() {
   document.documentElement.dataset.theme = settings.theme;
-  document.body.classList.toggle(
-    "play-view",
-    view === "arena" && settings.playView,
-  );
+  document.body.classList.toggle("play-view", view === "arena");
   $("theme-button").setAttribute(
     "aria-pressed",
     String(settings.theme === "light"),
   );
   $("theme-button").innerHTML =
     `<span aria-hidden="true">◐</span> ${settings.theme === "dark" ? "Light" : "Dark"}`;
-  const playViewAvailable = view === "arena";
-  $("play-view-button").disabled = !playViewAvailable;
-  $("play-view-button").title = playViewAvailable
-    ? "Toggle distraction-free Play view"
-    : "Open a court to use Play view";
-  $("play-view-button").setAttribute(
-    "aria-pressed",
-    String(playViewAvailable && settings.playView),
-  );
-  $("play-view-button").innerHTML =
-    `<span aria-hidden="true">◇</span> ${playViewAvailable && settings.playView ? "Exit play view" : "Play view"}`;
   if ($("preset-select")) $("preset-select").value = settings.preset;
   document.querySelectorAll("[data-binding]").forEach((element) => {
     const codes = settings.bindings[element.dataset.binding] || [];
@@ -916,15 +906,17 @@ $("theme-button").addEventListener("click", () => {
   persistSettings();
   syncSettingChrome();
 });
-$("play-view-button").addEventListener("click", () => {
-  settings.playView = !settings.playView;
-  sidebarOpen = false;
-  persistSettings();
-  syncSettingChrome();
-  syncSidebar();
-});
+// The desktop shell opens its window fullscreen without the page ever calling
+// requestFullscreen, and Electron reports no display-mode change for it. In the
+// shell a fullscreen window fills the screen exactly; a maximised one does not.
+const shellFullscreen = () =>
+  location.protocol === "tiki:" &&
+  window.innerWidth >= screen.width &&
+  window.innerHeight >= screen.height;
 function syncFullscreen() {
-  const active = document.fullscreenElement === document.documentElement;
+  const active =
+    document.fullscreenElement === document.documentElement ||
+    shellFullscreen();
   document.body.classList.toggle("fullscreen-game", active);
   $("fullscreen-button").setAttribute("aria-pressed", String(active));
   $("fullscreen-button").innerHTML =
@@ -933,6 +925,8 @@ function syncFullscreen() {
 $("fullscreen-button").addEventListener("click", async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
+    else if (shellFullscreen())
+      toast("Already fullscreen. Press F11 to play in a window.");
     else await document.documentElement.requestFullscreen();
   } catch {
     toast("Fullscreen is not available in this browser.");
@@ -940,6 +934,8 @@ $("fullscreen-button").addEventListener("click", async () => {
   syncFullscreen();
 });
 document.addEventListener("fullscreenchange", syncFullscreen);
+// F11 is handled by the shell, which only tells the page by resizing it.
+window.addEventListener("resize", syncFullscreen);
 $("sidebar-toggle").addEventListener("click", toggleSidebar);
 $("sidebar-close")?.addEventListener("click", () => closeSidebar());
 $("sidebar-backdrop").addEventListener("click", () => closeSidebar());
@@ -1252,12 +1248,19 @@ function pollGamepad(dt) {
   const pressed = pad.buttons.map((b) => b.pressed),
     tap = (i) => pressed[i] && !padPrevious[i];
   const dead = (v) => (Math.abs(v || 0) > 0.18 ? v : 0);
-  gamepadMove = { x: dead(pad.axes[0]), y: dead(pad.axes[1]) };
-  gamepadFocus = !!pressed[6];
-  if (Math.hypot(dead(pad.axes[2]), dead(pad.axes[3])) > 0.2)
-    aim = { x: pad.axes[2], y: pad.axes[3] };
-  else if (Math.hypot(gamepadMove.x, gamepadMove.y) > 0.2)
-    aim = { ...gamepadMove };
+  // Sticks only drive the court while the round is actually accepting play.
+  // Otherwise a nudge behind the pause overlay would keep repainting aim lanes.
+  if (acceptingPlayInput()) {
+    gamepadMove = { x: dead(pad.axes[0]), y: dead(pad.axes[1]) };
+    gamepadFocus = !!pressed[6];
+    if (Math.hypot(dead(pad.axes[2]), dead(pad.axes[3])) > 0.2)
+      aim = { x: pad.axes[2], y: pad.axes[3] };
+    else if (Math.hypot(gamepadMove.x, gamepadMove.y) > 0.2)
+      aim = { ...gamepadMove };
+  } else {
+    gamepadMove = { x: 0, y: 0 };
+    gamepadFocus = false;
+  }
   const direction =
     pressed[13] || pressed[15] || pad.axes[1] > 0.6
       ? 1
