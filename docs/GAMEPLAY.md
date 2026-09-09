@@ -16,19 +16,19 @@ The flow multiplier applies to pass, triangle, wall, and zone points. One-touch 
 
 ## Controls
 
-| Action | Keyboard / mouse | Touch | Standard gamepad |
-| --- | --- | --- | --- |
-| Move | WASD / arrows; drag empty court | Onscreen stick | Left stick |
-| Aim | Point or move toward teammate | Move toward teammate | Right stick; left when right is idle |
-| Pass | Click teammate; 1–4; Space for suggestion | Tap teammate or Pass | A / bottom face |
-| Wall pass | Hold Shift; B or Wall arms | Wall arms; Pass sends | X / left face sends immediately |
-| Focus | Hold E; button toggles | Hold Focus | Hold LT |
-| Pause | Esc or Pause | Pause / Resume | Start; B also resumes |
-| Menus | Tab, Enter/Space, mouse | Tap | D-pad/stick; A selects |
+| Action | Keyboard / mouse | Standard gamepad |
+| --- | --- | --- |
+| Move | WASD / arrows; drag empty court | Left stick |
+| Aim | Point or move toward teammate | Right stick; left when right is idle |
+| Pass | Click teammate; 1–4; Space for suggestion | A / bottom face |
+| Wall pass | Hold Shift; B or Wall arms | X / left face sends immediately |
+| Focus | Hold E; button toggles | Hold LT |
+| Pause | Esc or Pause | Start; B also resumes |
+| Menus | Tab, Enter/Space, mouse | D-pad/stick; A selects |
 
 Gamepad labels use the standard browser mapping and may differ from printed controller labels. Disconnecting a controller or hiding the browser pauses an active round.
 
-On mobile, Wall defaults to an armed toggle. Tap it again to cancel, or press Pass or a teammate to send. Settings also offers an Instant wall-pass mode. Passing while the ball travels queues one pass from the receiver; choosing another target replaces it. Pausing clears the queue. Focus does not extend the one-touch timing window.
+Wall defaults to an armed toggle: press it again to cancel, or press Pass or a teammate to send. Settings also offers an Instant wall-pass mode. Passing while the ball travels queues one pass from the receiver; choosing another target replaces it. Pausing clears the queue. Focus does not extend the one-touch timing window.
 
 ## Modes and progression
 
@@ -58,8 +58,8 @@ Finished rounds grant XP, with a new level and rank title every 300 XP.
 
 Home offers four modes, local progress, and the six World Tour courts. Opening Home during a round pauses it. Choosing another mode or court asks before abandoning unfinished play.
 
-Desktop offers remappable keyboard controls, light and dark themes, Play view, and fullscreen. Mobile uses Home, Play, Profile, and Settings navigation; landscape puts movement on the left and actions on the right. Rotating pauses play and releases held controls.
+The game offers remappable keyboard controls, light and dark themes, Play view, and fullscreen.
 
-The production desktop build caches assets after an initial online load. Service workers require localhost or HTTPS. The mobile browser preview does not install an offline worker; the Capacitor app bundles everything needed for offline play. Decorative effects honor reduced-motion preferences, while gameplay remains visual and real time.
+The production build caches assets after an initial online load, so it keeps working offline. Service workers require localhost or HTTPS. Decorative effects honor reduced-motion preferences, while gameplay remains visual and real time.
 
 Profiles and progress are local demo data. See [the README](../README.md#local-demo-profiles-and-saves) for persistence and privacy limits.
