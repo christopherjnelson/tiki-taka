@@ -325,7 +325,16 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
     'gamepad focus should be visibly marked',
   );
   await gotoArena(page, baseURL);
-  await page.waitForTimeout(150);
+  // Wait for the arena to actually be live before driving the pad: until the
+  // view switches, pollGamepad is still in the title-menu branch and A
+  // activates a menu item instead of the overlay's start button. A fixed wait
+  // was long enough on a workstation and not on a CI runner.
+  await page.locator('#game-overlay').waitFor({ state: 'visible', timeout: 10000 });
+  await page.waitForFunction(
+    () => !document.querySelector('#arena-view')?.hidden,
+    null,
+    { timeout: 10000 },
+  );
   await page.locator('#start-button').focus();
   await pulsePad(page, 0);
   // Activation lands on the next rAF tick, which is slower on a CI runner than
