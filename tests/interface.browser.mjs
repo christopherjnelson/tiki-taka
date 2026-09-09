@@ -227,7 +227,7 @@ await check(
       "gamepad Start closes settings",
     );
     assert.equal(
-      await page.locator("#game-overlay").isVisible(),
+      await page.locator("#pause-menu").isVisible(),
       true,
       "gamepad modal close must not resume behind it",
     );
@@ -568,7 +568,14 @@ await check(
         await page.locator("#courts-view").waitFor({ state: "visible" });
       }
       await page.locator(".court-item").nth(i).click();
-      await page.waitForTimeout(80);
+      await page.locator("#arena-view").waitFor({ state: "visible" });
+      await page.evaluate(
+        () =>
+          new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve)),
+          ),
+      );
+      await page.waitForTimeout(250);
       ids.push(await page.locator("html").getAttribute("data-venue"));
       accents.push(
         await page

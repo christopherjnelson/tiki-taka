@@ -344,13 +344,15 @@ await check(
       errors = errorsFor(page);
     await page.goto(`${baseURL}/#play`);
     await page.locator("#start-button").click();
+    // A remapped pause key still opens the menu in the arena.
     await page.keyboard.press("KeyP");
     assert.equal(
-      await page.locator("#game-overlay").isVisible(),
+      await page.locator("#pause-menu").isVisible(),
       true,
       "custom pause key works in Arena",
     );
-    await page.locator("#start-button").click();
+    await page.locator("#pause-resume").click();
+    await page.locator("#pause-menu").waitFor({ state: "hidden" });
     // The custom pause key opens the menu, and the menu takes focus.
     await page.keyboard.press("KeyP");
     await page.locator("#pause-menu").waitFor({ state: "visible" });
@@ -374,7 +376,9 @@ await check(
     assert.equal(
       await page.evaluate(() =>
         Boolean(
-          document.querySelector("#pause-menu")?.contains(document.activeElement),
+          document
+            .querySelector("#pause-menu")
+            ?.contains(document.activeElement),
         ),
       ),
       true,

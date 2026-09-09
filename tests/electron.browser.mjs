@@ -101,11 +101,12 @@ try {
   await page.bringToFront();
   // CDP keyboard events bypass Electron's before-input-event handler.
   // Send native input through Electron to exercise the shell shortcut.
-  const pressF11 = () => app.evaluate(({ BrowserWindow }) => {
-    const contents = BrowserWindow.getAllWindows()[0].webContents;
-    contents.sendInputEvent({ type: "keyDown", keyCode: "F11" });
-    contents.sendInputEvent({ type: "keyUp", keyCode: "F11" });
-  });
+  const pressF11 = () =>
+    app.evaluate(({ BrowserWindow }) => {
+      const contents = BrowserWindow.getAllWindows()[0].webContents;
+      contents.sendInputEvent({ type: "keyDown", keyCode: "F11" });
+      contents.sendInputEvent({ type: "keyUp", keyCode: "F11" });
+    });
   // Starting fullscreen, the first F11 must leave it.
   await pressF11();
   try {

@@ -154,7 +154,9 @@ function toast(text) {
   toastTimeout = setTimeout(() => $("toast").classList.remove("visible"), 4000);
 }
 const anyDialogOpen = () =>
-  $("settings-dialog").open || $("help-dialog").open || $("account-dialog").open;
+  $("settings-dialog").open ||
+  $("help-dialog").open ||
+  $("account-dialog").open;
 // Any menu that must swallow gameplay input before it reaches the court.
 const menuBlocking = () => menuOpen || anyDialogOpen();
 function syncPauseMenu() {
@@ -237,7 +239,8 @@ function applyView(next, { updateHash = true } = {}) {
     if (anyDialogOpen() || menuOpen) return;
     if (view === "title") padFocus($("title-play"));
     else if (view === "courts") padFocus($("courts-back"));
-    else if ($("game-overlay").hidden) $("court").focus({ preventScroll: true });
+    else if ($("game-overlay").hidden)
+      $("court").focus({ preventScroll: true });
     else padFocus($("start-button"));
   });
   if (updateHash) {
@@ -390,7 +393,10 @@ function prepare() {
   $("tactic-select").disabled = false;
   $("tactic-select").value = progress.tactic;
   $("tactic-description").textContent = TACTICS[progress.tactic].label;
-  $("pause-button").disabled = true;
+  // With the sidebar gone this button is the only pointer-driven way into the
+  // menu, so it stays live for the whole time the arena is on screen rather
+  // than only while a round is running. Touch players need it before kickoff.
+  $("pause-button").disabled = false;
   setPauseState(false);
   setControlsEnabled(false);
   $("bank-button").setAttribute("aria-pressed", "false");
@@ -678,7 +684,7 @@ function finish() {
   focusToggle = false;
   clearInput();
   endHold();
-  $("pause-button").disabled = true;
+  $("pause-button").disabled = false;
   setPauseState(false);
   setControlsEnabled(false);
   const result = awardMatch(progress, game, mode, courtIndex);
@@ -1022,8 +1028,10 @@ $("courts-back").addEventListener("click", () => applyView("title"));
 $("pause-resume").addEventListener("click", dismissPauseMenu);
 $("pause-restart").addEventListener("click", () => {
   closePauseMenu({ restoreFocus: false });
+  // Every round begins from the invitation card, so restarting lands there
+  // rather than throwing the player straight back into a live press.
   prepare();
-  start();
+  padFocus($("start-button"));
 });
 $("pause-courts").addEventListener("click", () => {
   closePauseMenu({ restoreFocus: false });

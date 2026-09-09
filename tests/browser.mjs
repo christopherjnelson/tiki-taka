@@ -66,6 +66,22 @@ async function expectText(locator, pattern, timeout = 5000) {
   assert.match(text || '', pattern);
 }
 
+// Under page.clock a round no longer resumes itself after a turnover, so a
+// scripted run has to answer the prompt the way a player does. Returns once
+// the round is over or the budget runs out.
+async function runRound(page, { steps = 60, stepMs = 500, onStep } = {}) {
+  for (let step = 0; step < steps; step++) {
+    if (!(await page.locator('#game-overlay').isHidden())) return;
+    if (await page.locator('#resume-prompt').isVisible()) {
+      await page.clock.runFor(400);
+      await page.keyboard.press('Space');
+      await page.locator('#resume-prompt').waitFor({ state: 'hidden' });
+    }
+    if (onStep) await onStep();
+    await page.clock.runFor(stepMs);
+  }
+}
+
 async function waitForScore(page, previous = 0) {
   await page.waitForFunction(value => Number(document.querySelector('#score-value')?.textContent) > value, previous);
   return Number(await page.locator('#score-value').textContent());
@@ -223,19 +239,23 @@ await check('desktop gameplay, controls, progression, help, and full run', async
   assert.equal(await page.locator('#focus-button').getAttribute('aria-pressed'), 'true');
   await page.waitForFunction(() => document.querySelector('#focus-button')?.getAttribute('aria-pressed') === 'false');
   assert.equal(await focusSeconds(page), 0, 'focus should auto-toggle off when depleted');
+  // The HUD pause button opens the same menu the pause key does.
   await page.locator('#pause-button').click();
-  await expectText(page.locator('#overlay-title'), /ball can wait/i);
+  await page.locator('#pause-menu').waitFor({ state: 'visible' });
+  await expectText(page.locator('#pause-title'), /paused/i);
   assert.equal(await page.locator('#focus-button').getAttribute('aria-pressed'), 'false');
-  await page.locator('#start-button').click();
+  await page.locator('#pause-resume').click();
+  await page.locator('#pause-menu').waitFor({ state: 'hidden' });
   assert.equal(await page.locator('#game-overlay').isHidden(), true);
+  // Restart from the pause menu returns to a fresh invitation card.
   await page.keyboard.press('Escape');
-  await page.locator('#secondary-button').click();
+  await page.locator('#pause-restart').click();
   await expectText(page.locator('#overlay-title'), /Keep it beautiful/i);
   assert.equal(await page.locator('#score-value').textContent(), '000');
 
   await page.clock.install();
   await page.locator('#start-button').click();
-  await page.clock.runFor(30000);
+  await runRound(page, { steps: 40, stepMs: 1000 });
   await expectText(page.locator('#overlay-kicker'), /ROUND COMPLETE|PERSONAL BEST/);
   await expectText(page.locator('#overlay-copy'), /points · \d+ passes · \d+ triangles · best one-touch \d+ · \+\d+ XP/);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tiki-taka.progress.v1')));
@@ -252,11 +272,13 @@ await check('a complete playable career run clears and unlocks the next court', 
   await page.goto(`${baseURL}/#play`);
   await page.clock.install();
   await page.locator('#start-button').click();
-  for (let step = 0; step < 180 && await page.locator('#game-overlay').isHidden(); step++) {
-    const target = (await page.locator('#target-label').textContent())?.match(/→\s*([1-4])/);
-    if (target) await page.keyboard.press(`Digit${target[1]}`);
-    await page.clock.runFor(500);
-  }
+  await runRound(page, {
+    steps: 180,
+    async onStep() {
+      const target = (await page.locator('#target-label').textContent())?.match(/→\s*([1-4])/);
+      if (target) await page.keyboard.press(`Digit${target[1]}`);
+    },
+  });
   await expectText(page.locator('#overlay-kicker'), /COURT CLEARED/);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tiki-taka.progress.v1')));
   assert.equal(saved.unlocked, 1);
@@ -535,7 +557,7 @@ await check('losing possession holds the round until a fresh button press', asyn
   // The round is genuinely frozen while it waits.
   const held = await page.evaluate(() => window.__observedGame.game.time);
   await page.waitForTimeout(300);
-  assert.equal(await page.evaluate(() => Math.abs(window.__observedGame.game.time - held) < 0.01), true,
+  assert.equal(await page.evaluate(time => Math.abs(window.__observedGame.game.time - time) < 0.01, held), true,
     'the clock must not run while the round waits for the player');
   // The turnover message stays legible for as long as the hold lasts, instead
   // of timing out after 2.5s the way the live announcement banner does.

@@ -12,7 +12,13 @@
 
 const FADE = 0.35;
 
-export function createMusic({ sources = [], volume = 0.34 } = {}) {
+// The track is a loud master: it peaks at -1.4 dBFS and averages -14.1 dBFS.
+// Effects now peak between -8 and -16 dBFS, but they are 140 ms transients
+// while music is continuous, so it is the music's *average* that decides
+// whether they cut through. -17.7 dB of gain puts the soundtrack's mean at
+// about -32 dBFS and its peaks at about -19 dBFS: under every effect, still
+// clearly present underneath the game.
+export function createMusic({ sources = [], volume = 0.13 } = {}) {
   let context = null,
     gain = null,
     source = null,

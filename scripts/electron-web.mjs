@@ -20,6 +20,14 @@ for (const asset of [
     path.join(projectRoot, "public", asset),
     path.join(desktopOutput, asset),
   );
+// The soundtrack lives in a subdirectory, so the folder has to exist first.
+// This list is separate from scripts/build.mjs and feeds the packaged app.
+await mkdir(path.join(desktopOutput, "audio"), { recursive: true });
+for (const track of ["neon-biscayne.ogg"])
+  await cp(
+    path.join(projectRoot, "public", "audio", track),
+    path.join(desktopOutput, "audio", track),
+  );
 await mkdir(path.join(desktopOutput, "licenses"), { recursive: true });
 for (const license of ["Poppins-LICENSE.txt", "Roboto-LICENSE.txt"])
   await cp(
