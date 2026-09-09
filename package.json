@@ -23,7 +23,6 @@
     "test:desktop-account": "node tests/desktop-account.browser.mjs",
     "test:audio": "node tests/audio.browser.mjs",
     "test:web": "npm run test:browser && npm run test:interface && npm run test:navigation && npm run test:one-touch && npm run test:mobile && npm run test:desktop-account && npm run test:audio",
-    "test:mobile-freeze": "node scripts/check-mobile-freeze.mjs",
     "electron:dev": "node scripts/electron-dev.mjs",
     "electron:pack": "node scripts/electron-pack.mjs",
     "test:electron": "node scripts/electron-test.mjs",

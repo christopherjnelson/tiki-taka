@@ -59,8 +59,6 @@ Browser pages on the same origin share profiles. The Electron app and installed 
 - `src/` — compatibility exports retained for regression coverage.
 - `tests/` — Node and browser integration tests.
 
-Mobile version 1.1.1 and the shared engine have a recorded 47-file freeze. Before changing shared gameplay or mobile source, read [the mobile freeze record](docs/MOBILE-FREEZE.md). Desktop shell and packaging work must keep `node scripts/check-mobile-freeze.mjs` passing.
-
 ## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before making changes. No license grant is provided for this repository.

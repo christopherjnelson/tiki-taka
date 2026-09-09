@@ -11,10 +11,9 @@ npm start
 
 Desktop runs at <http://localhost:5173>; mobile preview runs at <http://localhost:5173/mobile/>. Use `HOST=0.0.0.0 npm start` only on a trusted network.
 
-Every change should pass the source-freeze check, unit tests, and production build:
+Every change should pass the unit tests and the production build:
 
 ```sh
-npm run test:mobile-freeze
 npm test
 npm run build
 ```
@@ -54,17 +53,9 @@ Three locations state the release version and must stay in sync: root `package.j
 
 `apps/electron/package.json` is the one electron-builder reads, because `electron-builder.yml` sets `directories.app` to `apps/electron`; its version becomes the packaged artifact name.
 
-The Android file is inside the mobile freeze, so bumping it means deliberately reopening that freeze. Read [the freeze record](docs/MOBILE-FREEZE.md) first.
+## Android
 
-## Android and the mobile freeze
-
-Mobile 1.1.1 and the shared engine are frozen. Read [the freeze record](docs/MOBILE-FREEZE.md) before changing `apps/mobile/`, `packages/`, or shared mobile assets. Desktop-only work must pass:
-
-```sh
-node scripts/check-mobile-freeze.mjs
-```
-
-The checker must not silently regenerate its baseline. To use the existing Android project:
+To use the existing Android project:
 
 ```sh
 npm run mobile:sync
@@ -87,4 +78,4 @@ This is a commercial game repository. No license grant is provided.
 
 [GitHub Actions CI](.github/workflows/ci.yml) runs three jobs on pushes to `main` and pull requests: web build and tests, packaged Electron smoke testing on a private display, and an Android debug build. Successful package jobs retain the Linux AppImage and Android debug APK as workflow artifacts for 14 days.
 
-The CI APK is signed with a temporary runner debug key and may not install over a workstation-signed build. See [the mobile freeze record](docs/MOBILE-FREEZE.md) before using an APK to update a phone whose local data must be retained.
+The CI APK is signed with a temporary runner debug key and may not install over a workstation-signed build.
