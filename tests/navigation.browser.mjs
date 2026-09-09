@@ -79,16 +79,17 @@ async function openPauseMenu(page) {
     await page.locator("#pause-menu").waitFor({ state: "visible" });
   }
 }
-// Leaving the arena now goes through the pause menu, which is the replacement
-// for both the old workspace Home button and the sidebar drawer.
-async function leaveToCourts(page) {
+// Leaving the arena goes through the pause menu, which is the replacement for
+// both the old workspace Home button and the sidebar drawer. It lands on home,
+// which is now also the court picker.
+async function leaveToHome(page) {
   await openPauseMenu(page);
-  await page.locator("#pause-courts").click();
-  await page.locator("#courts-view").waitFor({ state: "visible" });
+  await page.locator("#pause-home").click();
+  await page.locator("#home-view").waitFor({ state: "visible" });
 }
 
 await check(
-  "fresh launch presents a gamepad-ready title screen with the progress one step behind it",
+  "fresh launch presents one gamepad-ready home screen holding the demo, the courts, the modes and the progress",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
@@ -97,28 +98,32 @@ await check(
     const page = await context.newPage(),
       errors = errorsFor(page);
     await page.goto(baseURL, { waitUntil: "networkidle" });
-    assert.equal(await page.locator("#title-view").isVisible(), true);
-    assert.equal(await page.locator("#courts-view").isHidden(), true);
+    assert.equal(await page.locator("#home-view").isVisible(), true);
     assert.equal(await page.locator("#arena-view").isHidden(), true);
-    // A game, not a dashboard: one vertical menu and nothing else.
+    // There is no separate courts page any more, so there is nothing behind
+    // home and no entry pointing at it.
+    assert.equal(await page.locator("#courts-view").count(), 0);
+    assert.equal(await page.locator("#title-courts").count(), 0);
+    assert.equal(await page.locator("#courts-back").count(), 0);
+    // A game, not a dashboard: one vertical menu, and it no longer has to
+    // offer a way to the courts because the courts are already on screen.
     assert.deepEqual(
       await page.evaluate(() =>
         [...document.querySelectorAll("#title-menu button")]
           .filter((el) => !el.hidden)
           .map((el) => el.id),
       ),
-      ["title-play", "title-courts", "settings-button"],
-      "the title menu offers Play, Courts and Settings and nothing else",
+      ["title-play", "settings-button"],
+      "the home menu offers Play and Settings and nothing else",
     );
     // Keyboard and controller both start on the menu with no clicking first.
     assert.equal(
       await page.evaluate(() => document.activeElement?.id),
       "title-play",
     );
-    // Every earned statistic the old dashboard showed still exists, on Courts.
-    await page.locator("#title-courts").click();
-    await page.locator("#courts-view").waitFor({ state: "visible" });
-    assert.equal(page.url().endsWith("#courts"), true);
+    // The demo, the courts, the modes and every earned statistic the old
+    // dashboard showed are all on this one screen, with nothing clicked.
+    assert.equal(await page.locator("#attract-court").isVisible(), true);
     assert.equal(await page.locator("[data-home-mode]").count(), 4);
     assert.equal(await page.locator(".court-item").count(), 6);
     assert.match(await page.locator("#level-label").textContent(), /LEVEL 1/i);
@@ -146,16 +151,20 @@ await check(
       path: new URL("home-desktop.png", outputDir).pathname,
       fullPage: true,
     });
-    // Escape walks back out of Courts without touching the mouse.
+    // Escape used to walk back out of the courts page. There is nowhere to
+    // walk back to now, and pressing it must leave home exactly as it was
+    // rather than blanking the view or throwing.
     await page.keyboard.press("Escape");
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await settled(page);
+    assert.equal(await page.locator("#home-view").isVisible(), true);
+    assert.equal(await page.locator("#court-list button").count(), 6);
     assert.deepEqual(errors, []);
     await context.close();
   },
 );
 
 await check(
-  "Play, Courts modes, unlocked courts, leave confirmation, and history preserve rounds",
+  "Play, modes, unlocked courts, the leave confirmation and history all preserve rounds",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
@@ -204,11 +213,12 @@ await check(
     const beforeHome = await page.evaluate(() => ({
       time: window.__navGame.time,
     }));
-    await leaveToCourts(page);
-    assert.equal(await page.locator("#courts-view").isVisible(), true);
-    await page.locator("#courts-back").click();
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await leaveToHome(page);
+    assert.equal(await page.locator("#home-view").isVisible(), true);
+    // Home is the courts screen, so a paused round is still offered as Resume
+    // from the very menu that shows the six courts.
     assert.match(await page.locator("#title-play").textContent(), /Resume/i);
+    assert.equal(await page.locator("#court-list button").count(), 6);
     const frozen = await page.evaluate(() => window.__navGame.time);
     await page.waitForTimeout(180);
     assert.equal(
@@ -219,16 +229,24 @@ await check(
       true,
       "leaving the arena must freeze the active round",
     );
-    await page.locator("#title-courts").click();
-    await page.locator("#courts-view").waitFor({ state: "visible" });
     await page.locator('[data-home-mode="daily"]').click();
+    // The confirmation names both outcomes plainly, and neither button says
+    // anything a player would have to guess at.
     assert.match(
       await page.locator("#overlay-kicker").textContent(),
-      /LEAVE THIS ROUND/i,
+      /THIS ROUND IS STILL GOING/i,
+    );
+    assert.match(
+      await page.locator("#overlay-title").textContent(),
+      /End it and start the new one\?/i,
     );
     assert.match(
       await page.locator("#start-button").textContent(),
-      /Keep playing/i,
+      /^Keep playing this round$/,
+    );
+    assert.match(
+      await page.locator("#secondary-button").textContent(),
+      /^End it and start the new one$/,
     );
     await page.locator("#start-button").click();
     assert.equal(await page.locator("#game-overlay").isHidden(), true);
@@ -241,7 +259,7 @@ await check(
       true,
       "resume keeps the same round time",
     );
-    await leaveToCourts(page);
+    await leaveToHome(page);
     await page.locator('[data-home-mode="daily"]').click();
     await page.locator("#secondary-button").click();
     assert.match(await page.locator("#mode-label").textContent(), /DAILY/i);
@@ -249,7 +267,7 @@ await check(
     await page.goBack();
     await page.waitForFunction(() => location.hash !== "#play");
     assert.equal(await page.locator("#arena-view").isHidden(), true);
-    await page.locator("#courts-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     await page.locator(".court-item").nth(4).click();
     assert.match(await page.locator("#court-title").textContent(), /The Cage/i);
     assert.equal(page.url().endsWith("#play"), true);
@@ -259,7 +277,7 @@ await check(
 );
 
 await check(
-  "the pause menu reaches Courts and Settings two presses from pausing",
+  "the pause menu reaches Home and Settings two presses from pausing",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -308,7 +326,7 @@ await check(
           .filter((el) => !el.hidden)
           .map((el) => el.id),
       ),
-      ["pause-resume", "pause-restart", "pause-courts", "pause-settings"],
+      ["pause-resume", "pause-restart", "pause-home", "pause-settings"],
     );
     await page.screenshot({
       path: new URL("play-view-menu-desktop.png", outputDir).pathname,
@@ -320,9 +338,23 @@ await check(
       true,
     );
     await page.locator("#close-settings").click();
-    // Courts is one press away from the same menu.
-    await page.locator("#pause-courts").click();
-    await page.locator("#courts-view").waitFor({ state: "visible" });
+    // Home is one press away from the same menu, and the entry says Home
+    // rather than Courts now that they are the same screen.
+    assert.match(
+      await page.locator("#pause-home").textContent(),
+      /\bHome\b/,
+    );
+    assert.equal(
+      await page.evaluate(() =>
+        [...document.querySelectorAll("#pause-menu button")].some((el) =>
+          /courts/i.test(el.textContent),
+        ),
+      ),
+      false,
+      "the pause menu must not still say Courts",
+    );
+    await page.locator("#pause-home").click();
+    await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(await page.locator(".court-item").count(), 6);
     assert.deepEqual(errors, []);
     await context.close();
@@ -407,11 +439,11 @@ await check(
       true,
     );
     await page.keyboard.press("KeyP");
-    await page.locator("#pause-courts").click();
-    await page.locator("#courts-view").waitFor({ state: "visible" });
+    await page.locator("#pause-home").click();
+    await page.locator("#home-view").waitFor({ state: "visible" });
     await page.keyboard.press("KeyP");
     assert.equal(
-      await page.locator("#courts-view").isVisible(),
+      await page.locator("#home-view").isVisible(),
       true,
       "custom pause key cannot activate hidden Arena controls from Courts",
     );
@@ -513,7 +545,7 @@ await check(
 );
 
 await check(
-  "the title screen and its menus remain usable at portrait and compact landscape sizes",
+  "home and its menus remain usable at portrait and compact landscape sizes",
   async () => {
     for (const [width, height, suffix] of [
       [390, 844, "mobile"],
@@ -529,8 +561,8 @@ await check(
         errors = errorsFor(page);
       await page.goto(baseURL);
       await settled(page);
-      assert.equal(await page.locator("#title-view").isVisible(), true);
-      for (const id of ["title-play", "title-courts", "settings-button"]) {
+      assert.equal(await page.locator("#home-view").isVisible(), true);
+      for (const id of ["title-play", "settings-button"]) {
         const box = await page.locator(`#${id}`).boundingBox();
         assert.ok(
           box && box.x >= -1 && box.x + box.width <= width + 1,
@@ -550,8 +582,9 @@ await check(
         fullPage: true,
       });
       await page.locator("#close-settings").tap();
-      await page.locator("#title-courts").tap();
-      await page.locator("#courts-view").waitFor({ state: "visible" });
+      // Home is the courts screen on a phone too — there is no second page to
+      // tap through to, so the same view has to hold without overflowing.
+      await page.locator("#home-view").waitFor({ state: "visible" });
       assert.equal(
         await page.evaluate(
           () =>
@@ -559,7 +592,7 @@ await check(
             document.documentElement.clientWidth,
         ),
         true,
-        `${suffix} courts screen must not overflow horizontally`,
+        `${suffix} home screen must not overflow horizontally`,
       );
       assert.deepEqual(errors, []);
       await context.close();
@@ -568,7 +601,7 @@ await check(
 );
 
 await check(
-  "a cold load opens the title screen even when the URL still says #play",
+  "a cold load opens home even when the URL still says #play",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 800 },
@@ -580,7 +613,7 @@ await check(
     // bookmark, a reopened tab and a refresh. A returning player must still
     // land on the menu rather than in the arena on a ready-state overlay.
     await page.goto(`${baseURL}/#play`);
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(
       await page.locator("#arena-view").isHidden(),
       true,
@@ -596,13 +629,13 @@ await check(
     await page.locator("#arena-view").waitFor({ state: "visible" });
     assert.equal(page.url().endsWith("#play"), true);
     await page.goBack();
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     await page.goForward();
     await page.locator("#arena-view").waitFor({ state: "visible" });
     // ...but a reload from the arena is a cold load, and cold loads open the
     // title screen.
     await page.reload();
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(await page.locator("#arena-view").isHidden(), true);
     assert.deepEqual(errors, []);
     await context.close();
@@ -610,7 +643,7 @@ await check(
 );
 
 await check(
-  "nothing scrolls at 1080x1024, and the court keeps its share of the window",
+  "nothing scrolls at 1080x1024, 1280x720 or 1920x1080, and the court keeps its share of the window",
   async () => {
     for (const [width, height] of [
       [1080, 1024],
@@ -624,7 +657,7 @@ await check(
       const page = await context.newPage();
       const errors = errorsFor(page);
       await page.goto(`${baseURL}/`);
-      await page.locator("#title-view").waitFor({ state: "visible" });
+      await page.locator("#home-view").waitFor({ state: "visible" });
       const noScroll = async (where) => {
         await settled(page);
         const box = await page.evaluate(() => ({
@@ -642,12 +675,41 @@ await check(
           `${where} scrolls down at ${width}x${height}: ${box.scrollHeight} > ${box.clientHeight}`,
         );
       };
-      await noScroll("the title screen");
-      await page.locator("#title-courts").click();
-      await page.locator("#courts-view").waitFor({ state: "visible" });
-      await noScroll("the courts screen");
-      await page.locator("#courts-back").click();
-      await page.locator("#title-view").waitFor({ state: "visible" });
+      await noScroll("home");
+      // Home holds the demo, the courts, the modes and the progress at once,
+      // so it is not enough that the document does not scroll: the view's own
+      // box must not be an overflowing scroller either.
+      const inner = await page
+        .locator("#home-view")
+        .evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          scrollHeight: el.scrollHeight,
+          clientWidth: el.clientWidth,
+          clientHeight: el.clientHeight,
+        }));
+      assert.ok(
+        inner.scrollHeight <= inner.clientHeight &&
+          inner.scrollWidth <= inner.clientWidth,
+        `home needs ${inner.scrollWidth}x${inner.scrollHeight} inside ${inner.clientWidth}x${inner.clientHeight} at ${width}x${height}`,
+      );
+      for (const selector of [
+        "#attract-court",
+        "#court-list",
+        ".home-modes",
+        ".home-progress",
+        "#title-play",
+      ]) {
+        const box = await page.locator(selector).boundingBox();
+        assert.ok(
+          box &&
+            box.y >= -1 &&
+            box.x >= -1 &&
+            box.y + box.height <= height + 1 &&
+            box.x + box.width <= width + 1,
+          `${selector} must be fully on screen at ${width}x${height}: ${JSON.stringify(box)}`,
+        );
+      }
+      assert.equal(await page.locator("#court-list button").count(), 6);
       await page.locator("#settings-button").click();
       await page.locator("#settings-dialog").waitFor({ state: "visible" });
       await noScroll("the settings screen");
@@ -669,26 +731,296 @@ await check(
       await page.locator("#title-play").click();
       await page.locator("#arena-view").waitFor({ state: "visible" });
       await noScroll("the arena");
-      // The side rails are drawn from the letterbox the canvas did not take,
-      // so they must never cost the court width. 90.7% is what a 1000:620
-      // court gets from a 16:9 window.
+      // The court is height-limited in any window wider than 1000:620, so the
+      // permanent top bar's row comes straight off the canvas: 90.7% of a
+      // 1920x1080 window before the bar, 87.0% after it. Emptying the two side
+      // gutters — the wordmark and the old second music player both moved into
+      // the bar — buys none of that back, because the spare width was never
+      // the constraint. 86% is the floor the drop must not slide past.
       const court = await page.locator("#court").boundingBox();
-      if (width / height > 1000 / 620)
+      // The bar reserves its own row rather than floating over the game.
+      const bar = await page.locator("#top-bar").boundingBox();
+      assert.ok(
+        bar.y + bar.height <= court.y + 0.5,
+        `the top bar must sit above the court, not over it, at ${width}x${height}: bar ends at ${bar.y + bar.height}, court starts at ${court.y}`,
+      );
+      if (width / height > 1000 / 620) {
+        // The bar is the ONLY thing the court gives up. Everything left below
+        // it goes to the canvas, so the largest 1000:620 rectangle that fits
+        // in the remaining height is what the court must actually measure.
+        const available = (height - bar.height) * (1000 / 620);
         assert.ok(
-          (court.width / width) * 100 > 90,
+          court.width >= Math.min(width, available) - 2,
+          `the court must take every pixel the top bar left at ${width}x${height}: got ${court.width.toFixed(1)}, expected ${available.toFixed(1)}`,
+        );
+        // And an absolute floor, so a bar that grew fat would still be caught.
+        assert.ok(
+          (court.width / width) * 100 > 84,
           `the court must keep its share of a ${width}x${height} window, got ${((court.width / width) * 100).toFixed(1)}%`,
         );
-      for (const id of ["brand-rail", "music-rail"]) {
-        const rail = await page.locator(`#${id}`).boundingBox();
-        assert.ok(
-          rail.x + rail.width <= court.x + 0.5 ||
-            rail.x + 0.5 >= court.x + court.width,
-          `${id} must sit beside the court, not over it, at ${width}x${height}`,
-        );
       }
+      if (width === 1920 && height === 1080)
+        assert.ok(
+          (court.width / width) * 100 > 86,
+          `a 1920x1080 window must still give the court ~87%, got ${((court.width / width) * 100).toFixed(1)}%`,
+        );
       assert.deepEqual(errors, []);
       await context.close();
     }
+  },
+);
+
+await check(
+  "the top bar carries one soundtrack player, the local demo profile and a mouse exit on every screen",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(baseURL, { waitUntil: "networkidle" });
+    // There is exactly one player in the document. The side rail this replaced
+    // was a second implementation of the same three controls, and it only
+    // existed while a round was on screen.
+    for (const selector of ["#music-toggle", "#music-skip", "#music-track"])
+      assert.equal(
+        await page.locator(selector).count(),
+        1,
+        `${selector} must exist exactly once now that the rail is gone`,
+      );
+    assert.equal(await page.locator("#brand-rail").count(), 0);
+    assert.equal(await page.locator("#music-rail").count(), 0);
+    const barIsUp = async (where) => {
+      await settled(page);
+      assert.equal(
+        await page.locator("#top-bar").isVisible(),
+        true,
+        `the top bar must be on screen on ${where}`,
+      );
+      for (const selector of [
+        "#music-toggle",
+        "#music-skip",
+        ".top-brand-mark",
+        "#profile-button",
+      ])
+        assert.equal(
+          await page.locator(selector).isVisible(),
+          true,
+          `${selector} must be on screen on ${where}`,
+        );
+    };
+    await barIsUp("the title screen");
+    // The chip names the local demo profile, and says that is what it is.
+    assert.match(
+      await page.locator("#profile-chip-name").textContent(),
+      /^Guest$/,
+    );
+    assert.match(
+      await page.locator(".profile-chip-kind").textContent(),
+      /local demo/i,
+    );
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    await barIsUp("the arena");
+    // The player still works from the bar during play, and the round keeps the
+    // keyboard afterwards rather than leaving focus parked on a bar button.
+    const before = await page.locator("#music-toggle").getAttribute("aria-pressed");
+    await page.locator("#music-toggle").click();
+    assert.notEqual(
+      await page.locator("#music-toggle").getAttribute("aria-pressed"),
+      before,
+      "the bar's play/pause must still switch the soundtrack during play",
+    );
+    await page.locator("#music-toggle").click();
+    // The profile chip opens the account surface that already existed.
+    await page.locator("#profile-button").click();
+    await page.locator("#account-dialog").waitFor({ state: "visible" });
+    assert.match(
+      await page.locator(".account-note").textContent(),
+      /not\s+online accounts/i,
+    );
+    await page.locator("#close-account").click();
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
+  "a mouse alone can leave a round through the top bar",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await gotoArena(page, baseURL);
+    await page.locator("#start-button").click();
+    await page.waitForFunction(
+      () => document.querySelector("#game-overlay")?.hidden === true,
+    );
+    // Only the mouse from here: no Escape, no gamepad. The Menu button lives in
+    // the bar, off the court, well away from the pass controls at its foot.
+    const bar = await page.locator("#top-bar").boundingBox();
+    const court = await page.locator("#court").boundingBox();
+    assert.ok(
+      bar.y + bar.height <= court.y + 0.5,
+      "the Menu button must not sit over the court",
+    );
+    assert.equal(await page.locator("#top-pause").isVisible(), true);
+    await page.locator("#top-pause").click();
+    await page.locator("#pause-menu").waitFor({ state: "visible" });
+    await page.locator("#pause-home").click();
+    await page.locator("#home-view").waitFor({ state: "visible" });
+    assert.equal(
+      await page
+        .locator("body")
+        .evaluate((el) => el.classList.contains("play-view")),
+      false,
+      "the mouse-only exit must actually leave the play view",
+    );
+    // Nothing on a menu screen has a pause menu to reach, so the button is not
+    // offered there.
+    assert.equal(await page.locator("#top-pause").isVisible(), false);
+    // Escape and the gamepad's Start still do exactly what they did.
+    await page.locator("#court-list button").first().click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
+    await page.locator("#pause-menu").waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
+    await page.locator("#pause-menu").waitFor({ state: "hidden" });
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
+  "the home demo runs from the shell's one loop and is torn down on the way into a round",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(`${baseURL}/`);
+    await page.locator("#home-view").waitFor({ state: "visible" });
+    // Count updates per Game instance, split by whose they are. The demo marks
+    // itself with config.attract; a round the player started does not.
+    await page.evaluate(async () => {
+      const { Game } = await import("/src/game.js");
+      const update = Game.prototype.update;
+      window.__ticks = { attract: 0, round: 0, attractInstances: new Set() };
+      Game.prototype.update = function (...args) {
+        if (this.config.attract) {
+          window.__ticks.attract++;
+          window.__ticks.attractInstances.add(this);
+        } else window.__ticks.round++;
+        return update.apply(this, args);
+      };
+    });
+    await settled(page);
+    assert.ok(
+      await page.evaluate(() => window.__ticks.attract > 0),
+      "the demo must actually be running on home",
+    );
+    assert.equal(
+      await page.evaluate(() => window.__ticks.round),
+      0,
+      "nothing but the demo runs while home is on screen",
+    );
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    await page.locator("#start-button").click();
+    await settled(page);
+    await page.evaluate(() => {
+      window.__ticks.attract = 0;
+      window.__ticks.round = 0;
+    });
+    await page.waitForTimeout(400);
+    const ticks = await page.evaluate(() => ({
+      attract: window.__ticks.attract,
+      round: window.__ticks.round,
+    }));
+    assert.equal(
+      ticks.attract,
+      0,
+      `the demo must stop when a real round starts, got ${ticks.attract} demo updates`,
+    );
+    assert.ok(ticks.round > 0, "the round itself must be running");
+    // Back to home and out again: the demo restarts rather than leaking a
+    // second instance that would then be stepped alongside the first.
+    await leaveToHome(page);
+    await settled(page);
+    await page.evaluate(() => {
+      window.__ticks.attract = 0;
+    });
+    await page.waitForTimeout(400);
+    const restarted = await page.evaluate(() => ({
+      attract: window.__ticks.attract,
+      instances: window.__ticks.attractInstances.size,
+    }));
+    assert.ok(restarted.attract > 0, "the demo must come back on home");
+    // One demo Game per visit, never two alive at once: over ~400ms at 60fps a
+    // single stepped instance gives roughly one update per frame, so twice
+    // that would mean two loops.
+    assert.ok(
+      restarted.attract < 60,
+      `the demo must be stepped once a frame, got ${restarted.attract} updates in 400ms`,
+    );
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
+  "every round overlay says plainly what its buttons do, in every mode",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(`${baseURL}/`);
+    await page.locator("#home-view").waitFor({ state: "visible" });
+    // The card that opens a round names the round it is about to open, so the
+    // button is never just a generic "Play" the player has to interpret.
+    for (const [mode, primary] of [
+      ["daily", /^Play today’s circuit$/],
+      ["endless", /^Start the run$/],
+      ["practice", /^Start the warm-up$/],
+      ["career", /^Play the court$/],
+    ]) {
+      await page.locator(`[data-home-mode="${mode}"]`).click();
+      await page.locator("#arena-view").waitFor({ state: "visible" });
+      assert.match(
+        await page.locator("#start-button").textContent(),
+        primary,
+        `the ${mode} invitation should name what it starts`,
+      );
+      // Nothing that opens a round offers a second button to guess at.
+      assert.equal(await page.locator("#secondary-button").isHidden(), true);
+      // Back out the way a mouse would: the bar's Menu, then Home.
+      await page.locator("#top-pause").click();
+      await page.locator("#pause-menu").waitFor({ state: "visible" });
+      await page.locator("#pause-home").click();
+      await page.locator("#home-view").waitFor({ state: "visible" });
+    }
+    // Nowhere in the shell still calls home "Courts".
+    const strays = await page.evaluate(() =>
+      [...document.querySelectorAll("button")]
+        .filter((el) => el.getClientRects().length && /\bcourts\b/i.test(el.textContent))
+        .map((el) => `${el.id || el.className}: ${el.textContent.trim()}`),
+    );
+    assert.deepEqual(
+      strays,
+      [],
+      `no visible control should still say "courts": ${JSON.stringify(strays)}`,
+    );
+    assert.deepEqual(errors, []);
+    await context.close();
   },
 );
 

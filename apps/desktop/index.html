@@ -29,15 +29,72 @@
   <body>
     <a class="skip-link" href="#main">Skip to the court</a>
     <div class="app-shell">
-      <main id="main" class="main" tabindex="-1">
-        <!-- The shell opens here: a title card and one vertical menu, so a
-        controller has something to drive from the very first frame. -->
-        <section
-          id="title-view"
-          class="title-view"
-          aria-labelledby="title-heading"
+      <!-- One bar, every screen, including during play. It carries the
+      wordmark, the single soundtrack player and the local demo profile. There
+      used to be two players — a side rail in the play-view gutter and the
+      switches in Settings — and two places the wordmark lived; this is the one
+      that is always on screen. It reserves its own row above <main>, so it can
+      never overlap the court, and it is walked by the d-pad alongside whatever
+      menu is open. -->
+      <header id="top-bar" class="top-bar">
+        <p class="top-brand">
+          <span class="top-brand-mark">tiki<span>-</span>taka</span>
+          <span class="top-brand-sub" aria-hidden="true">NO GOALS · ALL FLOW</span>
+        </p>
+        <div
+          id="music-player"
+          class="music-player"
+          role="group"
+          aria-label="Soundtrack"
         >
-          <div class="title-card">
+          <span class="music-player-heading" aria-hidden="true">SOUNDTRACK</span>
+          <span id="music-track" class="music-track" role="status" aria-live="off"
+            >—</span
+          >
+          <button
+            id="music-toggle"
+            type="button"
+            class="bar-button"
+            aria-pressed="true"
+            title="Play or pause the soundtrack"
+          >
+            <span aria-hidden="true">▮▮</span></button
+          ><button
+            id="music-skip"
+            type="button"
+            class="bar-button"
+            title="Skip to the next track"
+          >
+            <span aria-hidden="true">▶▶</span>
+          </button>
+        </div>
+        <!-- Item 3's answer to "a mouse cannot leave a round": a labelled
+        control that is always in the same off-court place, only during play,
+        far from the passing buttons at the foot of the canvas. Esc and Start
+        still do exactly what they did. -->
+        <button id="top-pause" type="button" class="bar-button top-pause">
+          <span aria-hidden="true">Ⅱ</span> Menu
+        </button>
+        <button
+          id="profile-button"
+          type="button"
+          class="profile-chip"
+          aria-haspopup="dialog"
+        >
+          <span class="profile-avatar" aria-hidden="true">◎</span>
+          <span class="profile-chip-text">
+            <span id="profile-chip-name" class="profile-chip-name">Guest</span>
+            <span class="profile-chip-kind">LOCAL DEMO PROFILE</span>
+          </span>
+        </button>
+      </header>
+      <main id="main" class="main" tabindex="-1">
+        <!-- Home. One screen, not two: the live demo, the menu, the six
+        courts, the four modes and your progress are all here, because a court
+        picker on its own page was a step that never earned itself. There is no
+        Back and no Courts entry any more — there is nowhere behind this. -->
+        <section id="home-view" class="home-view" aria-labelledby="title-heading">
+          <div class="home-intro">
             <p class="eyebrow">THE POSSESSION CLUB</p>
             <h1 id="title-heading" class="game-title">
               tiki<span>-</span>taka
@@ -46,9 +103,6 @@
             <nav id="title-menu" class="menu-list" aria-label="Main menu">
               <button id="title-play" type="button" class="menu-item primary">
                 <span class="menu-key" aria-hidden="true">▸</span> Play
-              </button>
-              <button id="title-courts" type="button" class="menu-item">
-                <span class="menu-key" aria-hidden="true">▸</span> Courts
               </button>
               <button
                 id="settings-button"
@@ -73,39 +127,69 @@
             <p id="audio-hint" class="title-hint audio-hint" role="status" hidden>
               Press any key or click once to enable sound.
             </p>
+            <!-- Progress lives with the menu rather than under the demo: the
+            menu column has the vertical slack, and the demo column's height is
+            spent on the canvas. -->
+            <section class="home-progress" aria-label="Player progress">
+              <div>
+                <span class="section-label">YOUR LEVEL</span
+                ><strong id="level-label">Level 1 · New arrival</strong>
+                <div class="progress-track"><span id="xp-fill"></span></div>
+                <p id="xp-label">0 XP · Every pass is progress</p>
+              </div>
+              <dl>
+                <div>
+                  <dt>Stars</dt>
+                  <dd id="home-stars">0</dd>
+                </div>
+                <div>
+                  <dt>Courts cleared</dt>
+                  <dd id="home-cleared">0 / 6</dd>
+                </div>
+                <div>
+                  <dt>Best flow</dt>
+                  <dd id="home-best">—</dd>
+                </div>
+                <div>
+                  <dt>Games</dt>
+                  <dd id="home-games">0</dd>
+                </div>
+                <div>
+                  <dt>Total passes</dt>
+                  <dd id="home-total-passes">0</dd>
+                </div>
+                <div>
+                  <dt>Best one-touch</dt>
+                  <dd id="home-best-one-touch">0</dd>
+                </div>
+              </dl>
+            </section>
           </div>
-          <!-- A real Game instance with the bots in possession, so the title
-          screen shows the game rather than describing it. Presentational
-          only: aria-hidden and not focusable, so it can never take a tab stop
-          or a d-pad step away from the menu beside it. It is driven from the
-          shell's single rAF loop and torn down on the way out of this view;
-          see startAttract()/stopAttract() in src/main.js. -->
-          <div id="title-demo" class="title-demo" aria-hidden="true">
-            <canvas id="attract-court" width="1000" height="620"></canvas>
-            <p class="title-demo-label">LIVE DEMO · BOTS IN POSSESSION</p>
+          <!-- A real Game instance with the bots in possession, so home shows
+          the game rather than describing it. Presentational only: aria-hidden
+          and not focusable, so it can never take a tab stop or a d-pad step
+          away from the controls around it. It is driven from the shell's
+          single rAF loop and torn down on the way into a real round; see
+          startAttract()/stopAttract() in src/main.js. -->
+          <div class="home-stage">
+            <div id="title-demo" class="title-demo" aria-hidden="true">
+              <canvas id="attract-court" width="1000" height="620"></canvas>
+            </div>
+            <p class="title-demo-label" aria-hidden="true">
+              LIVE DEMO · BOTS IN POSSESSION
+            </p>
           </div>
-        </section>
-
-        <!-- Everything the old web dashboard showed about your progress lives
-        here, one step behind the menu. -->
-        <section
-          id="courts-view"
-          class="courts-view"
-          aria-labelledby="courts-title"
-          hidden
-        >
-          <header class="courts-bar">
-            <button id="courts-back" type="button" class="menu-item back">
-              <span aria-hidden="true">←</span> Back
-            </button>
-            <h1 id="courts-title">Choose your court.</h1>
-            <span class="courts-count">06 COURTS</span>
-          </header>
-          <div
-            id="court-list"
-            class="court-list"
-            aria-label="Choose a court"
-          ></div>
+          <div class="home-courts">
+            <header class="courts-bar">
+              <h2 id="courts-title">Choose your court.</h2>
+              <span class="courts-count">06 COURTS</span>
+            </header>
+            <div
+              id="court-list"
+              class="court-list"
+              aria-label="Choose a court"
+            ></div>
+          </div>
           <div class="home-modes" aria-label="Choose a game mode">
             <button data-home-mode="career" type="button">
               <strong>World tour</strong
@@ -124,40 +208,6 @@
               ><span>Learn the rhythm without a turnover limit.</span>
             </button>
           </div>
-          <section class="home-progress" aria-label="Player progress">
-            <div>
-              <span class="section-label">YOUR LEVEL</span
-              ><strong id="level-label">Level 1 · New arrival</strong>
-              <div class="progress-track"><span id="xp-fill"></span></div>
-              <p id="xp-label">0 XP · Every pass is progress</p>
-            </div>
-            <dl>
-              <div>
-                <dt>Stars</dt>
-                <dd id="home-stars">0</dd>
-              </div>
-              <div>
-                <dt>Courts cleared</dt>
-                <dd id="home-cleared">0 / 6</dd>
-              </div>
-              <div>
-                <dt>Best flow</dt>
-                <dd id="home-best">—</dd>
-              </div>
-              <div>
-                <dt>Games</dt>
-                <dd id="home-games">0</dd>
-              </div>
-              <div>
-                <dt>Total passes</dt>
-                <dd id="home-total-passes">0</dd>
-              </div>
-              <div>
-                <dt>Best one-touch</dt>
-                <dd id="home-best-one-touch">0</dd>
-              </div>
-            </dl>
-          </section>
         </section>
 
         <section id="arena-view" class="arena-view" hidden>
@@ -206,54 +256,10 @@
               </button>
             </div>
             <div id="court-wrap" class="court-wrap">
-              <!-- The court is 1000x620 inside a 16:9 window, so about 9% of
-              the screen is letterbox down the two sides in play view. These
-              two rails live in that space and nowhere else: they are sized
-              from the leftover width, so they cannot take a pixel from the
-              canvas, and each hides itself rather than overlap when its gutter
-              is too narrow to hold its contents honestly. -->
-              <div id="brand-rail" class="side-rail side-rail-left">
-                <div class="rail-inner brand-rail-inner" aria-hidden="true">
-                  <span class="brand-mark">tiki<span>-</span>taka</span>
-                  <span class="brand-sub">NO GOALS · ALL FLOW</span>
-                </div>
-              </div>
-              <div
-                id="music-rail"
-                class="side-rail side-rail-right"
-                role="group"
-                aria-label="Soundtrack"
-              >
-                <div class="rail-inner music-rail-inner">
-                  <span class="music-rail-heading" aria-hidden="true"
-                    >SOUNDTRACK</span
-                  >
-                  <span
-                    id="music-track"
-                    class="music-track"
-                    role="status"
-                    aria-live="off"
-                    >—</span
-                  >
-                  <button
-                    id="music-toggle"
-                    type="button"
-                    class="rail-button"
-                    aria-pressed="true"
-                    title="Play or pause the soundtrack"
-                  >
-                    <span aria-hidden="true">▮▮</span>
-                  </button>
-                  <button
-                    id="music-skip"
-                    type="button"
-                    class="rail-button"
-                    title="Skip to the next track"
-                  >
-                    <span aria-hidden="true">▶▶</span>
-                  </button>
-                </div>
-              </div>
+              <!-- The court is 1000x620 inside a 16:9 window, so there is a
+              band of letterbox down each side in play view. It used to hold
+              the wordmark and a second music player; both now live in the top
+              bar, and this space is left to the game. -->
               <canvas
                 id="court"
                 width="1000"
@@ -322,9 +328,12 @@
                     </button>
                     <button id="pause-restart" type="button" class="menu-item">
                       <span class="menu-key" aria-hidden="true">▸</span> Restart
+                      this round
                     </button>
-                    <button id="pause-courts" type="button" class="menu-item">
-                      <span class="menu-key" aria-hidden="true">▸</span> Courts
+                    <!-- Home, not Courts: the court picker and the title
+                    screen are one screen now, and this is the way to it. -->
+                    <button id="pause-home" type="button" class="menu-item">
+                      <span class="menu-key" aria-hidden="true">▸</span> Home
                     </button>
                     <button
                       id="pause-settings"

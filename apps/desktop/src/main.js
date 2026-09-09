@@ -94,24 +94,21 @@ const music = createMusic({
 });
 music.setEnabled(settings.musicOn);
 const renderer = new Renderer($("court"));
-const viewForHash = () =>
-  location.hash === "#play"
-    ? "arena"
-    : location.hash === "#courts"
-      ? "courts"
-      : "title";
+// Two views now. #courts was the courts page's own hash; it survives here only
+// so an old bookmark lands on home rather than nowhere.
+const viewForHash = () => (location.hash === "#play" ? "arena" : "home");
 let mode = "career",
   courtIndex = progress.lastCourt,
   game,
   phase = "ready",
-  // A cold load always opens the title screen. applyView() pushes #play when a
-  // round starts, so that hash outlives the session in history, bookmarks and
+  // A cold load always opens home. applyView() pushes #play when a round
+  // starts, so that hash outlives the session in history, bookmarks and
   // reopened tabs; honouring it on boot drops a returning player straight into
   // the arena, where the ready-state overlay reads as a pause menu they never
   // asked for. Within a session the hash still drives the view (see the
   // hashchange listener), so back and forward behave — only this first paint
   // ignores it, and the boot below rewrites the URL so it cannot then lie.
-  view = "title",
+  view = "home",
   bank = false,
   focusToggle = false;
 let keys = new Set(),
@@ -133,8 +130,9 @@ let padPrevious = [],
   focusEarnedTimeout;
 let capture = null;
 let padFocusElement = null;
-// The pause menu is the one in-round menu. It owns Resume, Restart, Courts
-// and Settings so nothing important hides behind a drawer.
+// The pause menu is the one in-round menu. It owns Resume, Restart, Home and
+// Settings so nothing important hides behind a drawer. Home, not Courts: the
+// court picker and the title screen are the same screen now.
 let menuOpen = false;
 let menuReturnFocus = null;
 // A turnover freezes the round until the player asks for it back, so putting
@@ -195,7 +193,7 @@ function openMenu() {
   padFocus($("pause-resume"));
 }
 // Pausing always lands on the menu; from a ready or finished court the menu is
-// still the way to reach Courts and Settings.
+// still the way to reach Home and Settings.
 function openPauseMenu() {
   if (view !== "arena") return;
   if (phase === "playing") pause();
@@ -230,7 +228,7 @@ function syncTitle() {
     : `${court.name} · ${court.place}`;
 }
 function syncHome() {
-  if ($("title-view")) syncTitle();
+  if ($("home-view")) syncTitle();
   const courtProgress = Object.values(progress.courts || {});
   $("home-stars").textContent = String(
     courtProgress.reduce((total, item) => total + (item.stars || 0), 0),
@@ -246,33 +244,30 @@ function syncHome() {
 function applyView(next, { updateHash = true } = {}) {
   view = next;
   if (next !== "arena" && phase === "playing") pause();
-  $("title-view").hidden = view !== "title";
-  $("courts-view").hidden = view !== "courts";
+  $("home-view").hidden = view !== "home";
   $("arena-view").hidden = view !== "arena";
   if (view !== "arena") closePauseMenu({ restoreFocus: false });
-  // Exactly one game is live at a time: the demo is built on the way into the
-  // title screen and dropped on the way out, before the arena starts drawing.
-  if (view === "title") startAttract();
+  // Exactly one game is live at a time: the demo is built on the way into home
+  // and dropped on the way out, before the arena starts drawing.
+  if (view === "home") startAttract();
   else stopAttract();
   syncProgress();
   syncSettingChrome();
   syncPauseMenu();
   requestAnimationFrame(() => {
     if (anyDialogOpen() || menuOpen) return;
-    if (view === "title") padFocus($("title-play"));
-    else if (view === "courts") padFocus($("courts-back"));
+    if (view === "home") padFocus($("title-play"));
     else if ($("game-overlay").hidden)
       $("court").focus({ preventScroll: true });
     else padFocus($("start-button"));
   });
   if (updateHash) {
-    const hash =
-      view === "arena" ? "#play" : view === "courts" ? "#courts" : "";
+    const hash = view === "arena" ? "#play" : "";
     if (location.hash !== hash)
       history.pushState(null, "", hash || location.pathname + location.search);
   }
 }
-// --- The title screen's attract demo -------------------------------------
+// --- Home's attract demo -------------------------------------------------
 //
 // A second Game and a second Renderer, with the bots keeping the ball among
 // themselves, so the first thing a player sees is the game and not a
@@ -303,7 +298,7 @@ function startAttract() {
       // the player's round from the one running behind the menu.
       attract: true,
       // Practice rules: unlimited possessions, so a demo left running on the
-      // title screen can never stall on a turnover it has no way to dismiss.
+      // home screen can never stall on a turnover it has no way to dismiss.
       practice: true,
       target: 0,
       time: 120,
@@ -539,7 +534,13 @@ function prepare() {
     mode === "endless"
       ? "Connect triangles to buy time. Survive the rising press."
       : `Keep possession for ${game.config.time} seconds. ${mode === "practice" ? "Experiment freely." : `Earn ${game.config.target} points. You have 3 possessions; the third loss ends the round.`}`,
-    mode === "practice" ? "Start warm-up" : "Play the court",
+    mode === "daily"
+      ? "Play today’s circuit"
+      : mode === "endless"
+        ? "Start the run"
+        : mode === "practice"
+          ? "Start the warm-up"
+          : "Play the court",
   );
   syncProgress();
   syncHud();
@@ -550,12 +551,14 @@ function switchMode(next, index = courtIndex) {
     pause();
     applyView("arena");
     pendingSwitch = { next, index };
+    // Two buttons, two plain outcomes: stay in the round that is still on the
+    // clock, or end it and start the one that was just picked.
     setOverlay(
-      "LEAVE THIS ROUND?",
-      "Start somewhere new?",
-      "This round’s score will be lost. Your saved progress stays with you.",
-      "Keep playing",
-      "Leave round",
+      "THIS ROUND IS STILL GOING",
+      "End it and start the new one?",
+      "Starting somewhere new ends this round and its score. Everything you have already earned and saved stays with you.",
+      "Keep playing this round",
+      "End it and start the new one",
     );
     return;
   }
@@ -620,7 +623,7 @@ function syncMusicState() {
 }
 // A browser will not resume an AudioContext until a real user activation
 // gesture lands, and a gamepad button is not one, so a controller player can
-// sit on the title screen in silence with nothing to tell them why. Blocked
+// sit on home in silence with nothing to tell them why. Blocked
 // means: the player asked for this sound, nothing failed, and the context is
 // still not running. Muted audio and unavailable audio are both "not blocked".
 function audioBlocked() {
@@ -631,7 +634,7 @@ function audioBlocked() {
 function syncAudioHint() {
   const hint = $("audio-hint");
   if (!hint) return;
-  hint.hidden = !(view === "title" && audioBlocked());
+  hint.hidden = !(view === "home" && audioBlocked());
 }
 // Mirrors the hold gate onto <body data-resume-ready> so "is a fresh press
 // accepted yet" is observable from outside. It is written wherever holdElapsed
@@ -854,6 +857,7 @@ function finish() {
     .catch(() => toast("Round stats could not be stored."));
   persist();
   syncProgress();
+  const outOfPossessions = game.turnovers >= 3 && !game.config.practice;
   let title =
     mode === "endless"
       ? "What a run."
@@ -866,23 +870,36 @@ function finish() {
       ? courtIndex === COURTS.length - 1
         ? "Circuit complete. Chase three stars on every court."
         : `${COURTS[courtIndex + 1].name} is now unlocked.`
-      : game.turnovers >= 3 && !game.config.practice
+      : outOfPossessions
         ? "The press caught you. Use focus and wall passes to find space."
         : result.cleared
           ? "Keep exploring. There’s always a better passing lane."
           : `Aim for ${game.config.target} points and survive the full round.`;
+  // Both buttons replay this same court; the difference is only whether the
+  // ball is moving when you land. Say which is which, and never say "courts",
+  // which now means the home screen. Leaving for home is the Menu button in
+  // the top bar and the pause menu's Home entry, both of which are reachable
+  // from here — this overlay never pretends to offer it.
   setOverlay(
     result.cleared
       ? `COURT CLEARED ${"★".repeat(result.stars)}${result.newBest ? " · NEW BEST" : ""}`
       : result.newBest
-        ? "A NEW PERSONAL BEST"
-        : "ROUND COMPLETE",
+        ? "ROUND OVER · A NEW PERSONAL BEST"
+        : outOfPossessions
+          ? "ROUND OVER · POSSESSIONS GONE"
+          : "ROUND OVER · TARGET MISSED",
     title,
     `${details}. ${extra}`,
     mode === "career" && result.cleared && courtIndex < COURTS.length - 1
-      ? "Next court"
-      : "Play again",
-    "Back to court",
+      ? "Play the next court"
+      : mode === "daily"
+        ? "Play today’s circuit again"
+        : mode === "endless"
+          ? "Start a new run"
+          : mode === "practice"
+            ? "Practise this court again"
+            : "Play this court again",
+    "Back to the round intro",
   );
   $("start-button").focus({ preventScroll: true });
   announce(
@@ -998,9 +1015,9 @@ function toggleMusic() {
   persistSettings();
 }
 $("music-button").addEventListener("click", toggleMusic);
-// The side-rail player. It is the same switch as the settings dialog's Music
-// button plus a skip, so there is one notion of "music on" and the volume and
-// on/off settings keep governing it.
+// The top bar's player — the only one now. It is the same switch as the
+// settings dialog's Music button plus a skip, so there is one notion of
+// "music on" and the volume and on/off settings keep governing it.
 function syncMusicRail() {
   const toggle = $("music-toggle"),
     skip = $("music-skip");
@@ -1019,7 +1036,7 @@ function syncMusicRail() {
     ? `${title} · track ${music.trackIndex + 1} of ${music.trackCount}`
     : "";
 }
-// A rail button is a real button, so activating it takes DOM focus off the
+// A bar button is a real button, so activating it takes DOM focus off the
 // court — and then Space would press the button again instead of making a
 // pass. Handing focus straight back is what keeps the player out of the way
 // of play; during a pause or a menu the focus belongs where it is.
@@ -1145,6 +1162,16 @@ function syncAccountDialog() {
   $("profile-username").textContent = profile?.username || "";
   $("profile-email").textContent = profile?.email || "";
   $("account-button").textContent = `◎ ${profile?.username || "Local profile"}`;
+  // The bar says "Guest" until a local demo profile is chosen, and never
+  // claims to be signed in to anything: the chip's second line is the word
+  // "local demo profile" and it opens the dialog that says the same.
+  $("profile-chip-name").textContent = profile?.username || "Guest";
+  $("profile-button").setAttribute(
+    "aria-label",
+    profile
+      ? `Local demo profile ${profile.username}. Open profile and settings.`
+      : "Playing as Guest. Open local demo profiles and settings.",
+  );
 }
 async function switchDataContext(nextProfile) {
   if (phase === "playing") pause();
@@ -1179,6 +1206,11 @@ function openAccount() {
   $("account-dialog").showModal();
 }
 $("account-button").addEventListener("click", openAccount);
+$("profile-button").addEventListener("click", openAccount);
+// A mouse-only player's way out of a round: the same togglePause() Esc and the
+// gamepad's Start already call, on a labelled control that never sits over the
+// court. Both of those keep working untouched.
+$("top-pause").addEventListener("click", togglePause);
 $("close-account").addEventListener("click", () => $("account-dialog").close());
 $("register-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1279,8 +1311,6 @@ function playFromMenu() {
   if (resumeRound) resume();
 }
 $("title-play").addEventListener("click", playFromMenu);
-$("title-courts").addEventListener("click", () => applyView("courts"));
-$("courts-back").addEventListener("click", () => applyView("title"));
 $("pause-resume").addEventListener("click", dismissPauseMenu);
 $("pause-restart").addEventListener("click", () => {
   closePauseMenu({ restoreFocus: false });
@@ -1289,9 +1319,9 @@ $("pause-restart").addEventListener("click", () => {
   prepare();
   padFocus($("start-button"));
 });
-$("pause-courts").addEventListener("click", () => {
+$("pause-home").addEventListener("click", () => {
   closePauseMenu({ restoreFocus: false });
-  applyView("courts");
+  applyView("home");
 });
 $("pause-settings").addEventListener("click", openSettings);
 document.querySelectorAll("[data-home-mode]").forEach((button) => {
@@ -1375,7 +1405,7 @@ window.addEventListener("keydown", (e) => {
     }
     // Tab cycles the menu only; gameplay keys must not leak to the court.
     if (e.code === "Tab") {
-      const elements = padFocusables([$("pause-menu"), $("music-rail")]);
+      const elements = padFocusables([$("pause-menu"), $("top-bar")]);
       if (elements.length) {
         e.preventDefault();
         const current = elements.indexOf(document.activeElement);
@@ -1387,11 +1417,6 @@ window.addEventListener("keydown", (e) => {
       return;
     }
     if (action) e.preventDefault();
-    return;
-  }
-  if (e.code === "Escape" && view === "courts") {
-    e.preventDefault();
-    applyView("title");
     return;
   }
   const action = actionForCode(settings.bindings, e.code);
@@ -1694,11 +1719,10 @@ function pollGamepad(dt) {
     });
   } else if (menuOpen) {
     if (tap(1) || tap(9)) dismissPauseMenu();
-    // The music rail is walked with the pause menu: it is where a controller
-    // player can reach the soundtrack without a mouse, and pausing is the only
-    // time the d-pad is free to leave the court.
-    else
-      nav([$("pause-menu"), $("music-rail")], () => $("pause-resume").click());
+    // The top bar is walked with the pause menu: it is where a controller
+    // player reaches the soundtrack and the profile without a mouse, and
+    // pausing is the only time the d-pad is free to leave the court.
+    else nav([$("pause-menu"), $("top-bar")], () => $("pause-resume").click());
   } else if (view === "arena" && phase === "playing" && !awaitingResume) {
     if (tap(0)) doPass();
     if (tap(2)) toggleBank();
@@ -1708,11 +1732,12 @@ function pollGamepad(dt) {
   } else if (view === "arena" && !$("game-overlay").hidden) {
     if (tap(9)) openPauseMenu();
     else nav($("game-overlay"), () => $("start-button").click());
-  } else if (view === "courts") {
-    if (tap(1)) applyView("title");
-    else nav($("courts-view"), () => $("courts-back").click());
-  } else if (view === "title") {
-    nav($("title-menu"), () => $("title-play").click());
+  } else if (view === "home") {
+    // Home is one list: the menu, then the demo's neighbours — the courts and
+    // the modes — then the bar. The menu comes first so the first d-pad step
+    // from a fresh load is still the next menu item, and B has nowhere to go
+    // back to now that the courts page is this page.
+    nav([$("home-view"), $("top-bar")], () => $("title-play").click());
   } else {
     nav(document.body);
   }
@@ -1864,7 +1889,7 @@ function frame(now) {
       else announce(turnoverEvent.text);
     }
   }
-  if (view === "title") updateAttract(dt);
+  if (view === "home") updateAttract(dt);
   if (view === "arena") {
     syncHud();
     const target =
@@ -1888,7 +1913,7 @@ syncFullscreen();
 syncAccountDialog();
 prepare();
 syncPauseMenu();
-// Drop a stale #play or #courts so the address bar agrees with the title screen
+// Drop a stale #play or #courts so the address bar agrees with the home screen
 // the player is actually looking at. replaceState, not pushState: the boot must
 // not leave a history entry that Back would return to.
 if (location.hash)

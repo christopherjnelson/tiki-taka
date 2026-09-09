@@ -9,7 +9,7 @@
 // assertions about the URL becoming #play still hold once this has run.
 export async function gotoArena(page, baseURL, options) {
   await page.goto(`${baseURL}/`, options);
-  await page.locator("#title-view").waitFor({ state: "visible" });
+  await page.locator("#home-view").waitFor({ state: "visible" });
   await page.locator("#title-play").click();
   await page.locator("#arena-view").waitFor({ state: "visible" });
   return page;
