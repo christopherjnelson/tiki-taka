@@ -42,6 +42,41 @@
 * {
   box-sizing: border-box;
 }
+/* This is a game, not a web page: every scrollable region keeps scrolling by
+   wheel, drag, keyboard and gamepad, it just never paints a scrollbar. */
+html,
+body,
+.app-shell,
+.main,
+.sidebar,
+.home-view,
+.arena-view,
+.mode-nav,
+.court-list,
+.control-list,
+.bindings-list,
+.help-grid,
+.account-grid,
+dialog {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+.app-shell::-webkit-scrollbar,
+.main::-webkit-scrollbar,
+.sidebar::-webkit-scrollbar,
+.home-view::-webkit-scrollbar,
+.arena-view::-webkit-scrollbar,
+.mode-nav::-webkit-scrollbar,
+.court-list::-webkit-scrollbar,
+.control-list::-webkit-scrollbar,
+.bindings-list::-webkit-scrollbar,
+.help-grid::-webkit-scrollbar,
+.account-grid::-webkit-scrollbar,
+dialog::-webkit-scrollbar {
+  display: none;
+}
 html {
   background: var(--bg);
 }
@@ -734,6 +769,8 @@ kbd {
   transform: translate(-50%, 20px);
   opacity: 0;
   transition: 0.2s;
+  /* Status only: it must never swallow a tap meant for the controls beneath. */
+  pointer-events: none;
 }
 .toast.visible,
 .toast.show {
@@ -1865,6 +1902,12 @@ body.play-view .arena-view .below-court {
     margin: 0 -13px;
     padding: 0 13px;
     background: var(--bg);
+  }
+  /* Play view gives .main 12px of padding, so the bar bleeds by 12px too and
+     the page keeps its exact viewport width. */
+  body.play-view .workspace-bar {
+    margin: 0 -12px;
+    padding: 0 12px;
   }
   .home-view {
     padding-top: 20px;

@@ -397,13 +397,18 @@ await check(
     await useSidebarControl(page, "#theme-button");
     assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
 
-    await useSidebarControl(page, "#play-view-button");
     assert.equal(
       await page
         .locator("body")
         .evaluate((el) => el.classList.contains("play-view")),
       true,
+      "the arena is always presented in Play view",
     );
+    assert.equal(await page.locator("#play-view-button").count(), 0);
+    // The arena sidebar is a drawer now, so close it after using its controls.
+    if (await page.locator(".sidebar").isVisible())
+      await page.keyboard.press("Escape");
+    await page.locator(".sidebar").waitFor({ state: "hidden" });
     assert.equal(await page.locator(".sidebar").isHidden(), true);
     assert.equal(
       await page.locator("#sidebar-toggle").isVisible(),
@@ -477,7 +482,14 @@ await check(
     await page.screenshot({
       path: new URL("interface-play-view.png", outputDir).pathname,
     });
-    await useSidebarControl(page, "#play-view-button");
+    // Home leaves the play-view presentation and docks the sidebar again.
+    await useSidebarControl(page, "#home-button");
+    assert.equal(
+      await page
+        .locator("body")
+        .evaluate((el) => el.classList.contains("play-view")),
+      false,
+    );
     assert.equal(await page.locator(".sidebar").isVisible(), true);
     assert.deepEqual(errors, []);
     await context.close();
@@ -528,6 +540,11 @@ await check(
         /Fullscreen is not available/i,
       );
     }
+    // The arena sidebar is a drawer in Play view; close it before using the
+    // controls it covers.
+    if (await page.locator(".sidebar").isVisible())
+      await page.keyboard.press("Escape");
+    await page.locator(".sidebar").waitFor({ state: "hidden" });
     const ids = [],
       accents = [],
       frames = [];
@@ -599,9 +616,13 @@ await check(
         ),
         true,
       );
-      if (!(await page.locator("#play-view-button").isVisible()))
-        await page.locator("#sidebar-toggle").tap();
-      await page.locator("#play-view-button").tap();
+      assert.equal(
+        await page
+          .locator("body")
+          .evaluate((el) => el.classList.contains("play-view")),
+        true,
+        `${viewport.width}x${viewport.height} play view is always on in the arena`,
+      );
       await page.evaluate(
         () =>
           new Promise((resolve) =>

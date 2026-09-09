@@ -53,6 +53,8 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    // A game, not a browser window: the shell opens fullscreen and F11 leaves.
+    fullscreen: true,
     backgroundColor: "#100b25",
     autoHideMenuBar: true,
     webPreferences: {
@@ -90,7 +92,7 @@ async function createWindow() {
     }
   });
   win.once("ready-to-show", () => {
-    win.maximize();
+    win.setFullScreen(true);
     win.show();
   });
   await win.loadURL("tiki://app/index.html");

@@ -132,10 +132,15 @@ await check('desktop gameplay, controls, progression, help, and full run', async
   assert.equal(await page.locator('.court-item').nth(3).isDisabled(), false);
   assert.equal(await page.locator('.court-item').nth(4).isDisabled(), true);
 
+  // The arena always presents Play view, so sidebar controls open in a drawer.
+  assert.equal(await page.evaluate(() => document.body.classList.contains('play-view')), true);
+  await page.locator('#sidebar-toggle').click();
   await page.locator('#help-button').click();
   assert.equal(await page.locator('#help-dialog').evaluate(dialog => dialog.open), true);
   await expectText(page.locator('#help-dialog'), /Gamepad:.*left stick/s);
   await page.locator('#close-help').click();
+  await page.keyboard.press('Escape');
+  await page.locator('.sidebar').waitFor({ state: 'hidden' });
 
   await page.locator('#start-button').click();
   await observeGame(page);
@@ -317,8 +322,39 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   await page.evaluate(() => window.__setTestPad({ button: 6, pressed: false, axes: [0, 0, 0, 0] }));
   const focusAfter = await focusSeconds(page);
   assert.ok(focusAfter < focusBefore, 'LT should consume focus through the real animation poll');
+  await page.evaluate(async () => {
+    const { Renderer } = await import('/src/renderer.js');
+    window.__renderAims = [];
+    const render = Renderer.prototype.render;
+    Renderer.prototype.render = function(game, options = {}) {
+      window.__renderAims.push(options.aim ? { ...options.aim } : null);
+      return render.call(this, game, options);
+    };
+  });
+  await page.evaluate(() => window.__setTestPad({ axes: [1, -1, 0, 0] }));
+  await page.waitForTimeout(250);
+  const playingAims = await page.evaluate(() => window.__renderAims);
+  await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 0, 0] }));
+  assert.ok(playingAims.some(aim => aim && (aim.x || aim.y)),
+    `the stick should aim the court while playing, got ${JSON.stringify(playingAims.slice(0, 5))}`);
   await pulsePad(page, 9);
   await expectText(page.locator('#overlay-title'), /ball can wait/i);
+  // A paused round must ignore the stick: no aim reaches the renderer, so the
+  // court cannot keep repainting target lanes behind the pause overlay.
+  await page.evaluate(() => { window.__renderAims.length = 0; });
+  await page.evaluate(() => window.__setTestPad({ axes: [1, -1, 1, -1] }));
+  await page.waitForTimeout(300);
+  const pausedAims = await page.evaluate(() => window.__renderAims);
+  await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 0, 0] }));
+  assert.ok(pausedAims.length > 3, `the paused court should still be rendering, got ${pausedAims.length} frames`);
+  assert.equal(pausedAims.every(aim => aim === null), true,
+    `stick movement while paused must not aim the court, got ${JSON.stringify(pausedAims.slice(0, 5))}`);
+  const pausedMovement = await page.evaluate(() => window.__observedGame.movementX);
+  await page.evaluate(() => window.__setTestPad({ axes: [1, 0, 0, 0] }));
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(() => window.__observedGame.movementX), pausedMovement,
+    'the stick must not move the carrier while paused');
+  await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 0, 0] }));
   const overlayButtons = await page.evaluate(() => [...document.querySelectorAll('#game-overlay button')]
     .filter(el => !el.disabled && !el.closest('[hidden]') && el.getClientRects().length).map(el => el.id));
   assert.deepEqual(overlayButtons, ['start-button', 'secondary-button'], 'pause overlay should offer two buttons');
@@ -459,7 +495,9 @@ async function offlineReload(baseURL) {
   await page.reload({ waitUntil: 'networkidle' });
   await context.setOffline(true);
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await expectText(page.locator('#court-title'), /Courtyard/);
+  // Play view hides the court heading, so read the arena's live labels instead.
+  assert.match(await page.locator('#court-title').textContent(), /Courtyard/);
+  await expectText(page.locator('#workspace-label'), /Courtyard/i);
   await page.locator('#start-button').click();
   assert.equal(await page.locator('#game-overlay').isHidden(), true);
   assert.deepEqual(errors, []);
