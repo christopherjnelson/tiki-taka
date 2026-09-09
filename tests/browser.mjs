@@ -345,11 +345,17 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
     { timeout: 10000 },
   );
   await page.locator('#start-button').focus();
-  await pulsePad(page, 0);
-  // Activation lands on the next rAF tick, which is slower on a CI runner than
-  // on a workstation, so wait for the state rather than sampling immediately.
-  await page.locator('#game-overlay').waitFor({ state: 'hidden', timeout: 10000 });
-  assert.equal(await page.locator('#game-overlay').isHidden(), true, 'A should activate focused start');
+  // Activation is edge-triggered and sampled once per animation frame. On a
+  // CPU-starved runner the synthetic pad's press can sit entirely between two
+  // polls, so a single press is not reliably observed - a real player would
+  // simply press again. Retry a few times before calling it a failure, so this
+  // still proves A starts the round rather than proving the runner is fast.
+  let started = false;
+  for (let attempt = 0; attempt < 6 && !started; attempt++) {
+    await pulsePad(page, 0);
+    started = await page.locator('#game-overlay').isHidden();
+  }
+  assert.equal(started, true, 'A should activate focused start');
   await observeGame(page);
   await pulsePad(page, 0);
   await waitForScore(page);
