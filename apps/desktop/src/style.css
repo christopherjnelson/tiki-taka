@@ -1598,6 +1598,45 @@ body.play-view .arena-view .below-court {
   width: min(520px, 100%);
   text-align: center;
 }
+/* The attract demo is an extra, not a requirement: it is off by default and
+   only appears where there is honestly room for it beside the menu. Hiding it
+   rather than letting it shrink or wrap is what keeps the title screen free of
+   scrolling on small and short windows. */
+.title-demo {
+  display: none;
+}
+@media (min-width: 980px) and (min-height: 620px) {
+  .title-view {
+    grid-template-columns: minmax(300px, 440px) minmax(0, 1fr);
+    align-items: center;
+    column-gap: 40px;
+    width: min(100%, 1440px);
+    margin-inline: auto;
+  }
+  .title-demo {
+    display: grid;
+    gap: 10px;
+    justify-items: center;
+    /* The renderer stretches its 1000x620 world to whatever box it is given,
+       so the canvas has to keep that ratio exactly or the court skews. Width
+       is therefore capped by the height the viewport can spare, which is what
+       stops a wide-but-short window from pushing the demo off the bottom. */
+    width: min(100%, calc((100svh - 260px) * 1.613));
+  }
+  .title-demo canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1000 / 620;
+    background: var(--panel);
+    border: 1px solid var(--line);
+  }
+  .title-demo-label {
+    margin: 0;
+    color: var(--muted);
+    font: 700 9px var(--sign);
+    letter-spacing: 3px;
+  }
+}
 .game-title {
   margin: 6px 0 0;
   color: var(--ink);

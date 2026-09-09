@@ -254,6 +254,10 @@ function applyView(next, { updateHash = true } = {}) {
   $("courts-view").hidden = view !== "courts";
   $("arena-view").hidden = view !== "arena";
   if (view !== "arena") closePauseMenu({ restoreFocus: false });
+  // Exactly one game is live at a time: the demo is built on the way into the
+  // title screen and dropped on the way out, before the arena starts drawing.
+  if (view === "title") startAttract();
+  else stopAttract();
   syncProgress();
   syncSettingChrome();
   syncPauseMenu();
@@ -271,6 +275,85 @@ function applyView(next, { updateHash = true } = {}) {
     if (location.hash !== hash)
       history.pushState(null, "", hash || location.pathname + location.search);
   }
+}
+// --- The title screen's attract demo -------------------------------------
+//
+// A second Game and a second Renderer, with the bots keeping the ball among
+// themselves, so the first thing a player sees is the game and not a
+// description of it. Three rules hold it in its place:
+//
+//   * one loop. It is stepped from the shell's existing rAF loop rather than
+//     starting a second one, so it cannot outlive the screen it belongs to or
+//     run alongside the arena;
+//   * it owns nothing. Its events feed its own renderer for the flourish and
+//     are then dropped: no progress, no records, no round stats, no sound;
+//   * it is invisible to input. The canvas is aria-hidden and not focusable,
+//     and nothing here touches `game`, `phase` or the key state.
+const attractCanvas = $("attract-court");
+let attractGame = null,
+  attractRenderer = null,
+  attractPassIn = 0;
+function startAttract() {
+  if (!attractCanvas || attractGame) return;
+  attractRenderer ||= new Renderer(attractCanvas);
+  attractRenderer.effects.length = 0;
+  attractGame = new Game(
+    {
+      ...COURTS[1],
+      name: "Attract",
+      // Practice rules: unlimited possessions, so a demo left running on the
+      // title screen can never stall on a turnover it has no way to dismiss.
+      practice: true,
+      target: 0,
+      time: 120,
+      speed: 74,
+      defenders: 3,
+      seed: (Date.now() >>> 0) || 1,
+    },
+    "balanced",
+  );
+  attractPassIn = 0.9;
+}
+function stopAttract() {
+  attractGame = null;
+  if (attractRenderer) attractRenderer.effects.length = 0;
+}
+function updateAttract(dt) {
+  if (!attractGame || !attractRenderer) return;
+  const demo = attractGame,
+    carrier = demo.players[demo.carrier];
+  // Drift the carrier off the nearest defender and back towards the middle, so
+  // the demo reads as play rather than as four statues. The engine moves the
+  // teammates and the press on its own.
+  let x = 0,
+    y = 0;
+  const nearest = demo.defenders
+    .map((defender) => ({ defender, gap: distance(defender, carrier) }))
+    .sort((a, b) => a.gap - b.gap)[0];
+  if (nearest && nearest.gap > 0.001) {
+    x = (carrier.x - nearest.defender.x) / nearest.gap;
+    y = (carrier.y - nearest.defender.y) / nearest.gap;
+  }
+  x += (500 - carrier.x) / 900;
+  y += (310 - carrier.y) / 560;
+  demo.update(dt, { x, y, focus: false });
+  attractPassIn -= dt;
+  if (!demo.ball && attractPassIn <= 0) {
+    // bestTarget(null) is the same smart pass the pass button gives a player,
+    // so the demo plays the game the way the game means it to be played.
+    demo.pass(demo.bestTarget(null));
+    attractPassIn = 0.55 + Math.random() * 0.5;
+  }
+  for (const event of demo.events) attractRenderer.addEvent(event);
+  demo.events = [];
+  if (demo.status !== "playing") {
+    // The clock ran out. Nothing is scored or saved; another round simply
+    // starts, and the next frame renders that one instead.
+    attractGame = null;
+    startAttract();
+    return;
+  }
+  attractRenderer.render(demo, { preview: false });
 }
 function config() {
   if (mode === "daily") return dailyConfig();
@@ -1730,6 +1813,7 @@ function frame(now) {
       else announce(turnoverEvent.text);
     }
   }
+  if (view === "title") updateAttract(dt);
   if (view === "arena") {
     syncHud();
     const target =

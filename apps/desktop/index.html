@@ -77,6 +77,16 @@
               Press any key or click once to enable sound.
             </p>
           </div>
+          <!-- A real Game instance with the bots in possession, so the title
+          screen shows the game rather than describing it. Presentational
+          only: aria-hidden and not focusable, so it can never take a tab stop
+          or a d-pad step away from the menu beside it. It is driven from the
+          shell's single rAF loop and torn down on the way out of this view;
+          see startAttract()/stopAttract() in src/main.js. -->
+          <div id="title-demo" class="title-demo" aria-hidden="true">
+            <canvas id="attract-court" width="1000" height="620"></canvas>
+            <p class="title-demo-label">LIVE DEMO · BOTS IN POSSESSION</p>
+          </div>
         </section>
 
         <!-- Everything the old web dashboard showed about your progress lives
