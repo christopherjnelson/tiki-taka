@@ -268,7 +268,17 @@ await check('desktop gameplay, controls, progression, help, and full run', async
   await page.clock.install();
   await page.locator('#start-button').click();
   await runRound(page, { steps: 40, stepMs: 1000 });
-  await expectText(page.locator('#overlay-kicker'), /ROUND COMPLETE|PERSONAL BEST/);
+  // Every ending says which ending it was, and none of them says "courts".
+  await expectText(page.locator('#overlay-kicker'), /^ROUND OVER · (POSSESSIONS GONE|TARGET MISSED|A NEW PERSONAL BEST)$|^COURT CLEARED/);
+  // Both buttons on this overlay replay the court; they must say which is
+  // which rather than leaving the player to guess.
+  await expectText(page.locator('#start-button'), /^Play (the next court|this court again|today’s circuit again)$|^Start a new run$|^Practise this court again$/);
+  await expectText(page.locator('#secondary-button'), /^Back to the round intro$/);
+  assert.equal(
+    await page.evaluate(() => [...document.querySelectorAll('#game-overlay button')].some(el => /courts/i.test(el.textContent))),
+    false,
+    'the round-end overlay must not offer "courts" now that home is the court picker',
+  );
   await expectText(page.locator('#overlay-copy'), /points · \d+ passes · \d+ triangles · best one-touch \d+ · \+\d+ XP/);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tiki-taka.progress.v1')));
   assert.ok(saved.xp > 650, 'finished run should persist awarded XP');
@@ -292,6 +302,12 @@ await check('a complete playable career run clears and unlocks the next court', 
     },
   });
   await expectText(page.locator('#overlay-kicker'), /COURT CLEARED/);
+  // A cleared career court is the one case where the primary button advances
+  // rather than replays, and it has to say so — this is exactly the "does it
+  // replay, advance or abandon?" the old "Next court"/"Back to court" pair
+  // left the player guessing at.
+  await expectText(page.locator('#start-button'), /^Play the next court$/);
+  await expectText(page.locator('#secondary-button'), /^Back to the round intro$/);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tiki-taka.progress.v1')));
   assert.equal(saved.unlocked, 1);
   assert.ok(saved.courts['0'].stars >= 1);
@@ -416,8 +432,8 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 0, 0] }));
   const menuButtons = await page.evaluate(() => [...document.querySelectorAll('#pause-menu button')]
     .filter(el => !el.disabled && !el.closest('[hidden]') && el.getClientRects().length).map(el => el.id));
-  assert.deepEqual(menuButtons, ['pause-resume', 'pause-restart', 'pause-courts', 'pause-settings'],
-    'the pause menu should offer resume, restart, courts and settings');
+  assert.deepEqual(menuButtons, ['pause-resume', 'pause-restart', 'pause-home', 'pause-settings'],
+    'the pause menu should offer resume, restart, home and settings');
   await page.evaluate(() => document.activeElement?.blur());
   const visited = [];
   for (let step = 0; step < 4; step++) {
@@ -431,7 +447,7 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   assert.equal(visited.every(v => v.inMenu && v.marked), true,
     `paused d-pad focus must stay inside the pause menu, got ${JSON.stringify(visited)}`);
   assert.deepEqual([...new Set(visited.map(v => v.id))].sort(),
-    ['pause-courts', 'pause-restart', 'pause-resume', 'pause-settings'],
+    ['pause-home', 'pause-restart', 'pause-resume', 'pause-settings'],
     `paused d-pad should cycle only the pause menu, got ${JSON.stringify(visited)}`);
   const upFrom = visited.at(-1).id;
   await pulsePad(page, 12);

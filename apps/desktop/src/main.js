@@ -130,8 +130,9 @@ let padPrevious = [],
   focusEarnedTimeout;
 let capture = null;
 let padFocusElement = null;
-// The pause menu is the one in-round menu. It owns Resume, Restart, Courts
-// and Settings so nothing important hides behind a drawer.
+// The pause menu is the one in-round menu. It owns Resume, Restart, Home and
+// Settings so nothing important hides behind a drawer. Home, not Courts: the
+// court picker and the title screen are the same screen now.
 let menuOpen = false;
 let menuReturnFocus = null;
 // A turnover freezes the round until the player asks for it back, so putting
@@ -192,7 +193,7 @@ function openMenu() {
   padFocus($("pause-resume"));
 }
 // Pausing always lands on the menu; from a ready or finished court the menu is
-// still the way to reach Courts and Settings.
+// still the way to reach Home and Settings.
 function openPauseMenu() {
   if (view !== "arena") return;
   if (phase === "playing") pause();
@@ -533,7 +534,13 @@ function prepare() {
     mode === "endless"
       ? "Connect triangles to buy time. Survive the rising press."
       : `Keep possession for ${game.config.time} seconds. ${mode === "practice" ? "Experiment freely." : `Earn ${game.config.target} points. You have 3 possessions; the third loss ends the round.`}`,
-    mode === "practice" ? "Start warm-up" : "Play the court",
+    mode === "daily"
+      ? "Play today’s circuit"
+      : mode === "endless"
+        ? "Start the run"
+        : mode === "practice"
+          ? "Start the warm-up"
+          : "Play the court",
   );
   syncProgress();
   syncHud();
@@ -544,12 +551,14 @@ function switchMode(next, index = courtIndex) {
     pause();
     applyView("arena");
     pendingSwitch = { next, index };
+    // Two buttons, two plain outcomes: stay in the round that is still on the
+    // clock, or end it and start the one that was just picked.
     setOverlay(
-      "LEAVE THIS ROUND?",
-      "Start somewhere new?",
-      "This round’s score will be lost. Your saved progress stays with you.",
-      "Keep playing",
-      "Leave round",
+      "THIS ROUND IS STILL GOING",
+      "End it and start the new one?",
+      "Starting somewhere new ends this round and its score. Everything you have already earned and saved stays with you.",
+      "Keep playing this round",
+      "End it and start the new one",
     );
     return;
   }
@@ -848,6 +857,7 @@ function finish() {
     .catch(() => toast("Round stats could not be stored."));
   persist();
   syncProgress();
+  const outOfPossessions = game.turnovers >= 3 && !game.config.practice;
   let title =
     mode === "endless"
       ? "What a run."
@@ -860,23 +870,36 @@ function finish() {
       ? courtIndex === COURTS.length - 1
         ? "Circuit complete. Chase three stars on every court."
         : `${COURTS[courtIndex + 1].name} is now unlocked.`
-      : game.turnovers >= 3 && !game.config.practice
+      : outOfPossessions
         ? "The press caught you. Use focus and wall passes to find space."
         : result.cleared
           ? "Keep exploring. There’s always a better passing lane."
           : `Aim for ${game.config.target} points and survive the full round.`;
+  // Both buttons replay this same court; the difference is only whether the
+  // ball is moving when you land. Say which is which, and never say "courts",
+  // which now means the home screen. Leaving for home is the Menu button in
+  // the top bar and the pause menu's Home entry, both of which are reachable
+  // from here — this overlay never pretends to offer it.
   setOverlay(
     result.cleared
       ? `COURT CLEARED ${"★".repeat(result.stars)}${result.newBest ? " · NEW BEST" : ""}`
       : result.newBest
-        ? "A NEW PERSONAL BEST"
-        : "ROUND COMPLETE",
+        ? "ROUND OVER · A NEW PERSONAL BEST"
+        : outOfPossessions
+          ? "ROUND OVER · POSSESSIONS GONE"
+          : "ROUND OVER · TARGET MISSED",
     title,
     `${details}. ${extra}`,
     mode === "career" && result.cleared && courtIndex < COURTS.length - 1
-      ? "Next court"
-      : "Play again",
-    "Back to court",
+      ? "Play the next court"
+      : mode === "daily"
+        ? "Play today’s circuit again"
+        : mode === "endless"
+          ? "Start a new run"
+          : mode === "practice"
+            ? "Practise this court again"
+            : "Play this court again",
+    "Back to the round intro",
   );
   $("start-button").focus({ preventScroll: true });
   announce(
@@ -1296,7 +1319,7 @@ $("pause-restart").addEventListener("click", () => {
   prepare();
   padFocus($("start-button"));
 });
-$("pause-courts").addEventListener("click", () => {
+$("pause-home").addEventListener("click", () => {
   closePauseMenu({ restoreFocus: false });
   applyView("home");
 });

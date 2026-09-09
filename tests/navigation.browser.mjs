@@ -84,7 +84,7 @@ async function openPauseMenu(page) {
 // which is now also the court picker.
 async function leaveToHome(page) {
   await openPauseMenu(page);
-  await page.locator("#pause-courts").click();
+  await page.locator("#pause-home").click();
   await page.locator("#home-view").waitFor({ state: "visible" });
 }
 
@@ -164,7 +164,7 @@ await check(
 );
 
 await check(
-  "Play, Courts modes, unlocked courts, leave confirmation, and history preserve rounds",
+  "Play, modes, unlocked courts, the leave confirmation and history all preserve rounds",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
@@ -230,13 +230,23 @@ await check(
       "leaving the arena must freeze the active round",
     );
     await page.locator('[data-home-mode="daily"]').click();
+    // The confirmation names both outcomes plainly, and neither button says
+    // anything a player would have to guess at.
     assert.match(
       await page.locator("#overlay-kicker").textContent(),
-      /LEAVE THIS ROUND/i,
+      /THIS ROUND IS STILL GOING/i,
+    );
+    assert.match(
+      await page.locator("#overlay-title").textContent(),
+      /End it and start the new one\?/i,
     );
     assert.match(
       await page.locator("#start-button").textContent(),
-      /Keep playing/i,
+      /^Keep playing this round$/,
+    );
+    assert.match(
+      await page.locator("#secondary-button").textContent(),
+      /^End it and start the new one$/,
     );
     await page.locator("#start-button").click();
     assert.equal(await page.locator("#game-overlay").isHidden(), true);
@@ -267,7 +277,7 @@ await check(
 );
 
 await check(
-  "the pause menu reaches Courts and Settings two presses from pausing",
+  "the pause menu reaches Home and Settings two presses from pausing",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -316,7 +326,7 @@ await check(
           .filter((el) => !el.hidden)
           .map((el) => el.id),
       ),
-      ["pause-resume", "pause-restart", "pause-courts", "pause-settings"],
+      ["pause-resume", "pause-restart", "pause-home", "pause-settings"],
     );
     await page.screenshot({
       path: new URL("play-view-menu-desktop.png", outputDir).pathname,
@@ -328,8 +338,22 @@ await check(
       true,
     );
     await page.locator("#close-settings").click();
-    // Courts is one press away from the same menu.
-    await page.locator("#pause-courts").click();
+    // Home is one press away from the same menu, and the entry says Home
+    // rather than Courts now that they are the same screen.
+    assert.match(
+      await page.locator("#pause-home").textContent(),
+      /\bHome\b/,
+    );
+    assert.equal(
+      await page.evaluate(() =>
+        [...document.querySelectorAll("#pause-menu button")].some((el) =>
+          /courts/i.test(el.textContent),
+        ),
+      ),
+      false,
+      "the pause menu must not still say Courts",
+    );
+    await page.locator("#pause-home").click();
     await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(await page.locator(".court-item").count(), 6);
     assert.deepEqual(errors, []);
@@ -415,7 +439,7 @@ await check(
       true,
     );
     await page.keyboard.press("KeyP");
-    await page.locator("#pause-courts").click();
+    await page.locator("#pause-home").click();
     await page.locator("#home-view").waitFor({ state: "visible" });
     await page.keyboard.press("KeyP");
     assert.equal(
@@ -847,7 +871,7 @@ await check(
     assert.equal(await page.locator("#top-pause").isVisible(), true);
     await page.locator("#top-pause").click();
     await page.locator("#pause-menu").waitFor({ state: "visible" });
-    await page.locator("#pause-courts").click();
+    await page.locator("#pause-home").click();
     await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(
       await page
@@ -944,6 +968,56 @@ await check(
     assert.ok(
       restarted.attract < 60,
       `the demo must be stepped once a frame, got ${restarted.attract} updates in 400ms`,
+    );
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
+  "every round overlay says plainly what its buttons do, in every mode",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(`${baseURL}/`);
+    await page.locator("#home-view").waitFor({ state: "visible" });
+    // The card that opens a round names the round it is about to open, so the
+    // button is never just a generic "Play" the player has to interpret.
+    for (const [mode, primary] of [
+      ["daily", /^Play today’s circuit$/],
+      ["endless", /^Start the run$/],
+      ["practice", /^Start the warm-up$/],
+      ["career", /^Play the court$/],
+    ]) {
+      await page.locator(`[data-home-mode="${mode}"]`).click();
+      await page.locator("#arena-view").waitFor({ state: "visible" });
+      assert.match(
+        await page.locator("#start-button").textContent(),
+        primary,
+        `the ${mode} invitation should name what it starts`,
+      );
+      // Nothing that opens a round offers a second button to guess at.
+      assert.equal(await page.locator("#secondary-button").isHidden(), true);
+      // Back out the way a mouse would: the bar's Menu, then Home.
+      await page.locator("#top-pause").click();
+      await page.locator("#pause-menu").waitFor({ state: "visible" });
+      await page.locator("#pause-home").click();
+      await page.locator("#home-view").waitFor({ state: "visible" });
+    }
+    // Nowhere in the shell still calls home "Courts".
+    const strays = await page.evaluate(() =>
+      [...document.querySelectorAll("button")]
+        .filter((el) => el.getClientRects().length && /\bcourts\b/i.test(el.textContent))
+        .map((el) => `${el.id || el.className}: ${el.textContent.trim()}`),
+    );
+    assert.deepEqual(
+      strays,
+      [],
+      `no visible control should still say "courts": ${JSON.stringify(strays)}`,
     );
     assert.deepEqual(errors, []);
     await context.close();

@@ -520,7 +520,7 @@ await check(
     });
     // Pause -> Home leaves the play-view presentation for the home screen.
     await openPauseMenu(page);
-    await page.locator("#pause-courts").click();
+    await page.locator("#pause-home").click();
     await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(
       await page
@@ -587,7 +587,7 @@ await check(
     for (let i = 0; i < 6; i++) {
       if (await page.locator("#arena-view").isVisible()) {
         await openPauseMenu(page);
-        await page.locator("#pause-courts").click();
+        await page.locator("#pause-home").click();
         await page.locator("#home-view").waitFor({ state: "visible" });
       }
       await page.locator(".court-item").nth(i).click();
