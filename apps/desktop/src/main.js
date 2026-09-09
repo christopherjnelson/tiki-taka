@@ -71,7 +71,20 @@ let progress = initialData.progress;
 let settings = initialData.settings;
 let accountStats = initialData.stats;
 let profile = (await dataAdapter.getSession())?.profile || null;
-const sound = new Sound(progress.sound);
+// One switch used to cover everything, and it lived on `progress.sound` so
+// Android could share it. Effects and music now have a switch and a level
+// each, in settings. A player who had turned the old switch off must not be
+// blasted on the next launch, so the first run after the split folds the old
+// boolean into all four fields; `audioMigrated` makes that a one-time step so a
+// later "music off, effects on" is never overwritten by it. `progress.sound`
+// stays live for apps/mobile, which still reads it, and the shell keeps it in
+// step with "is anything audible".
+if (!settings.audioMigrated) {
+  settings.effectsOn = progress.sound;
+  settings.musicOn = progress.sound;
+  settings.audioMigrated = true;
+}
+const sound = new Sound(settings.effectsOn, settings.effectsVolume);
 const music = createMusic({
   // A build copies the track next to index.html (scripts/build.mjs); the
   // source tree is served straight from public/. Picking one rather than
@@ -81,8 +94,9 @@ const music = createMusic({
       ? new URL("./audio/neon-biscayne.ogg", document.baseURI).href
       : new URL("/public/audio/neon-biscayne.ogg", location.origin).href,
   ],
+  trim: settings.musicVolume,
 });
-music.setEnabled(progress.sound);
+music.setEnabled(settings.musicOn);
 const renderer = new Renderer($("court"));
 const viewForHash = () =>
   location.hash === "#play"
@@ -106,6 +120,7 @@ let keys = new Set(),
 let padPrevious = [],
   padConnected = false,
   menuRepeat = 0,
+  sliderRepeat = 0,
   finished = false,
   roundCleared = false,
   lastTime = 0,
@@ -495,6 +510,22 @@ function unlockAudio() {
 }
 function syncMusicState() {
   document.body.dataset.music = music.state;
+  syncAudioHint();
+}
+// A browser will not resume an AudioContext until a real user activation
+// gesture lands, and a gamepad button is not one, so a controller player can
+// sit on the title screen in silence with nothing to tell them why. Blocked
+// means: the player asked for this sound, nothing failed, and the context is
+// still not running. Muted audio and unavailable audio are both "not blocked".
+function audioBlocked() {
+  const effectsBlocked =
+    settings.effectsOn && (!sound.context || sound.context.state !== "running");
+  return Boolean((settings.musicOn && music.blocked) || effectsBlocked);
+}
+function syncAudioHint() {
+  const hint = $("audio-hint");
+  if (!hint) return;
+  hint.hidden = !(view === "title" && audioBlocked());
 }
 function syncResumePrompt() {
   const showing = awaitingResume && view === "arena" && !menuOpen;
@@ -780,23 +811,89 @@ $("tactic-select").addEventListener("change", (e) => {
   persist();
   prepare();
 });
-$("sound-button").setAttribute("aria-pressed", String(progress.sound));
-function soundLabel() {
-  $("sound-button").textContent = progress.sound ? "Sound on" : "Sound off";
-}
-soundLabel();
-$("sound-button").addEventListener("click", () => {
-  progress.sound = !progress.sound;
-  sound.enabled = progress.sound;
-  // One switch for effects and soundtrack: muting stops both, unmuting brings
-  // the music back where it left off.
-  music.setEnabled(progress.sound);
+// #sound-button survives the split as the master mute: one press silences
+// both buses, the next brings back exactly what was on before. The per-bus
+// switches below it are what a player reaches for to keep one and drop the
+// other.
+const percent = (value) => `${Math.round(value * 100)}%`;
+let mutedState = null;
+function applyAudioSettings() {
+  sound.enabled = settings.effectsOn;
+  sound.setVolume(settings.effectsVolume);
+  music.setEnabled(settings.musicOn);
+  music.setVolume(settings.musicVolume);
+  // apps/mobile still reads progress.sound, and a shared profile would look
+  // broken if it disagreed with the desktop switches.
+  progress.sound = settings.effectsOn || settings.musicOn;
   unlockAudio();
-  $("sound-button").setAttribute("aria-pressed", String(progress.sound));
-  soundLabel();
+  syncAudioChrome();
+}
+function syncAudioChrome() {
+  const anyOn = settings.effectsOn || settings.musicOn;
+  $("sound-button").setAttribute("aria-pressed", String(anyOn));
+  $("sound-button").textContent = anyOn ? "Sound on" : "Sound off";
+  $("effects-button").setAttribute("aria-pressed", String(settings.effectsOn));
+  $("effects-button").textContent = settings.effectsOn
+    ? "Effects on"
+    : "Effects off";
+  $("music-button").setAttribute("aria-pressed", String(settings.musicOn));
+  $("music-button").textContent = settings.musicOn ? "Music on" : "Music off";
+  $("effects-volume").value = String(Math.round(settings.effectsVolume * 100));
+  $("music-volume").value = String(Math.round(settings.musicVolume * 100));
+  $("effects-volume-value").textContent = percent(settings.effectsVolume);
+  $("music-volume-value").textContent = percent(settings.musicVolume);
+  $("effects-volume").disabled = !settings.effectsOn;
+  $("music-volume").disabled = !settings.musicOn;
+  syncAudioHint();
+}
+$("sound-button").addEventListener("click", () => {
+  const anyOn = settings.effectsOn || settings.musicOn;
+  if (anyOn) {
+    // Remember the shape of the mute so unmuting restores it rather than
+    // turning on a bus the player had deliberately switched off.
+    mutedState = { effects: settings.effectsOn, music: settings.musicOn };
+    settings.effectsOn = false;
+    settings.musicOn = false;
+  } else {
+    settings.effectsOn = mutedState?.effects ?? true;
+    settings.musicOn = mutedState?.music ?? true;
+    mutedState = null;
+  }
+  applyAudioSettings();
   persist();
+  persistSettings();
 });
+$("effects-button").addEventListener("click", () => {
+  settings.effectsOn = !settings.effectsOn;
+  mutedState = null;
+  applyAudioSettings();
+  persist();
+  persistSettings();
+});
+$("music-button").addEventListener("click", () => {
+  settings.musicOn = !settings.musicOn;
+  mutedState = null;
+  applyAudioSettings();
+  persist();
+  persistSettings();
+});
+// "input" fires for a mouse drag, an arrow key and the gamepad steps below
+// alike, so the level follows the control live and is written once it settles.
+for (const [id, key] of [
+  ["effects-volume", "effectsVolume"],
+  ["music-volume", "musicVolume"],
+]) {
+  $(id).addEventListener("input", () => {
+    settings[key] = Number($(id).value) / 100;
+    if (key === "effectsVolume") sound.setVolume(settings[key]);
+    else music.setVolume(settings[key]);
+    $(`${id}-value`).textContent = percent(settings[key]);
+    unlockAudio();
+  });
+  $(id).addEventListener("change", () => persistSettings());
+}
 function syncSettingChrome() {
+  syncAudioChrome();
   document.documentElement.dataset.theme = settings.theme;
   document.body.classList.toggle("play-view", view === "arena");
   document.body.dataset.view = view;
@@ -898,7 +995,15 @@ async function switchDataContext(nextProfile) {
   accountStats = data.stats;
   mode = "career";
   courtIndex = progress.lastCourt;
-  sound.enabled = progress.sound;
+  // A switched-to profile brings its own audio settings, and may never have
+  // seen the split, so it gets the same one-time fold as the first load did.
+  if (!settings.audioMigrated) {
+    settings.effectsOn = progress.sound;
+    settings.musicOn = progress.sound;
+    settings.audioMigrated = true;
+  }
+  mutedState = null;
+  applyAudioSettings();
   prepare();
   syncProgress();
   syncSettingChrome();
@@ -1273,9 +1378,12 @@ document.addEventListener("focusout", (event) => {
 });
 function padFocusables(root) {
   return [
-    ...root.querySelectorAll("button:not(:disabled),select:not(:disabled)"),
+    ...root.querySelectorAll(
+      "button:not(:disabled),select:not(:disabled),input:not(:disabled)",
+    ),
   ].filter((el) => !el.closest("[hidden]") && el.getClientRects().length);
 }
+const isRange = (el) => el instanceof HTMLInputElement && el.type === "range";
 function padFocus(el) {
   if (!el) return;
   if (padFocusElement && padFocusElement !== el)
@@ -1297,12 +1405,36 @@ function padActivate(el) {
     el.click();
     return true;
   }
+  // A slider has nothing to activate; A on one must not fall through to the
+  // menu's default action and, say, start a round from behind the dialog.
+  if (isRange(el)) return true;
   return false;
 }
 // One place for "collect the controls of whatever is actually on screen, move
-// focus with the d-pad or left stick, activate with A".
-function padNavigate(root, { dt, direction, activate, fallback }) {
+// focus with the d-pad or left stick, activate with A". A focused slider takes
+// left and right as a level change instead of as navigation, which is the only
+// way the volume controls are reachable without a mouse.
+function padNavigate(root, { dt, direction, horizontal = 0, activate, fallback }) {
   if (!root) return;
+  const focused = document.activeElement;
+  const slider = root.contains(focused) && isRange(focused) ? focused : null;
+  if (slider && horizontal) {
+    direction = 0;
+    sliderRepeat -= dt;
+    if (sliderRepeat <= 0) {
+      const step = Number(slider.step) || 1;
+      const next = Number(slider.value) + horizontal * step;
+      slider.value = String(
+        Math.min(Number(slider.max), Math.max(Number(slider.min), next)),
+      );
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      slider.dispatchEvent(new Event("change", { bubbles: true }));
+      sliderRepeat = 0.11;
+    }
+  } else {
+    sliderRepeat = 0;
+    direction ||= horizontal;
+  }
   menuRepeat -= dt;
   if (direction && menuRepeat <= 0) {
     const elements = padFocusables(root);
@@ -1342,6 +1474,11 @@ function pollGamepad(dt) {
   }
   const pressed = pad.buttons.map((b) => b.pressed),
     tap = (i) => pressed[i] && !padPrevious[i];
+  // A gamepad press is not a user activation gesture, so this will not unblock
+  // a browser on its own. It costs nothing, it does unblock the packaged shell
+  // and any browser whose policy is relaxed, and on the rest it keeps the
+  // context ready so the first key or click starts audio instantly.
+  if (pressed.some((down, i) => down && !padPrevious[i])) unlockAudio();
   // Any button at all resumes after a turnover, but only on a fresh press:
   // tap() is edge-triggered, so a button still held from before is ignored.
   if (awaitingResume && !menuOpen && !anyDialogOpen()) {
@@ -1365,14 +1502,23 @@ function pollGamepad(dt) {
     gamepadMove = { x: 0, y: 0 };
     gamepadFocus = false;
   }
+  // Vertical and horizontal are separated so a focused slider can take left
+  // and right as a level change; everywhere else horizontal still walks the
+  // menu, exactly as it did when both axes were folded into one direction.
   const direction =
-    pressed[13] || pressed[15] || pad.axes[1] > 0.6
+    pressed[13] || pad.axes[1] > 0.6
       ? 1
-      : pressed[12] || pressed[14] || pad.axes[1] < -0.6
+      : pressed[12] || pad.axes[1] < -0.6
+        ? -1
+        : 0;
+  const horizontal =
+    pressed[15] || pad.axes[0] > 0.6
+      ? 1
+      : pressed[14] || pad.axes[0] < -0.6
         ? -1
         : 0;
   const nav = (root, fallback) =>
-    padNavigate(root, { dt, direction, activate: tap(0), fallback });
+    padNavigate(root, { dt, direction, horizontal, activate: tap(0), fallback });
   // Most modal context first: navigation is scoped to whatever is actually on
   // screen so the d-pad never wanders into controls the player cannot see.
   if ($("help-dialog").open) {
@@ -1569,11 +1715,17 @@ syncAccountDialog();
 prepare();
 syncPauseMenu();
 applyView(view, { updateHash: false });
-// Electron does not require a gesture, so the shell starts the soundtrack at
-// once; a browser tab keeps this armed until the first real interaction.
-music.unlock();
-syncMusicState();
-for (const type of ["pointerdown", "keydown", "touchstart"])
+// The packaged shell sets autoplayPolicy to no-user-gesture-required, so this
+// first attempt is all it ever needs. A browser tab is likely to refuse it and
+// stay armed until a real activation gesture arrives.
+applyAudioSettings();
+// Every plausible source of a user activation gesture retries the unlock, and
+// they stay attached rather than firing once: a retry after audio is already
+// running is a no-op, and a gamepad press (which grants no activation at all)
+// costs nothing but keeps the door open for the moment the player does reach
+// for the keyboard or mouse. `click` is here as well as `pointerdown` because
+// a keyboard-activated button produces a click with no pointer event.
+for (const type of ["pointerdown", "click", "keydown", "touchstart"])
   window.addEventListener(type, unlockAudio, { capture: true, passive: true });
 setInterval(syncMusicState, 500);
 requestAnimationFrame(frame);

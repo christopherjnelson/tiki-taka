@@ -12,6 +12,12 @@
 
 const FADE = 0.35;
 
+function clampTrim(value, fallback) {
+  const trim = Number(value);
+  if (!Number.isFinite(trim)) return fallback;
+  return Math.min(1, Math.max(0, trim));
+}
+
 // The track is a loud master: it peaks at -1.4 dBFS and averages -14.1 dBFS.
 // Effects now peak between -8 and -16 dBFS, but they are 140 ms transients
 // while music is continuous, so it is the music's *average* that decides

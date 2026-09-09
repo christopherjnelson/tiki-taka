@@ -68,6 +68,14 @@
             <p class="title-hint">
               Gamepad: D-pad or left stick to move · A to select · Start pauses
             </p>
+            <!-- Browsers will not start audio without a real user gesture, and
+            gamepad input is not one. A controller player would otherwise get
+            silence with no explanation. Hidden the moment audio is running,
+            and never shown in the packaged shell, which does not need a
+            gesture at all. -->
+            <p id="audio-hint" class="title-hint audio-hint" role="status" hidden>
+              Press any key or click once to enable sound.
+            </p>
           </div>
         </section>
 
@@ -508,6 +516,49 @@
         <button id="account-button" type="button">
           <span aria-hidden="true">◎</span> Local profile
         </button>
+      </div>
+      <!-- Effects and soundtrack each get their own switch and trim. The
+      Sound button above is still the one-press master mute for both. -->
+      <div class="settings-audio" role="group" aria-labelledby="audio-heading">
+        <p id="audio-heading" class="settings-audio-heading">AUDIO</p>
+        <div class="audio-row">
+          <button id="effects-button" type="button" aria-pressed="true">
+            Effects on
+          </button>
+          <label class="audio-slider" for="effects-volume">
+            <span>Effects volume</span>
+            <input
+              id="effects-volume"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value="30"
+            />
+            <output id="effects-volume-value" for="effects-volume">30%</output>
+          </label>
+        </div>
+        <div class="audio-row">
+          <button id="music-button" type="button" aria-pressed="true">
+            Music on
+          </button>
+          <label class="audio-slider" for="music-volume">
+            <span>Music volume</span>
+            <input
+              id="music-volume"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value="100"
+            />
+            <output id="music-volume-value" for="music-volume">100%</output>
+          </label>
+        </div>
+        <p class="settings-note">
+          Sliders take the d-pad or left stick left and right on a controller,
+          and the arrow keys from the keyboard.
+        </p>
       </div>
       <div class="settings-preset">
         <label for="preset-select">CONTROL PRESET</label>

@@ -115,9 +115,11 @@ canvas:focus-visible {
 button.pad-focus,
 a.pad-focus,
 select.pad-focus,
+input.pad-focus,
 button:focus-visible,
 a:focus-visible,
-select:focus-visible {
+select:focus-visible,
+input:focus-visible {
   outline: 3px solid var(--cyan);
   outline-offset: 3px;
   box-shadow:
@@ -712,6 +714,57 @@ dialog::backdrop {
 .help-footnote {
   color: var(--muted);
   font-size: 10px;
+}
+.settings-audio {
+  padding: 13px 0;
+  border-block-start: 1px solid var(--line);
+}
+.settings-audio-heading {
+  margin: 0 0 10px;
+  color: var(--cyan);
+  font: 700 10px var(--sign);
+  letter-spacing: 2px;
+}
+.audio-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.audio-row button {
+  min-width: 104px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font-size: 10px;
+}
+.audio-slider {
+  display: flex;
+  flex: 1 1 220px;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font: 700 9px var(--sign);
+  letter-spacing: 1px;
+}
+.audio-slider input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 110px;
+  accent-color: var(--cyan);
+}
+.audio-slider input[type="range"]:disabled {
+  opacity: 0.4;
+}
+.audio-slider output {
+  min-width: 38px;
+  text-align: right;
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+.audio-hint {
+  color: var(--cyan);
 }
 .settings-preset {
   display: flex;
