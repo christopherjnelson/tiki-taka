@@ -31,6 +31,7 @@ import {
 } from "../../../packages/engine/src/settings.js";
 import { createLocalDataAdapter } from "../../../packages/data/src/index.js";
 import { createMusic } from "./music.js";
+import { TRACKS } from "./playlist.js";
 const $ = (id) => document.getElementById(id);
 // Running inside the Electron shell rather than a browser tab. window.close()
 // only ends the app for a window the shell opened itself, so Quit is offered
@@ -86,14 +87,14 @@ if (!settings.audioMigrated) {
 }
 const sound = new Sound(settings.effectsOn, settings.effectsVolume);
 const music = createMusic({
-  // A build copies the track next to index.html (scripts/build.mjs); the
+  tracks: TRACKS,
+  // A build copies the tracks next to index.html (scripts/build.mjs); the
   // source tree is served straight from public/. Picking one rather than
   // probing both keeps a 404 out of the console.
-  sources: [
+  resolve: (track) =>
     import.meta.env?.PROD
-      ? new URL("./audio/neon-biscayne.ogg", document.baseURI).href
-      : new URL("/public/audio/neon-biscayne.ogg", location.origin).href,
-  ],
+      ? new URL(`./audio/${track.file}`, document.baseURI).href
+      : new URL(`/public/audio/${track.file}`, location.origin).href,
   trim: settings.musicVolume,
 });
 music.setEnabled(settings.musicOn);
@@ -613,6 +614,9 @@ function unlockAudio() {
 function syncMusicState() {
   document.body.dataset.music = music.state;
   syncAudioHint();
+  // The playlist advances on its own when a track ends, so the rail's title is
+  // refreshed on this poll rather than waiting for a player to press something.
+  syncMusicRail();
 }
 // A browser will not resume an AudioContext until a real user activation
 // gesture lands, and a gamepad button is not one, so a controller player can
@@ -952,6 +956,7 @@ function syncAudioChrome() {
   $("effects-volume").disabled = !settings.effectsOn;
   $("music-volume").disabled = !settings.musicOn;
   syncAudioHint();
+  syncMusicRail();
 }
 $("sound-button").addEventListener("click", () => {
   const anyOn = settings.effectsOn || settings.musicOn;
@@ -977,12 +982,53 @@ $("effects-button").addEventListener("click", () => {
   persist();
   persistSettings();
 });
-$("music-button").addEventListener("click", () => {
+function toggleMusic() {
   settings.musicOn = !settings.musicOn;
   mutedState = null;
   applyAudioSettings();
   persist();
   persistSettings();
+}
+$("music-button").addEventListener("click", toggleMusic);
+// The side-rail player. It is the same switch as the settings dialog's Music
+// button plus a skip, so there is one notion of "music on" and the volume and
+// on/off settings keep governing it.
+function syncMusicRail() {
+  const toggle = $("music-toggle"),
+    skip = $("music-skip");
+  if (!toggle) return;
+  toggle.setAttribute("aria-pressed", String(settings.musicOn));
+  toggle.firstElementChild.textContent = settings.musicOn ? "▮▮" : "▶";
+  toggle.setAttribute(
+    "aria-label",
+    settings.musicOn ? "Pause the soundtrack" : "Play the soundtrack",
+  );
+  skip.setAttribute("aria-label", "Skip to the next track");
+  skip.disabled = music.trackCount < 2;
+  const title = music.trackTitle;
+  $("music-track").textContent = title || "—";
+  $("music-track").title = title
+    ? `${title} · track ${music.trackIndex + 1} of ${music.trackCount}`
+    : "";
+}
+// A rail button is a real button, so activating it takes DOM focus off the
+// court — and then Space would press the button again instead of making a
+// pass. Handing focus straight back is what keeps the player out of the way
+// of play; during a pause or a menu the focus belongs where it is.
+function returnFocusToCourt() {
+  if (phase === "playing" && !menuBlocking())
+    $("court").focus({ preventScroll: true });
+}
+$("music-toggle").addEventListener("click", () => {
+  toggleMusic();
+  syncMusicRail();
+  returnFocusToCourt();
+});
+$("music-skip").addEventListener("click", () => {
+  unlockAudio();
+  music.skip(1);
+  syncMusicRail();
+  returnFocusToCourt();
 });
 // "input" fires for a mouse drag, an arrow key and the gamepad steps below
 // alike, so the level follows the control live and is written once it settles.
@@ -1335,7 +1381,7 @@ window.addEventListener("keydown", (e) => {
     }
     // Tab cycles the menu only; gameplay keys must not leak to the court.
     if (e.code === "Tab") {
-      const elements = padFocusables($("pause-menu"));
+      const elements = padFocusables([$("pause-menu"), $("music-rail")]);
       if (elements.length) {
         e.preventDefault();
         const current = elements.indexOf(document.activeElement);
@@ -1483,12 +1529,20 @@ document.addEventListener("focusout", (event) => {
     padFocusElement = null;
   }
 });
+// `root` may be one element or several. Several is what lets the pause menu
+// and the music rail — which are siblings on screen, not nested — be walked as
+// one list by the d-pad, without giving either a wrapper it does not want.
+const padRoots = (root) => (Array.isArray(root) ? root : [root]).filter(Boolean);
+const padWithin = (root, el) =>
+  Boolean(el) && padRoots(root).some((node) => node.contains(el));
 function padFocusables(root) {
-  return [
-    ...root.querySelectorAll(
-      "button:not(:disabled),select:not(:disabled),input:not(:disabled)",
-    ),
-  ].filter((el) => !el.closest("[hidden]") && el.getClientRects().length);
+  return padRoots(root)
+    .flatMap((node) => [
+      ...node.querySelectorAll(
+        "button:not(:disabled),select:not(:disabled),input:not(:disabled)",
+      ),
+    ])
+    .filter((el) => !el.closest("[hidden]") && el.getClientRects().length);
 }
 const isRange = (el) => el instanceof HTMLInputElement && el.type === "range";
 function padFocus(el) {
@@ -1524,7 +1578,7 @@ function padActivate(el) {
 function padNavigate(root, { dt, direction, horizontal = 0, activate, fallback }) {
   if (!root) return;
   const focused = document.activeElement;
-  const slider = root.contains(focused) && isRange(focused) ? focused : null;
+  const slider = padWithin(root, focused) && isRange(focused) ? focused : null;
   if (slider && horizontal) {
     direction = 0;
     sliderRepeat -= dt;
@@ -1552,7 +1606,7 @@ function padNavigate(root, { dt, direction, horizontal = 0, activate, fallback }
   } else if (!direction) menuRepeat = 0;
   if (activate) {
     const el = document.activeElement;
-    if (!padActivate(root.contains(el) ? el : null) && fallback) fallback();
+    if (!padActivate(padWithin(root, el) ? el : null) && fallback) fallback();
   }
 }
 function pollGamepad(dt) {
@@ -1646,7 +1700,11 @@ function pollGamepad(dt) {
     });
   } else if (menuOpen) {
     if (tap(1) || tap(9)) dismissPauseMenu();
-    else nav($("pause-menu"), () => $("pause-resume").click());
+    // The music rail is walked with the pause menu: it is where a controller
+    // player can reach the soundtrack without a mouse, and pausing is the only
+    // time the d-pad is free to leave the court.
+    else
+      nav([$("pause-menu"), $("music-rail")], () => $("pause-resume").click());
   } else if (view === "arena" && phase === "playing" && !awaitingResume) {
     if (tap(0)) doPass();
     if (tap(2)) toggleBank();

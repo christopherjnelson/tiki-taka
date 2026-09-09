@@ -2,6 +2,7 @@ import { build } from "vite";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { TRACK_FILES } from "../apps/desktop/src/playlist.js";
 
 await rm("dist", { recursive: true, force: true });
 await build({ configFile: path.resolve("vite.desktop.config.js") });
@@ -14,8 +15,11 @@ for (const asset of [
 ])
   await cp(path.join("public", asset), path.join("dist/desktop", asset));
 // The soundtrack lives in a subdirectory, so it needs the folder made first.
+// The list comes from apps/desktop/src/playlist.js rather than being repeated
+// here: this copy step and the one in scripts/electron-web.mjs drifted apart
+// once and the packaged app shipped with no audio at all.
 await mkdir("dist/desktop/audio", { recursive: true });
-for (const track of ["neon-biscayne.ogg"])
+for (const track of TRACK_FILES)
   await cp(
     path.join("public/audio", track),
     path.join("dist/desktop/audio", track),

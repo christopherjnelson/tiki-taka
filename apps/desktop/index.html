@@ -209,6 +209,54 @@
               </button>
             </div>
             <div id="court-wrap" class="court-wrap">
+              <!-- The court is 1000x620 inside a 16:9 window, so about 9% of
+              the screen is letterbox down the two sides in play view. These
+              two rails live in that space and nowhere else: they are sized
+              from the leftover width, so they cannot take a pixel from the
+              canvas, and each hides itself rather than overlap when its gutter
+              is too narrow to hold its contents honestly. -->
+              <div id="brand-rail" class="side-rail side-rail-left">
+                <div class="rail-inner brand-rail-inner" aria-hidden="true">
+                  <span class="brand-mark">tiki<span>-</span>taka</span>
+                  <span class="brand-sub">NO GOALS · ALL FLOW</span>
+                </div>
+              </div>
+              <div
+                id="music-rail"
+                class="side-rail side-rail-right"
+                role="group"
+                aria-label="Soundtrack"
+              >
+                <div class="rail-inner music-rail-inner">
+                  <span class="music-rail-heading" aria-hidden="true"
+                    >SOUNDTRACK</span
+                  >
+                  <span
+                    id="music-track"
+                    class="music-track"
+                    role="status"
+                    aria-live="off"
+                    >—</span
+                  >
+                  <button
+                    id="music-toggle"
+                    type="button"
+                    class="rail-button"
+                    aria-pressed="true"
+                    title="Play or pause the soundtrack"
+                  >
+                    <span aria-hidden="true">▮▮</span>
+                  </button>
+                  <button
+                    id="music-skip"
+                    type="button"
+                    class="rail-button"
+                    title="Skip to the next track"
+                  >
+                    <span aria-hidden="true">▶▶</span>
+                  </button>
+                </div>
+              </div>
               <canvas
                 id="court"
                 width="1000"

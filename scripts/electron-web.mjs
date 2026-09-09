@@ -2,6 +2,7 @@ import { build } from "vite";
 import { cp, mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { TRACK_FILES } from "../apps/desktop/src/playlist.js";
 
 const projectRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -21,9 +22,11 @@ for (const asset of [
     path.join(desktopOutput, asset),
   );
 // The soundtrack lives in a subdirectory, so the folder has to exist first.
-// This list is separate from scripts/build.mjs and feeds the packaged app.
+// This step feeds the packaged app. It used to keep its own copy of the track
+// list, which fell behind scripts/build.mjs and shipped a desktop build with
+// no audio; both now read apps/desktop/src/playlist.js.
 await mkdir(path.join(desktopOutput, "audio"), { recursive: true });
-for (const track of ["neon-biscayne.ogg"])
+for (const track of TRACK_FILES)
   await cp(
     path.join(projectRoot, "public", "audio", track),
     path.join(desktopOutput, "audio", track),

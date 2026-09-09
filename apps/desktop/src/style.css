@@ -879,6 +879,122 @@ body.play-view #court {
   aspect-ratio: 1000/620;
   transform: translate(-50%, -50%);
 }
+/* The side rails.
+   The court is a 1000:620 rectangle inside a 16:9 window, so in play view
+   there is a band of letterbox down each side — about 89px a side at
+   1920x1080. The rails are that band and nothing more: their width is derived
+   from what the canvas did not take, so no arrangement of them can shrink the
+   court. When the window is tall and narrow the canvas is width-limited, the
+   band is zero, and the rails simply have nothing to occupy.
+   Each rail is its own inline-size container, so its contents can hide
+   themselves at a width where they would have to be crushed or overlap the
+   court to fit. Hiding is the graceful case; overflowing the page is not. */
+.side-rail {
+  display: none;
+}
+body.play-view .side-rail {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: calc((100cqw - min(100cqw, 161.2903cqh)) / 2);
+  container-type: inline-size;
+  container-name: rail;
+  overflow: hidden;
+  /* The rails sit beside the court, not over it, but a stray press near the
+     canvas edge must still reach the court. Only the player's own controls
+     opt back in. */
+  pointer-events: none;
+}
+body.play-view .side-rail-left {
+  left: 0;
+}
+body.play-view .side-rail-right {
+  right: 0;
+}
+.rail-inner {
+  height: 100%;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 18px 2px;
+}
+/* Below this the gutter cannot hold a 44px control and a legible label at
+   once, so the rail shows nothing rather than colliding with the court. */
+@container rail (max-width: 52px) {
+  .rail-inner {
+    display: none;
+  }
+}
+/* Vertical text is what makes a 60-90px gutter usable at all, and it reads
+   bottom-to-top so it does not fight the eye moving across the court. */
+.brand-mark,
+.brand-sub,
+.music-rail-heading,
+.music-track {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The branding is deliberately quiet: the game has to win this contest. */
+.brand-rail-inner {
+  gap: 18px;
+  opacity: 0.42;
+}
+.brand-mark {
+  color: var(--ink);
+  text-transform: lowercase;
+  font: italic 800 clamp(20px, 3.4cqh, 34px) var(--display);
+  letter-spacing: -1px;
+}
+.brand-mark span {
+  color: var(--cyan);
+}
+.brand-sub {
+  color: var(--muted);
+  font: 700 9px var(--sign);
+  letter-spacing: 4px;
+}
+.music-rail-inner {
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  pointer-events: auto;
+}
+.music-rail-heading {
+  color: var(--cyan);
+  font: 700 8px var(--sign);
+  letter-spacing: 3px;
+  opacity: 0.75;
+}
+.music-track {
+  min-height: 0;
+  color: var(--ink);
+  font: 700 11px var(--sign);
+  letter-spacing: 1px;
+  opacity: 0.8;
+}
+.rail-button {
+  width: 100%;
+  max-width: 46px;
+  min-height: 38px;
+  padding: 0;
+  color: var(--ink);
+  background: #0a0520cc;
+  border: 1px solid var(--line);
+  font-size: 10px;
+}
+.rail-button:hover,
+.rail-button:focus-visible,
+.rail-button.pad-focus {
+  color: #100923;
+  background: var(--cyan);
+  border-color: var(--cyan);
+  outline: none;
+}
 /* Both bars are sized to the court, not the window, so they never sit over the
    letterbox and never steal a row from the canvas. */
 body.play-view .scoreboard {
