@@ -45,6 +45,10 @@ const publicFile = (relative) =>
   (servingBuild && relative === "sw.js") ||
   rootAssets.includes(relative) ||
   relative.startsWith(`assets${path.sep}`) ||
+  // The built desktop output carries the soundtrack beside index.html, and the
+  // generated service worker precaches it, so a build served from dist has to
+  // be able to hand it over or the offline install fails.
+  relative.startsWith(`audio${path.sep}`) ||
   relative.startsWith(`licenses${path.sep}`) ||
   relative.startsWith(`src${path.sep}`) ||
   relative.startsWith(`public${path.sep}`) ||

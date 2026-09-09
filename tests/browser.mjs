@@ -529,9 +529,11 @@ async function offlineReload(baseURL) {
   await page.reload({ waitUntil: 'domcontentloaded' });
   // Play view hides the court heading, so read the arena's live labels instead.
   assert.match(await page.locator('#court-title').textContent(), /Courtyard/);
-  await expectText(page.locator('#workspace-label'), /Courtyard/i);
+  await expectText(page.locator('#overlay-kicker'), /FOUR PLAYERS/i);
   await page.locator('#start-button').click();
   assert.equal(await page.locator('#game-overlay').isHidden(), true);
+  // The soundtrack is precached with everything else, so it plays offline too.
+  await page.waitForFunction(() => document.body.dataset.music !== 'unavailable');
   assert.deepEqual(errors, []);
   await context.setOffline(false);
   await context.close();
@@ -574,10 +576,12 @@ await check('losing possession holds the round until a fresh button press', asyn
   await page.waitForTimeout(350);
   await page.keyboard.press('KeyW');
   await page.locator('#resume-prompt').waitFor({ state: 'hidden' });
+  // The engine still plays out its own 1.2s reset after a turnover, during
+  // which it holds the clock, so give the round long enough to come back.
   const resumed = await page.evaluate(() => window.__observedGame.game.time);
-  await page.waitForTimeout(250);
-  assert.equal(await page.evaluate(time => window.__observedGame.game.time < time, resumed), true,
-    'the clock runs again once the player is back');
+  await page.waitForFunction(time => window.__observedGame.game.time < time, resumed, { timeout: 5000 });
+  assert.equal(await page.evaluate(() => window.__observedGame.game.lock), 0,
+    'the engine reset finished once the round was live again');
   // A pointer press works too, for mouse and touch players.
   await page.evaluate(() => window.__observedGame.game.turnover('CAUGHT IN POSSESSION'));
   await page.locator('#resume-prompt').waitFor({ state: 'visible' });
