@@ -1,5 +1,18 @@
 export const SETTINGS_KEY = "tiki-taka.settings.v1";
 
+// Kept in step with DEFAULT_EFFECTS_VOLUME in packages/presentation/src/audio.js.
+// The engine does not import the presentation package, so the number is
+// repeated here rather than crossing that boundary; both comments point at the
+// other. Effects default well below unity because the per-effect constants are
+// the ceiling and this is the trim (see that file for the measured levels).
+// Music defaults to full because its own base gain is already the tuned level.
+export const DEFAULT_AUDIO = {
+  effectsOn: true,
+  effectsVolume: 0.3,
+  musicOn: true,
+  musicVolume: 1,
+};
+
 export const ACTIONS = {
   moveUp: "Move up",
   moveDown: "Move down",
@@ -70,9 +83,22 @@ export function defaultSettings() {
     playView: false,
     sidebarCollapsed: false,
     mobileWallMode: "armed",
+    ...DEFAULT_AUDIO,
+    // Cleared once the shell has folded a pre-split `progress.sound` into the
+    // four fields above; see apps/desktop/src/main.js.
+    audioMigrated: false,
     preset: "wasd",
     bindings: presetBindings(),
   };
+}
+
+// Old stored settings have none of the audio fields. Absent must mean "on" and
+// "the default level", never 0 or false, so a returning player is not silenced
+// by an upgrade.
+function normalizeVolume(value, fallback) {
+  const volume = Number(value);
+  if (!Number.isFinite(volume)) return fallback;
+  return Math.min(1, Math.max(0, volume));
 }
 
 export function normalizeSettings(value) {
@@ -97,6 +123,11 @@ export function normalizeSettings(value) {
     playView: value.playView === true,
     sidebarCollapsed: value.sidebarCollapsed === true,
     mobileWallMode: value.mobileWallMode === "instant" ? "instant" : "armed",
+    effectsOn: value.effectsOn !== false,
+    effectsVolume: normalizeVolume(value.effectsVolume, DEFAULT_AUDIO.effectsVolume),
+    musicOn: value.musicOn !== false,
+    musicVolume: normalizeVolume(value.musicVolume, DEFAULT_AUDIO.musicVolume),
+    audioMigrated: value.audioMigrated === true,
     preset: Object.hasOwn(PRESETS, value.preset) ? value.preset : "custom",
     bindings,
   };

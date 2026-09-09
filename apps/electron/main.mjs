@@ -64,6 +64,14 @@ async function createWindow() {
       webSecurity: true,
       allowRunningInsecureContent: false,
       devTools: !app.isPackaged,
+      // Chromium will not resume an AudioContext without a user activation
+      // gesture, and gamepad input does not grant one: a player who navigates
+      // the menu with a controller never produces the gesture, so the game
+      // stayed silent until they happened to click something. This is a local
+      // app serving its own content over tiki://, not a web page that could
+      // surprise a visitor with sound, so the policy has nothing to protect
+      // here. The web build cannot do this and shows a hint instead.
+      autoplayPolicy: "no-user-gesture-required",
     },
   });
   win.removeMenu();

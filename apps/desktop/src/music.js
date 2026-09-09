@@ -18,8 +18,13 @@ const FADE = 0.35;
 // whether they cut through. -17.7 dB of gain puts the soundtrack's mean at
 // about -32 dBFS and its peaks at about -19 dBFS: under every effect, still
 // clearly present underneath the game.
-export function createMusic({ sources = [], volume = 0.13 } = {}) {
-  let context = null,
+// `volume` is that tuned level and stays the ceiling; the player's music
+// slider is a 0..1 trim on top of it, so the balance against the effects bus
+// survives any setting.
+export function createMusic({ sources = [], volume = 0.13, trim = 1 } = {}) {
+  const base = volume;
+  let level = base * clampTrim(trim, 1),
+    context = null,
     gain = null,
     source = null,
     buffer = null,
@@ -99,7 +104,10 @@ export function createMusic({ sources = [], volume = 0.13 } = {}) {
       source.start(0, offset % buffer.duration);
       gain.gain.cancelScheduledValues(context.currentTime);
       gain.gain.setValueAtTime(0.0001, context.currentTime);
-      gain.gain.linearRampToValueAtTime(volume, context.currentTime + FADE);
+      gain.gain.linearRampToValueAtTime(
+        Math.max(level, 0.0001),
+        context.currentTime + FADE,
+      );
     } catch {
       source = null;
       failed = true;
@@ -136,6 +144,23 @@ export function createMusic({ sources = [], volume = 0.13 } = {}) {
       makeContext();
       void apply();
     },
+    get volume() {
+      return base ? level / base : 0;
+    },
+    // Live: a slider drag retargets the running source without restarting it.
+    setVolume(value) {
+      level = base * clampTrim(value, base ? level / base : 0);
+      if (!gain || !context) return level;
+      try {
+        gain.gain.cancelScheduledValues(context.currentTime);
+        gain.gain.setTargetAtTime(
+          source ? Math.max(level, 0.0001) : 0.0001,
+          context.currentTime,
+          0.02,
+        );
+      } catch {}
+      return level;
+    },
     setEnabled(value) {
       const next = Boolean(value);
       if (next === enabled) return;
@@ -152,6 +177,18 @@ export function createMusic({ sources = [], volume = 0.13 } = {}) {
       if (!unlocked || !context || context.state !== "running")
         return "waiting";
       return "loading";
+    },
+    get contextState() {
+      return context?.state || "none";
+    },
+    // True only when a browser is still withholding the AudioContext: enabled,
+    // asked to play, and stuck because no real gesture has landed yet. The
+    // title screen's "press a key" hint keys off this, so it must never be
+    // true when audio is simply muted or unavailable.
+    get blocked() {
+      return (
+        enabled && !failed && (!context || context.state !== "running")
+      );
     },
   };
 }
