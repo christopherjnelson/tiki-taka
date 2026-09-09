@@ -998,9 +998,9 @@ function toggleMusic() {
   persistSettings();
 }
 $("music-button").addEventListener("click", toggleMusic);
-// The side-rail player. It is the same switch as the settings dialog's Music
-// button plus a skip, so there is one notion of "music on" and the volume and
-// on/off settings keep governing it.
+// The top bar's player — the only one now. It is the same switch as the
+// settings dialog's Music button plus a skip, so there is one notion of
+// "music on" and the volume and on/off settings keep governing it.
 function syncMusicRail() {
   const toggle = $("music-toggle"),
     skip = $("music-skip");
@@ -1019,7 +1019,7 @@ function syncMusicRail() {
     ? `${title} · track ${music.trackIndex + 1} of ${music.trackCount}`
     : "";
 }
-// A rail button is a real button, so activating it takes DOM focus off the
+// A bar button is a real button, so activating it takes DOM focus off the
 // court — and then Space would press the button again instead of making a
 // pass. Handing focus straight back is what keeps the player out of the way
 // of play; during a pause or a menu the focus belongs where it is.
@@ -1145,6 +1145,16 @@ function syncAccountDialog() {
   $("profile-username").textContent = profile?.username || "";
   $("profile-email").textContent = profile?.email || "";
   $("account-button").textContent = `◎ ${profile?.username || "Local profile"}`;
+  // The bar says "Guest" until a local demo profile is chosen, and never
+  // claims to be signed in to anything: the chip's second line is the word
+  // "local demo profile" and it opens the dialog that says the same.
+  $("profile-chip-name").textContent = profile?.username || "Guest";
+  $("profile-button").setAttribute(
+    "aria-label",
+    profile
+      ? `Local demo profile ${profile.username}. Open profile and settings.`
+      : "Playing as Guest. Open local demo profiles and settings.",
+  );
 }
 async function switchDataContext(nextProfile) {
   if (phase === "playing") pause();
@@ -1179,6 +1189,11 @@ function openAccount() {
   $("account-dialog").showModal();
 }
 $("account-button").addEventListener("click", openAccount);
+$("profile-button").addEventListener("click", openAccount);
+// A mouse-only player's way out of a round: the same togglePause() Esc and the
+// gamepad's Start already call, on a labelled control that never sits over the
+// court. Both of those keep working untouched.
+$("top-pause").addEventListener("click", togglePause);
 $("close-account").addEventListener("click", () => $("account-dialog").close());
 $("register-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1375,7 +1390,7 @@ window.addEventListener("keydown", (e) => {
     }
     // Tab cycles the menu only; gameplay keys must not leak to the court.
     if (e.code === "Tab") {
-      const elements = padFocusables([$("pause-menu"), $("music-rail")]);
+      const elements = padFocusables([$("pause-menu"), $("top-bar")]);
       if (elements.length) {
         e.preventDefault();
         const current = elements.indexOf(document.activeElement);
@@ -1694,11 +1709,10 @@ function pollGamepad(dt) {
     });
   } else if (menuOpen) {
     if (tap(1) || tap(9)) dismissPauseMenu();
-    // The music rail is walked with the pause menu: it is where a controller
-    // player can reach the soundtrack without a mouse, and pausing is the only
-    // time the d-pad is free to leave the court.
-    else
-      nav([$("pause-menu"), $("music-rail")], () => $("pause-resume").click());
+    // The top bar is walked with the pause menu: it is where a controller
+    // player reaches the soundtrack and the profile without a mouse, and
+    // pausing is the only time the d-pad is free to leave the court.
+    else nav([$("pause-menu"), $("top-bar")], () => $("pause-resume").click());
   } else if (view === "arena" && phase === "playing" && !awaitingResume) {
     if (tap(0)) doPass();
     if (tap(2)) toggleBank();
@@ -1710,9 +1724,11 @@ function pollGamepad(dt) {
     else nav($("game-overlay"), () => $("start-button").click());
   } else if (view === "courts") {
     if (tap(1)) applyView("title");
-    else nav($("courts-view"), () => $("courts-back").click());
+    else nav([$("courts-view"), $("top-bar")], () => $("courts-back").click());
   } else if (view === "title") {
-    nav($("title-menu"), () => $("title-play").click());
+    // The bar comes after the menu in the walk, so the first d-pad step from a
+    // fresh load is still the next menu item and not the soundtrack.
+    nav([$("title-menu"), $("top-bar")], () => $("title-play").click());
   } else {
     nav(document.body);
   }

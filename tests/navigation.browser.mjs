@@ -669,26 +669,172 @@ await check(
       await page.locator("#title-play").click();
       await page.locator("#arena-view").waitFor({ state: "visible" });
       await noScroll("the arena");
-      // The side rails are drawn from the letterbox the canvas did not take,
-      // so they must never cost the court width. 90.7% is what a 1000:620
-      // court gets from a 16:9 window.
+      // The court is height-limited in any window wider than 1000:620, so the
+      // permanent top bar's row comes straight off the canvas: 90.7% of a
+      // 1920x1080 window before the bar, 87.0% after it. Emptying the two side
+      // gutters — the wordmark and the old second music player both moved into
+      // the bar — buys none of that back, because the spare width was never
+      // the constraint. 86% is the floor the drop must not slide past.
       const court = await page.locator("#court").boundingBox();
-      if (width / height > 1000 / 620)
+      // The bar reserves its own row rather than floating over the game.
+      const bar = await page.locator("#top-bar").boundingBox();
+      assert.ok(
+        bar.y + bar.height <= court.y + 0.5,
+        `the top bar must sit above the court, not over it, at ${width}x${height}: bar ends at ${bar.y + bar.height}, court starts at ${court.y}`,
+      );
+      if (width / height > 1000 / 620) {
+        // The bar is the ONLY thing the court gives up. Everything left below
+        // it goes to the canvas, so the largest 1000:620 rectangle that fits
+        // in the remaining height is what the court must actually measure.
+        const available = (height - bar.height) * (1000 / 620);
         assert.ok(
-          (court.width / width) * 100 > 90,
+          court.width >= Math.min(width, available) - 2,
+          `the court must take every pixel the top bar left at ${width}x${height}: got ${court.width.toFixed(1)}, expected ${available.toFixed(1)}`,
+        );
+        // And an absolute floor, so a bar that grew fat would still be caught.
+        assert.ok(
+          (court.width / width) * 100 > 84,
           `the court must keep its share of a ${width}x${height} window, got ${((court.width / width) * 100).toFixed(1)}%`,
         );
-      for (const id of ["brand-rail", "music-rail"]) {
-        const rail = await page.locator(`#${id}`).boundingBox();
-        assert.ok(
-          rail.x + rail.width <= court.x + 0.5 ||
-            rail.x + 0.5 >= court.x + court.width,
-          `${id} must sit beside the court, not over it, at ${width}x${height}`,
-        );
       }
+      if (width === 1920 && height === 1080)
+        assert.ok(
+          (court.width / width) * 100 > 86,
+          `a 1920x1080 window must still give the court ~87%, got ${((court.width / width) * 100).toFixed(1)}%`,
+        );
       assert.deepEqual(errors, []);
       await context.close();
     }
+  },
+);
+
+await check(
+  "the top bar carries one soundtrack player, the local demo profile and a mouse exit on every screen",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(baseURL, { waitUntil: "networkidle" });
+    // There is exactly one player in the document. The side rail this replaced
+    // was a second implementation of the same three controls, and it only
+    // existed while a round was on screen.
+    for (const selector of ["#music-toggle", "#music-skip", "#music-track"])
+      assert.equal(
+        await page.locator(selector).count(),
+        1,
+        `${selector} must exist exactly once now that the rail is gone`,
+      );
+    assert.equal(await page.locator("#brand-rail").count(), 0);
+    assert.equal(await page.locator("#music-rail").count(), 0);
+    const barIsUp = async (where) => {
+      await settled(page);
+      assert.equal(
+        await page.locator("#top-bar").isVisible(),
+        true,
+        `the top bar must be on screen on ${where}`,
+      );
+      for (const selector of [
+        "#music-toggle",
+        "#music-skip",
+        ".top-brand-mark",
+        "#profile-button",
+      ])
+        assert.equal(
+          await page.locator(selector).isVisible(),
+          true,
+          `${selector} must be on screen on ${where}`,
+        );
+    };
+    await barIsUp("the title screen");
+    // The chip names the local demo profile, and says that is what it is.
+    assert.match(
+      await page.locator("#profile-chip-name").textContent(),
+      /^Guest$/,
+    );
+    assert.match(
+      await page.locator(".profile-chip-kind").textContent(),
+      /local demo/i,
+    );
+    await page.locator("#title-courts").click();
+    await page.locator("#courts-view").waitFor({ state: "visible" });
+    await barIsUp("the courts screen");
+    await page.locator("#courts-back").click();
+    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    await barIsUp("the arena");
+    // The player still works from the bar during play, and the round keeps the
+    // keyboard afterwards rather than leaving focus parked on a bar button.
+    const before = await page.locator("#music-toggle").getAttribute("aria-pressed");
+    await page.locator("#music-toggle").click();
+    assert.notEqual(
+      await page.locator("#music-toggle").getAttribute("aria-pressed"),
+      before,
+      "the bar's play/pause must still switch the soundtrack during play",
+    );
+    await page.locator("#music-toggle").click();
+    // The profile chip opens the account surface that already existed.
+    await page.locator("#profile-button").click();
+    await page.locator("#account-dialog").waitFor({ state: "visible" });
+    assert.match(
+      await page.locator(".account-note").textContent(),
+      /not\s+online accounts/i,
+    );
+    await page.locator("#close-account").click();
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
+  "a mouse alone can leave a round through the top bar",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await gotoArena(page, baseURL);
+    await page.locator("#start-button").click();
+    await page.waitForFunction(
+      () => document.querySelector("#game-overlay")?.hidden === true,
+    );
+    // Only the mouse from here: no Escape, no gamepad. The Menu button lives in
+    // the bar, off the court, well away from the pass controls at its foot.
+    const bar = await page.locator("#top-bar").boundingBox();
+    const court = await page.locator("#court").boundingBox();
+    assert.ok(
+      bar.y + bar.height <= court.y + 0.5,
+      "the Menu button must not sit over the court",
+    );
+    assert.equal(await page.locator("#top-pause").isVisible(), true);
+    await page.locator("#top-pause").click();
+    await page.locator("#pause-menu").waitFor({ state: "visible" });
+    await page.locator("#pause-courts").click();
+    await page.locator("#courts-view").waitFor({ state: "visible" });
+    assert.equal(
+      await page
+        .locator("body")
+        .evaluate((el) => el.classList.contains("play-view")),
+      false,
+      "the mouse-only exit must actually leave the play view",
+    );
+    // Nothing on a menu screen has a pause menu to reach, so the button is not
+    // offered there.
+    assert.equal(await page.locator("#top-pause").isVisible(), false);
+    // Escape and the gamepad's Start still do exactly what they did.
+    await page.locator("#court-list button").first().click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
+    await page.locator("#pause-menu").waitFor({ state: "visible" });
+    await page.keyboard.press("Escape");
+    await page.locator("#pause-menu").waitFor({ state: "hidden" });
+    assert.deepEqual(errors, []);
+    await context.close();
   },
 );
 

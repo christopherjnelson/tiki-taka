@@ -29,6 +29,65 @@
   <body>
     <a class="skip-link" href="#main">Skip to the court</a>
     <div class="app-shell">
+      <!-- One bar, every screen, including during play. It carries the
+      wordmark, the single soundtrack player and the local demo profile. There
+      used to be two players — a side rail in the play-view gutter and the
+      switches in Settings — and two places the wordmark lived; this is the one
+      that is always on screen. It reserves its own row above <main>, so it can
+      never overlap the court, and it is walked by the d-pad alongside whatever
+      menu is open. -->
+      <header id="top-bar" class="top-bar">
+        <p class="top-brand">
+          <span class="top-brand-mark">tiki<span>-</span>taka</span>
+          <span class="top-brand-sub" aria-hidden="true">NO GOALS · ALL FLOW</span>
+        </p>
+        <div
+          id="music-player"
+          class="music-player"
+          role="group"
+          aria-label="Soundtrack"
+        >
+          <span class="music-player-heading" aria-hidden="true">SOUNDTRACK</span>
+          <span id="music-track" class="music-track" role="status" aria-live="off"
+            >—</span
+          >
+          <button
+            id="music-toggle"
+            type="button"
+            class="bar-button"
+            aria-pressed="true"
+            title="Play or pause the soundtrack"
+          >
+            <span aria-hidden="true">▮▮</span></button
+          ><button
+            id="music-skip"
+            type="button"
+            class="bar-button"
+            title="Skip to the next track"
+          >
+            <span aria-hidden="true">▶▶</span>
+          </button>
+        </div>
+        <!-- Item 3's answer to "a mouse cannot leave a round": a labelled
+        control that is always in the same off-court place, only during play,
+        far from the passing buttons at the foot of the canvas. Esc and Start
+        still do exactly what they did. -->
+        <button id="top-pause" type="button" class="bar-button top-pause">
+          <span aria-hidden="true">Ⅱ</span> Menu
+        </button>
+        <button
+          id="profile-button"
+          type="button"
+          class="profile-chip"
+          aria-haspopup="dialog"
+        >
+          <span class="profile-avatar" aria-hidden="true">◎</span>
+          <span class="profile-chip-text">
+            <span id="profile-chip-name" class="profile-chip-name">Guest</span>
+            <span class="profile-chip-kind">LOCAL DEMO PROFILE</span>
+          </span>
+        </button>
+      </header>
       <main id="main" class="main" tabindex="-1">
         <!-- The shell opens here: a title card and one vertical menu, so a
         controller has something to drive from the very first frame. -->
@@ -206,54 +265,10 @@
               </button>
             </div>
             <div id="court-wrap" class="court-wrap">
-              <!-- The court is 1000x620 inside a 16:9 window, so about 9% of
-              the screen is letterbox down the two sides in play view. These
-              two rails live in that space and nowhere else: they are sized
-              from the leftover width, so they cannot take a pixel from the
-              canvas, and each hides itself rather than overlap when its gutter
-              is too narrow to hold its contents honestly. -->
-              <div id="brand-rail" class="side-rail side-rail-left">
-                <div class="rail-inner brand-rail-inner" aria-hidden="true">
-                  <span class="brand-mark">tiki<span>-</span>taka</span>
-                  <span class="brand-sub">NO GOALS · ALL FLOW</span>
-                </div>
-              </div>
-              <div
-                id="music-rail"
-                class="side-rail side-rail-right"
-                role="group"
-                aria-label="Soundtrack"
-              >
-                <div class="rail-inner music-rail-inner">
-                  <span class="music-rail-heading" aria-hidden="true"
-                    >SOUNDTRACK</span
-                  >
-                  <span
-                    id="music-track"
-                    class="music-track"
-                    role="status"
-                    aria-live="off"
-                    >—</span
-                  >
-                  <button
-                    id="music-toggle"
-                    type="button"
-                    class="rail-button"
-                    aria-pressed="true"
-                    title="Play or pause the soundtrack"
-                  >
-                    <span aria-hidden="true">▮▮</span>
-                  </button>
-                  <button
-                    id="music-skip"
-                    type="button"
-                    class="rail-button"
-                    title="Skip to the next track"
-                  >
-                    <span aria-hidden="true">▶▶</span>
-                  </button>
-                </div>
-              </div>
+              <!-- The court is 1000x620 inside a 16:9 window, so there is a
+              band of letterbox down each side in play view. It used to hold
+              the wordmark and a second music player; both now live in the top
+              bar, and this space is left to the game. -->
               <canvas
                 id="court"
                 width="1000"

@@ -25,6 +25,10 @@
   --pink: #ff3aa7;
   --gold: #ffd64d;
   --court: #102e3c;
+  /* The one row the shell reserves for the top bar. The play view's court is
+     height-limited in a wide window, so this is exactly what the canvas pays
+     for having a player, a wordmark and a profile on every screen. */
+  --top-bar: 44px;
   --venue-accent: #27ead8;
   --display: "Tiki Display", Impact, sans-serif;
   --sign: "Tiki Signage", "Arial Narrow", sans-serif;
@@ -159,9 +163,11 @@ input:focus-visible {
   display: none !important;
 }
 .app-shell {
-  /* One column now that the navigation sidebar is gone: the shell is the
-     title card, the courts screen, or the court itself. */
-  min-height: 100svh;
+  /* One column: the permanent top bar, then the home screen or the court.
+     Fixed to the viewport rather than min-height so the bar's row always
+     comes out of the window and nothing below it can push the page into a
+     scroll. */
+  height: 100svh;
   display: flex;
   flex-direction: column;
 }
@@ -271,6 +277,7 @@ input:focus-visible {
 }
 .main {
   min-width: 0;
+  min-height: 0;
   flex: 1 1 0;
   display: flex;
   flex-direction: column;
@@ -841,11 +848,13 @@ body.play-view .game-footer {
    float on top hugging the court's own edges. The canvas keeps its 1000x620
    backing store, so courtPoint() and the engine's LIMITS are untouched. */
 body.play-view .app-shell {
-  display: block;
   max-width: none;
 }
 body.play-view .main {
-  height: 100svh;
+  /* Whatever the top bar left, and not a pixel of the window more. */
+  height: auto;
+  min-height: 0;
+  flex: 1 1 0;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -879,121 +888,221 @@ body.play-view #court {
   aspect-ratio: 1000/620;
   transform: translate(-50%, -50%);
 }
-/* The side rails.
-   The court is a 1000:620 rectangle inside a 16:9 window, so in play view
-   there is a band of letterbox down each side — about 89px a side at
-   1920x1080. The rails are that band and nothing more: their width is derived
-   from what the canvas did not take, so no arrangement of them can shrink the
-   court. When the window is tall and narrow the canvas is width-limited, the
-   band is zero, and the rails simply have nothing to occupy.
-   Each rail is its own inline-size container, so its contents can hide
-   themselves at a width where they would have to be crushed or overlap the
-   court to fit. Hiding is the graceful case; overflowing the page is not. */
-.side-rail {
-  display: none;
+/* The top bar.
+   It is a real row of the shell, not an overlay: .app-shell is a flex column
+   and this is its first child, so nothing it holds can ever sit over the
+   court. That costs the play view --top-bar of height, and the court is
+   height-limited in a 16:9 window, so the canvas gives that back — see the
+   note on body.play-view #court. Emptying the two side gutters was the trade:
+   one player and one wordmark on every screen instead of two implementations
+   that only existed while a round was on screen. */
+.top-bar {
+  flex: 0 0 auto;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--top-bar);
+  padding: 0 12px;
+  background: linear-gradient(100deg, #120c28, #2a1247);
+  border-bottom: 1px solid var(--line);
 }
-body.play-view .side-rail {
-  position: absolute;
-  z-index: 3;
-  top: 0;
-  bottom: 0;
-  display: grid;
-  place-items: center;
-  width: calc((100cqw - min(100cqw, 161.2903cqh)) / 2);
-  container-type: inline-size;
-  container-name: rail;
+:root[data-theme="light"] .top-bar {
+  background: linear-gradient(100deg, #ffffff, #f1ecff);
+}
+.top-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin: 0;
+  min-width: 0;
   overflow: hidden;
-  /* The rails sit beside the court, not over it, but a stray press near the
-     canvas edge must still reach the court. Only the player's own controls
-     opt back in. */
-  pointer-events: none;
 }
-body.play-view .side-rail-left {
-  left: 0;
+.top-brand-mark {
+  color: #fff;
+  text-transform: lowercase;
+  white-space: nowrap;
+  font: italic 800 22px/1 var(--display);
+  letter-spacing: -1px;
 }
-body.play-view .side-rail-right {
-  right: 0;
+:root[data-theme="light"] .top-brand-mark {
+  color: var(--ink);
 }
-.rail-inner {
-  height: 100%;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 12px;
-  padding: 18px 2px;
+.top-brand-mark span {
+  color: var(--cyan);
 }
-/* Below this the gutter cannot hold a 44px control and a legible label at
-   once, so the rail shows nothing rather than colliding with the court. */
-@container rail (max-width: 52px) {
-  .rail-inner {
-    display: none;
-  }
+.top-brand-sub {
+  color: var(--muted);
+  white-space: nowrap;
+  font: 700 8px var(--sign);
+  letter-spacing: 3px;
 }
-/* Vertical text is what makes a 60-90px gutter usable at all, and it reads
-   bottom-to-top so it does not fight the eye moving across the court. */
-.brand-mark,
-.brand-sub,
-.music-rail-heading,
+.music-player {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin-left: auto;
+}
+.music-player-heading {
+  color: var(--cyan);
+  white-space: nowrap;
+  font: 700 8px var(--sign);
+  letter-spacing: 3px;
+  opacity: 0.85;
+}
 .music-track {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
+  min-width: 0;
+  max-width: 22ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-/* The branding is deliberately quiet: the game has to win this contest. */
-.brand-rail-inner {
-  gap: 18px;
-  opacity: 0.42;
-}
-.brand-mark {
-  color: var(--ink);
-  text-transform: lowercase;
-  font: italic 800 clamp(20px, 3.4cqh, 34px) var(--display);
-  letter-spacing: -1px;
-}
-.brand-mark span {
-  color: var(--cyan);
-}
-.brand-sub {
-  color: var(--muted);
-  font: 700 9px var(--sign);
-  letter-spacing: 4px;
-}
-.music-rail-inner {
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
-  pointer-events: auto;
-}
-.music-rail-heading {
-  color: var(--cyan);
-  font: 700 8px var(--sign);
-  letter-spacing: 3px;
-  opacity: 0.75;
-}
-.music-track {
-  min-height: 0;
-  color: var(--ink);
+  color: #efe7ff;
   font: 700 11px var(--sign);
   letter-spacing: 1px;
-  opacity: 0.8;
 }
-.rail-button {
-  width: 100%;
-  max-width: 46px;
-  min-height: 38px;
-  padding: 0;
+:root[data-theme="light"] .music-track {
   color: var(--ink);
-  background: #0a0520cc;
-  border: 1px solid var(--line);
-  font-size: 10px;
 }
-.rail-button:hover,
-.rail-button:focus-visible,
-.rail-button.pad-focus {
+.bar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 40px;
+  min-height: 30px;
+  padding: 0 9px;
+  color: #efe7ff;
+  background: #0a052066;
+  border: 1px solid var(--line);
+  font: 700 10px var(--sign);
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+:root[data-theme="light"] .bar-button {
+  color: var(--ink);
+  background: #ffffffaa;
+}
+.bar-button:hover,
+.bar-button:focus-visible,
+.bar-button.pad-focus {
   color: #100923;
   background: var(--cyan);
   border-color: var(--cyan);
   outline: none;
+}
+/* Only a live round has a pause menu to reach, so the Menu button is only
+   there while one is on screen. display:none also takes it out of
+   padFocusables(), so the d-pad never lands on a control that does nothing. */
+.top-pause {
+  display: none;
+}
+body[data-view="arena"] .top-pause {
+  display: inline-flex;
+}
+/* Local demo data, and the chip says so. It opens the same #account-dialog
+   the Settings dialog has always opened; nothing here is an online account. */
+.profile-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px 0 8px;
+  color: #efe7ff;
+  background: #0a052066;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+:root[data-theme="light"] .profile-chip {
+  color: var(--ink);
+  background: #ffffffaa;
+}
+.profile-chip:hover,
+.profile-chip:focus-visible,
+.profile-chip.pad-focus {
+  color: #100923;
+  background: var(--cyan);
+  border-color: var(--cyan);
+  outline: none;
+}
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  color: var(--cyan);
+  background: #0a0520;
+  border-radius: 50%;
+  font-size: 13px;
+}
+.profile-chip:hover .profile-avatar,
+.profile-chip:focus-visible .profile-avatar,
+.profile-chip.pad-focus .profile-avatar {
+  color: var(--cyan);
+}
+.profile-chip-text {
+  display: grid;
+  min-width: 0;
+}
+.profile-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 11px var(--sign);
+  letter-spacing: 0.5px;
+}
+.profile-chip-kind {
+  color: inherit;
+  opacity: 0.6;
+  white-space: nowrap;
+  font: 700 7px var(--sign);
+  letter-spacing: 2px;
+}
+/* The bar drops its explanatory labels before it drops a control: on a narrow
+   window the wordmark, the track title and the three buttons survive, and the
+   sub-headings that only name what you are already looking at go. */
+@media (max-width: 900px) {
+  :root {
+    --top-bar: 40px;
+  }
+  .top-bar {
+    gap: 10px;
+    padding: 0 8px;
+  }
+  .top-brand-sub,
+  .music-player-heading,
+  .profile-chip-kind {
+    display: none;
+  }
+  .music-track {
+    max-width: 12ch;
+  }
+  .top-brand-mark {
+    font-size: 18px;
+  }
+}
+@media (max-width: 560px) {
+  .music-track {
+    display: none;
+  }
+  .profile-chip-name {
+    max-width: 8ch;
+  }
+}
+@media (orientation: landscape) and (max-height: 480px) {
+  :root {
+    --top-bar: 34px;
+  }
+  .top-brand-mark {
+    font-size: 16px;
+  }
+  .bar-button {
+    min-height: 26px;
+  }
+  .profile-chip {
+    min-height: 26px;
+  }
 }
 /* Both bars are sized to the court, not the window, so they never sit over the
    letterbox and never steal a row from the canvas. */
@@ -1270,7 +1379,7 @@ body.play-view #focus-button {
     padding: 0 190px 4px 4px;
   }
   .game-panel {
-    height: calc(100svh - 48px);
+    height: calc(100svh - 48px - var(--top-bar));
   }
   .scoreboard {
     min-height: 50px;
@@ -1444,7 +1553,8 @@ body.play-view #focus-button {
     position: relative;
     width: 100vw;
     max-width: 100vw;
-    height: 100svh;
+    height: auto;
+    flex: 1 1 0;
     min-height: 0;
     padding: 0 190px 4px 4px;
     overflow: hidden;
@@ -1657,7 +1767,11 @@ body.play-view #focus-button {
     height: 100svh;
   }
   .main {
-    height: 100svh;
+    /* The window minus the top bar's row, taken by flex rather than by
+       subtracting a number, so the bar's height lives in one place. */
+    height: auto;
+    min-height: 0;
+    flex: 1 1 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
