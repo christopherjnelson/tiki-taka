@@ -915,6 +915,30 @@ body.play-view .below-court,
 body.play-view .game-footer {
   display: none;
 }
+/* Play view is permanent in the arena, so the sidebar is always a drawer here.
+   The drawer styling below lives only inside height-constrained media queries,
+   which left tall desktop screens showing a backdrop over a display:none
+   sidebar - i.e. no way to reach settings mid-game. */
+body.play-view.sidebar-open .sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 70;
+  display: flex;
+  width: min(300px, 86vw);
+  height: 100svh;
+  overflow-y: auto;
+}
+body.play-view.sidebar-open .sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  background: #060311b8;
+  border: 0;
+}
 body.play-view .app-shell {
   display: block;
   max-width: none;

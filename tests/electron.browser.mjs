@@ -82,18 +82,10 @@ try {
     await page.evaluate(() => window.open("https://example.com")),
     null,
   );
-  await page.locator("#fullscreen-button").click();
-  await page.waitForFunction(
-    () => document.fullscreenElement === document.documentElement,
-    null,
-    { timeout: 5_000 },
-  );
-  await page.evaluate(() => document.exitFullscreen());
-  await page.waitForFunction(() => document.fullscreenElement === null, null, {
-    timeout: 5_000,
-  });
-  await waitForNativeFullscreen(app, false);
-  mark("HTML fullscreen toggled");
+  // The shell now opens fullscreen like a game, so assert that first: the
+  // window must already be fullscreen before anything toggles it.
+  await waitForNativeFullscreen(app, true);
+  mark("launches fullscreen");
   await app.evaluate(({ BrowserWindow }) => {
     globalThis.__tikiInputEvents = [];
     const win = BrowserWindow.getAllWindows()[0];
@@ -114,21 +106,40 @@ try {
     contents.sendInputEvent({ type: "keyDown", keyCode: "F11" });
     contents.sendInputEvent({ type: "keyUp", keyCode: "F11" });
   });
+  // Starting fullscreen, the first F11 must leave it.
   await pressF11();
   try {
-    await waitForNativeFullscreen(app, true);
+    await waitForNativeFullscreen(app, false);
   } catch (error) {
     const inputs = await app.evaluate(() => globalThis.__tikiInputEvents);
     error.message += `; captured input=${JSON.stringify(inputs)}`;
     throw error;
   }
-  await pressF11();
+  // Windowed, the in-page button still performs a real HTML fullscreen
+  // round-trip; it only refuses (and toasts) while the shell owns fullscreen.
+  await page.locator("#fullscreen-button").click();
+  await page.waitForFunction(
+    () => document.fullscreenElement === document.documentElement,
+    null,
+    { timeout: 5_000 },
+  );
+  await page.evaluate(() => document.exitFullscreen());
+  await page.waitForFunction(() => document.fullscreenElement === null, null, {
+    timeout: 5_000,
+  });
   await waitForNativeFullscreen(app, false);
+  mark("HTML fullscreen toggled");
+  // And F11 restores the shell fullscreen it started in.
+  await pressF11();
+  await waitForNativeFullscreen(app, true);
   mark("F11 fullscreen toggled");
   await page.locator("#home-continue").click();
   await page.locator("#start-button").click();
   await page.keyboard.press("Space");
   await page.locator("#pause-button").click();
+  // Play view is permanent, so the sidebar is always a drawer in the arena and
+  // settings live behind the menu toggle until the pause menu absorbs them.
+  await page.locator("#sidebar-toggle").click();
   await page.locator("#settings-button").click();
   assert.equal(
     await page.locator("#settings-dialog").evaluate((dialog) => dialog.open),
@@ -136,6 +147,14 @@ try {
   );
   mark("gameplay and settings controls exercised");
   await page.locator("#close-settings").click();
+  // Dismiss the drawer we opened to reach settings; its backdrop would
+  // otherwise sit over the overlay buttons.
+  await page.locator("#sidebar-backdrop").click();
+  await page.waitForFunction(
+    () => !document.body.classList.contains("sidebar-open"),
+    null,
+    { timeout: 5_000 },
+  );
   if (await page.locator("#game-overlay").isVisible())
     await page.locator("#start-button").click();
   const stabilityEnd = Date.now() + stabilityMs;
