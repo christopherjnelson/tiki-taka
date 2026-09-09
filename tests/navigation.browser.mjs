@@ -79,16 +79,17 @@ async function openPauseMenu(page) {
     await page.locator("#pause-menu").waitFor({ state: "visible" });
   }
 }
-// Leaving the arena now goes through the pause menu, which is the replacement
-// for both the old workspace Home button and the sidebar drawer.
-async function leaveToCourts(page) {
+// Leaving the arena goes through the pause menu, which is the replacement for
+// both the old workspace Home button and the sidebar drawer. It lands on home,
+// which is now also the court picker.
+async function leaveToHome(page) {
   await openPauseMenu(page);
   await page.locator("#pause-courts").click();
-  await page.locator("#courts-view").waitFor({ state: "visible" });
+  await page.locator("#home-view").waitFor({ state: "visible" });
 }
 
 await check(
-  "fresh launch presents a gamepad-ready title screen with the progress one step behind it",
+  "fresh launch presents one gamepad-ready home screen holding the demo, the courts, the modes and the progress",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
@@ -97,28 +98,32 @@ await check(
     const page = await context.newPage(),
       errors = errorsFor(page);
     await page.goto(baseURL, { waitUntil: "networkidle" });
-    assert.equal(await page.locator("#title-view").isVisible(), true);
-    assert.equal(await page.locator("#courts-view").isHidden(), true);
+    assert.equal(await page.locator("#home-view").isVisible(), true);
     assert.equal(await page.locator("#arena-view").isHidden(), true);
-    // A game, not a dashboard: one vertical menu and nothing else.
+    // There is no separate courts page any more, so there is nothing behind
+    // home and no entry pointing at it.
+    assert.equal(await page.locator("#courts-view").count(), 0);
+    assert.equal(await page.locator("#title-courts").count(), 0);
+    assert.equal(await page.locator("#courts-back").count(), 0);
+    // A game, not a dashboard: one vertical menu, and it no longer has to
+    // offer a way to the courts because the courts are already on screen.
     assert.deepEqual(
       await page.evaluate(() =>
         [...document.querySelectorAll("#title-menu button")]
           .filter((el) => !el.hidden)
           .map((el) => el.id),
       ),
-      ["title-play", "title-courts", "settings-button"],
-      "the title menu offers Play, Courts and Settings and nothing else",
+      ["title-play", "settings-button"],
+      "the home menu offers Play and Settings and nothing else",
     );
     // Keyboard and controller both start on the menu with no clicking first.
     assert.equal(
       await page.evaluate(() => document.activeElement?.id),
       "title-play",
     );
-    // Every earned statistic the old dashboard showed still exists, on Courts.
-    await page.locator("#title-courts").click();
-    await page.locator("#courts-view").waitFor({ state: "visible" });
-    assert.equal(page.url().endsWith("#courts"), true);
+    // The demo, the courts, the modes and every earned statistic the old
+    // dashboard showed are all on this one screen, with nothing clicked.
+    assert.equal(await page.locator("#attract-court").isVisible(), true);
     assert.equal(await page.locator("[data-home-mode]").count(), 4);
     assert.equal(await page.locator(".court-item").count(), 6);
     assert.match(await page.locator("#level-label").textContent(), /LEVEL 1/i);
@@ -146,9 +151,13 @@ await check(
       path: new URL("home-desktop.png", outputDir).pathname,
       fullPage: true,
     });
-    // Escape walks back out of Courts without touching the mouse.
+    // Escape used to walk back out of the courts page. There is nowhere to
+    // walk back to now, and pressing it must leave home exactly as it was
+    // rather than blanking the view or throwing.
     await page.keyboard.press("Escape");
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await settled(page);
+    assert.equal(await page.locator("#home-view").isVisible(), true);
+    assert.equal(await page.locator("#court-list button").count(), 6);
     assert.deepEqual(errors, []);
     await context.close();
   },
@@ -204,11 +213,12 @@ await check(
     const beforeHome = await page.evaluate(() => ({
       time: window.__navGame.time,
     }));
-    await leaveToCourts(page);
-    assert.equal(await page.locator("#courts-view").isVisible(), true);
-    await page.locator("#courts-back").click();
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await leaveToHome(page);
+    assert.equal(await page.locator("#home-view").isVisible(), true);
+    // Home is the courts screen, so a paused round is still offered as Resume
+    // from the very menu that shows the six courts.
     assert.match(await page.locator("#title-play").textContent(), /Resume/i);
+    assert.equal(await page.locator("#court-list button").count(), 6);
     const frozen = await page.evaluate(() => window.__navGame.time);
     await page.waitForTimeout(180);
     assert.equal(
@@ -219,8 +229,6 @@ await check(
       true,
       "leaving the arena must freeze the active round",
     );
-    await page.locator("#title-courts").click();
-    await page.locator("#courts-view").waitFor({ state: "visible" });
     await page.locator('[data-home-mode="daily"]').click();
     assert.match(
       await page.locator("#overlay-kicker").textContent(),
@@ -241,7 +249,7 @@ await check(
       true,
       "resume keeps the same round time",
     );
-    await leaveToCourts(page);
+    await leaveToHome(page);
     await page.locator('[data-home-mode="daily"]').click();
     await page.locator("#secondary-button").click();
     assert.match(await page.locator("#mode-label").textContent(), /DAILY/i);
@@ -249,7 +257,7 @@ await check(
     await page.goBack();
     await page.waitForFunction(() => location.hash !== "#play");
     assert.equal(await page.locator("#arena-view").isHidden(), true);
-    await page.locator("#courts-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     await page.locator(".court-item").nth(4).click();
     assert.match(await page.locator("#court-title").textContent(), /The Cage/i);
     assert.equal(page.url().endsWith("#play"), true);
@@ -322,7 +330,7 @@ await check(
     await page.locator("#close-settings").click();
     // Courts is one press away from the same menu.
     await page.locator("#pause-courts").click();
-    await page.locator("#courts-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(await page.locator(".court-item").count(), 6);
     assert.deepEqual(errors, []);
     await context.close();
@@ -408,10 +416,10 @@ await check(
     );
     await page.keyboard.press("KeyP");
     await page.locator("#pause-courts").click();
-    await page.locator("#courts-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     await page.keyboard.press("KeyP");
     assert.equal(
-      await page.locator("#courts-view").isVisible(),
+      await page.locator("#home-view").isVisible(),
       true,
       "custom pause key cannot activate hidden Arena controls from Courts",
     );
@@ -513,7 +521,7 @@ await check(
 );
 
 await check(
-  "the title screen and its menus remain usable at portrait and compact landscape sizes",
+  "home and its menus remain usable at portrait and compact landscape sizes",
   async () => {
     for (const [width, height, suffix] of [
       [390, 844, "mobile"],
@@ -529,8 +537,8 @@ await check(
         errors = errorsFor(page);
       await page.goto(baseURL);
       await settled(page);
-      assert.equal(await page.locator("#title-view").isVisible(), true);
-      for (const id of ["title-play", "title-courts", "settings-button"]) {
+      assert.equal(await page.locator("#home-view").isVisible(), true);
+      for (const id of ["title-play", "settings-button"]) {
         const box = await page.locator(`#${id}`).boundingBox();
         assert.ok(
           box && box.x >= -1 && box.x + box.width <= width + 1,
@@ -550,8 +558,9 @@ await check(
         fullPage: true,
       });
       await page.locator("#close-settings").tap();
-      await page.locator("#title-courts").tap();
-      await page.locator("#courts-view").waitFor({ state: "visible" });
+      // Home is the courts screen on a phone too — there is no second page to
+      // tap through to, so the same view has to hold without overflowing.
+      await page.locator("#home-view").waitFor({ state: "visible" });
       assert.equal(
         await page.evaluate(
           () =>
@@ -559,7 +568,7 @@ await check(
             document.documentElement.clientWidth,
         ),
         true,
-        `${suffix} courts screen must not overflow horizontally`,
+        `${suffix} home screen must not overflow horizontally`,
       );
       assert.deepEqual(errors, []);
       await context.close();
@@ -568,7 +577,7 @@ await check(
 );
 
 await check(
-  "a cold load opens the title screen even when the URL still says #play",
+  "a cold load opens home even when the URL still says #play",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 800 },
@@ -580,7 +589,7 @@ await check(
     // bookmark, a reopened tab and a refresh. A returning player must still
     // land on the menu rather than in the arena on a ready-state overlay.
     await page.goto(`${baseURL}/#play`);
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(
       await page.locator("#arena-view").isHidden(),
       true,
@@ -596,13 +605,13 @@ await check(
     await page.locator("#arena-view").waitFor({ state: "visible" });
     assert.equal(page.url().endsWith("#play"), true);
     await page.goBack();
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     await page.goForward();
     await page.locator("#arena-view").waitFor({ state: "visible" });
     // ...but a reload from the arena is a cold load, and cold loads open the
     // title screen.
     await page.reload();
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(await page.locator("#arena-view").isHidden(), true);
     assert.deepEqual(errors, []);
     await context.close();
@@ -610,7 +619,7 @@ await check(
 );
 
 await check(
-  "nothing scrolls at 1080x1024, and the court keeps its share of the window",
+  "nothing scrolls at 1080x1024, 1280x720 or 1920x1080, and the court keeps its share of the window",
   async () => {
     for (const [width, height] of [
       [1080, 1024],
@@ -624,7 +633,7 @@ await check(
       const page = await context.newPage();
       const errors = errorsFor(page);
       await page.goto(`${baseURL}/`);
-      await page.locator("#title-view").waitFor({ state: "visible" });
+      await page.locator("#home-view").waitFor({ state: "visible" });
       const noScroll = async (where) => {
         await settled(page);
         const box = await page.evaluate(() => ({
@@ -642,12 +651,41 @@ await check(
           `${where} scrolls down at ${width}x${height}: ${box.scrollHeight} > ${box.clientHeight}`,
         );
       };
-      await noScroll("the title screen");
-      await page.locator("#title-courts").click();
-      await page.locator("#courts-view").waitFor({ state: "visible" });
-      await noScroll("the courts screen");
-      await page.locator("#courts-back").click();
-      await page.locator("#title-view").waitFor({ state: "visible" });
+      await noScroll("home");
+      // Home holds the demo, the courts, the modes and the progress at once,
+      // so it is not enough that the document does not scroll: the view's own
+      // box must not be an overflowing scroller either.
+      const inner = await page
+        .locator("#home-view")
+        .evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          scrollHeight: el.scrollHeight,
+          clientWidth: el.clientWidth,
+          clientHeight: el.clientHeight,
+        }));
+      assert.ok(
+        inner.scrollHeight <= inner.clientHeight &&
+          inner.scrollWidth <= inner.clientWidth,
+        `home needs ${inner.scrollWidth}x${inner.scrollHeight} inside ${inner.clientWidth}x${inner.clientHeight} at ${width}x${height}`,
+      );
+      for (const selector of [
+        "#attract-court",
+        "#court-list",
+        ".home-modes",
+        ".home-progress",
+        "#title-play",
+      ]) {
+        const box = await page.locator(selector).boundingBox();
+        assert.ok(
+          box &&
+            box.y >= -1 &&
+            box.x >= -1 &&
+            box.y + box.height <= height + 1 &&
+            box.x + box.width <= width + 1,
+          `${selector} must be fully on screen at ${width}x${height}: ${JSON.stringify(box)}`,
+        );
+      }
+      assert.equal(await page.locator("#court-list button").count(), 6);
       await page.locator("#settings-button").click();
       await page.locator("#settings-dialog").waitFor({ state: "visible" });
       await noScroll("the settings screen");
@@ -758,11 +796,6 @@ await check(
       await page.locator(".profile-chip-kind").textContent(),
       /local demo/i,
     );
-    await page.locator("#title-courts").click();
-    await page.locator("#courts-view").waitFor({ state: "visible" });
-    await barIsUp("the courts screen");
-    await page.locator("#courts-back").click();
-    await page.locator("#title-view").waitFor({ state: "visible" });
     await page.locator("#title-play").click();
     await page.locator("#arena-view").waitFor({ state: "visible" });
     await barIsUp("the arena");
@@ -815,7 +848,7 @@ await check(
     await page.locator("#top-pause").click();
     await page.locator("#pause-menu").waitFor({ state: "visible" });
     await page.locator("#pause-courts").click();
-    await page.locator("#courts-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(
       await page
         .locator("body")
@@ -833,6 +866,85 @@ await check(
     await page.locator("#pause-menu").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
     await page.locator("#pause-menu").waitFor({ state: "hidden" });
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
+  "the home demo runs from the shell's one loop and is torn down on the way into a round",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(`${baseURL}/`);
+    await page.locator("#home-view").waitFor({ state: "visible" });
+    // Count updates per Game instance, split by whose they are. The demo marks
+    // itself with config.attract; a round the player started does not.
+    await page.evaluate(async () => {
+      const { Game } = await import("/src/game.js");
+      const update = Game.prototype.update;
+      window.__ticks = { attract: 0, round: 0, attractInstances: new Set() };
+      Game.prototype.update = function (...args) {
+        if (this.config.attract) {
+          window.__ticks.attract++;
+          window.__ticks.attractInstances.add(this);
+        } else window.__ticks.round++;
+        return update.apply(this, args);
+      };
+    });
+    await settled(page);
+    assert.ok(
+      await page.evaluate(() => window.__ticks.attract > 0),
+      "the demo must actually be running on home",
+    );
+    assert.equal(
+      await page.evaluate(() => window.__ticks.round),
+      0,
+      "nothing but the demo runs while home is on screen",
+    );
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    await page.locator("#start-button").click();
+    await settled(page);
+    await page.evaluate(() => {
+      window.__ticks.attract = 0;
+      window.__ticks.round = 0;
+    });
+    await page.waitForTimeout(400);
+    const ticks = await page.evaluate(() => ({
+      attract: window.__ticks.attract,
+      round: window.__ticks.round,
+    }));
+    assert.equal(
+      ticks.attract,
+      0,
+      `the demo must stop when a real round starts, got ${ticks.attract} demo updates`,
+    );
+    assert.ok(ticks.round > 0, "the round itself must be running");
+    // Back to home and out again: the demo restarts rather than leaking a
+    // second instance that would then be stepped alongside the first.
+    await leaveToHome(page);
+    await settled(page);
+    await page.evaluate(() => {
+      window.__ticks.attract = 0;
+    });
+    await page.waitForTimeout(400);
+    const restarted = await page.evaluate(() => ({
+      attract: window.__ticks.attract,
+      instances: window.__ticks.attractInstances.size,
+    }));
+    assert.ok(restarted.attract > 0, "the demo must come back on home");
+    // One demo Game per visit, never two alive at once: over ~400ms at 60fps a
+    // single stepped instance gives roughly one update per frame, so twice
+    // that would mean two loops.
+    assert.ok(
+      restarted.attract < 60,
+      `the demo must be stepped once a frame, got ${restarted.attract} updates in 400ms`,
+    );
     assert.deepEqual(errors, []);
     await context.close();
   },

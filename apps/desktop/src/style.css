@@ -52,8 +52,7 @@ html,
 body,
 .app-shell,
 .main,
-.title-view,
-.courts-view,
+.home-view,
 .arena-view,
 .menu-list,
 .court-list,
@@ -69,8 +68,7 @@ html::-webkit-scrollbar,
 body::-webkit-scrollbar,
 .app-shell::-webkit-scrollbar,
 .main::-webkit-scrollbar,
-.title-view::-webkit-scrollbar,
-.courts-view::-webkit-scrollbar,
+.home-view::-webkit-scrollbar,
 .arena-view::-webkit-scrollbar,
 .menu-list::-webkit-scrollbar,
 .court-list::-webkit-scrollbar,
@@ -1637,14 +1635,12 @@ body.play-view #focus-button {
   grid-template-columns: 248px minmax(0, 1fr);
 }
 .home-modes {
-  display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
-  margin-top: 16px;
 }
 .home-modes button {
-  min-height: 98px;
-  padding: 14px;
+  min-height: 76px;
+  padding: 11px 13px;
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1660,33 +1656,35 @@ body.play-view #focus-button {
 }
 .home-modes strong {
   text-transform: uppercase;
-  font: 700 20px var(--sign);
+  font: 700 16px var(--sign);
 }
 .home-modes span {
-  margin-top: 11px;
+  margin-top: 8px;
   color: var(--muted);
   font-size: 11px;
-  line-height: 1.45;
+  line-height: 1.4;
 }
+/* In the menu column this is one narrow panel, so the level block sits above
+   the six counters rather than beside them. */
 .home-progress {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 24px;
+  width: 100%;
   margin-top: 16px;
-  padding: 14px 18px;
+  display: grid;
+  gap: 12px;
+  padding: 11px 14px;
   background: var(--surface);
   border: 1px solid var(--line);
 }
 .home-progress strong {
   display: block;
-  margin: 9px 0;
-  font: 700 24px var(--sign);
+  margin: 7px 0;
+  font: 700 17px var(--sign);
   text-transform: uppercase;
 }
 .home-progress dl {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 6px;
   margin: 0;
 }
 .account-note {
@@ -1737,7 +1735,8 @@ body.play-view #focus-button {
   border-left: 4px solid var(--cyan);
 }
 .home-progress dl div {
-  padding-left: 12px;
+  min-width: 0;
+  padding-left: 9px;
   border-left: 1px solid var(--line);
 }
 .home-progress dt {
@@ -1746,9 +1745,9 @@ body.play-view #focus-button {
   font: 700 8px var(--sign);
 }
 .home-progress dd {
-  margin: 8px 0 0;
+  margin: 4px 0 0;
   color: var(--pink);
-  font: italic 800 26px var(--display);
+  font: italic 800 19px var(--display);
 }
 .arena-view {
   flex: 1 1 0;
@@ -1788,7 +1787,7 @@ body.play-view .arena-view .below-court {
     padding: 0 13px 18px;
   }
   .home-modes,
-  .courts-view .court-list {
+  .home-courts .court-list {
     grid-template-columns: 1fr 1fr;
   }
   .home-progress {
@@ -1797,65 +1796,122 @@ body.play-view .arena-view .below-court {
 }
 @media (max-width: 560px) {
   .home-modes,
-  .courts-view .court-list {
+  .home-courts .court-list {
     grid-template-columns: 1fr;
   }
   .home-progress dl {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
   .account-grid {
     grid-template-columns: 1fr;
   }
 }
 
-/* ── Game shell ─────────────────────────────────────────────────────────────
-   The app opens on a title card with one vertical menu instead of a web
-   dashboard, and every menu here is driven by the same padNavigate helper the
-   arena uses, so a controller can reach everything from the first frame. */
-.title-view {
+/* ── Home ───────────────────────────────────────────────────────────────────
+   One screen. The demo, the menu, the courts, the modes and your progress used
+   to be a title card and a separate courts page; splitting them meant a step
+   between wanting to play and picking where. Three columns and a strip:
+
+     intro | stage (demo over progress) | courts
+     ------------------ modes ------------------
+
+   Nothing here is allowed to make the page scroll. The shell is already capped
+   at the viewport height, and everything inside is sized from the row it was
+   given — the demo canvas most of all, which is a size container so it takes
+   the largest 1000:620 rectangle that fits rather than dictating one. */
+.home-view {
   flex: 1 1 0;
   min-height: 0;
   display: grid;
-  place-items: center;
-  padding: 24px 20px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-content: center;
+  gap: 14px 20px;
+  width: min(100%, 1720px);
+  margin-inline: auto;
+  padding: 16px 20px;
   overflow-y: auto;
 }
-.title-view[hidden],
-.courts-view[hidden] {
+.home-view[hidden] {
   display: none;
 }
-.title-card {
-  width: min(520px, 100%);
+.home-intro {
+  min-width: 0;
+  align-self: center;
   text-align: center;
 }
-/* The attract demo is an extra, not a requirement: it is off by default and
-   only appears where there is honestly room for it beside the menu. Hiding it
-   rather than letting it shrink or wrap is what keeps the title screen free of
-   scrolling on small and short windows. */
-.title-demo {
+/* The attract demo and the court picker are extras on a small window: below
+   this the three columns cannot each hold their contents honestly, so home
+   falls back to the menu alone rather than scrolling or crushing them. */
+.home-stage,
+.home-courts,
+.home-modes {
   display: none;
 }
 @media (min-width: 980px) and (min-height: 620px) {
-  .title-view {
-    grid-template-columns: minmax(300px, 440px) minmax(0, 1fr);
-    align-items: center;
-    column-gap: 40px;
-    width: min(100%, 1440px);
-    margin-inline: auto;
+  .home-view {
+    grid-template-columns:
+      minmax(260px, 24%)
+      minmax(0, 1fr)
+      minmax(250px, 24%);
+    grid-template-rows: minmax(0, 1fr) auto;
+    align-content: stretch;
+    text-align: left;
+  }
+  .home-intro {
+    min-height: 0;
+    display: grid;
+    align-content: center;
+    grid-template-rows: auto;
+    text-align: left;
+    overflow: hidden;
+  }
+  /* Demo and caption only, centred in the column. The progress panel moved to
+     the menu column, which has the vertical slack; this column's height is
+     spent on the canvas. */
+  .home-stage {
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto auto;
+    align-content: center;
+    justify-items: center;
+    gap: 8px;
+    /* A size container, so the canvas can be asked for "the biggest 1000:620
+       box that fits in this column" — see .title-demo canvas below. */
+    container-type: size;
+  }
+  .home-courts {
+    min-width: 0;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 10px;
+  }
+  /* Six courts sharing the column's height, so the list reads as the whole
+     side of the screen rather than a stub hanging off the top of it. */
+  .home-courts .court-list {
+    grid-auto-rows: minmax(54px, 1fr);
+    align-content: stretch;
+  }
+  .home-modes {
+    grid-column: 1 / -1;
+    display: grid;
   }
   .title-demo {
     display: grid;
-    gap: 10px;
-    justify-items: center;
-    /* The renderer stretches its 1000x620 world to whatever box it is given,
-       so the canvas has to keep that ratio exactly or the court skews. Width
-       is therefore capped by the height the viewport can spare, which is what
-       stops a wide-but-short window from pushing the demo off the bottom. */
-    width: min(100%, calc((100svh - 260px) * 1.613));
+    place-items: center;
+    min-width: 0;
+    min-height: 0;
   }
+  /* The renderer stretches its 1000x620 world to whatever box it is given, so
+     the ratio has to be exact or the court skews. Width is therefore taken
+     from .home-stage's own box: the whole column, less the 26px the caption
+     line under the canvas needs, converted back through 1000/620. */
   .title-demo canvas {
     display: block;
-    width: 100%;
+    width: min(100cqw, calc((100cqh - 26px) * 1.6129));
+    height: auto;
     aspect-ratio: 1000 / 620;
     background: var(--panel);
     border: 1px solid var(--line);
@@ -1867,19 +1923,22 @@ body.play-view .arena-view .below-court {
     letter-spacing: 3px;
   }
 }
+/* The wordmark is in the top bar on every screen now, so home's copy of it no
+   longer has to carry the branding on its own — and it has a 24% column to sit
+   in rather than half the window. */
 .game-title {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: var(--ink);
   text-transform: lowercase;
-  font: italic 800 clamp(64px, 11vw, 132px) / 0.82 var(--display);
-  letter-spacing: -3px;
-  text-shadow: 6px 6px 0 #ff3aa7cc;
+  font: italic 800 clamp(38px, 4.4vw, 76px) / 0.86 var(--display);
+  letter-spacing: -2px;
+  text-shadow: 4px 4px 0 #ff3aa7cc;
 }
 .game-title span {
   color: var(--cyan);
 }
 .title-tagline {
-  margin: 12px 0 0;
+  margin: 9px 0 0;
   color: var(--cyan);
   font: 700 11px var(--sign);
   letter-spacing: 5px;
@@ -1887,7 +1946,7 @@ body.play-view .arena-view .below-court {
 .menu-list {
   display: grid;
   gap: 9px;
-  margin: 30px 0 0;
+  margin: 18px 0 0;
 }
 .menu-item {
   display: flex;
@@ -1933,7 +1992,7 @@ body.play-view .arena-view .below-court {
   opacity: 1;
 }
 .title-note {
-  margin: 18px 0 0;
+  margin: 13px 0 0;
   color: var(--cyan);
   font: 700 10px var(--sign);
   letter-spacing: 2px;
@@ -1943,44 +2002,30 @@ body.play-view .arena-view .below-court {
   color: var(--muted);
   font-size: 10px;
 }
-.courts-view {
-  flex: 1 1 0;
-  min-height: 0;
-  width: min(1180px, 100%);
-  margin: 0 auto;
-  padding: 18px 26px 26px;
-  overflow-y: auto;
-}
 .courts-bar {
   display: flex;
-  align-items: center;
-  gap: 18px;
-  margin-bottom: 16px;
+  align-items: baseline;
+  gap: 12px;
 }
-.courts-bar h1 {
+.courts-bar h2 {
   flex: 1;
   margin: 0;
-  font-size: clamp(28px, 4vw, 52px);
-}
-.menu-item.back {
-  width: auto;
-  min-height: 44px;
-  padding: 8px 16px;
-  font-size: 13px;
+  text-transform: uppercase;
+  color: var(--ink);
+  font: italic 800 clamp(20px, 1.9vw, 32px) / 0.9 var(--display);
+  letter-spacing: -1px;
 }
 .courts-count {
   color: var(--pink);
   font: 700 9px var(--sign);
   letter-spacing: 1px;
 }
-.courts-view .court-list {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.courts-view .home-modes {
-  margin-top: 16px;
-}
-.courts-view .home-progress {
-  margin-top: 16px;
+/* One column of six on home: the courts sit beside the demo rather than under
+   it, so they read as a list you scan down and never need a second page. */
+.home-courts .court-list {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  min-height: 0;
 }
 .court-list button.pad-focus,
 .home-modes button.pad-focus {
@@ -2085,10 +2130,10 @@ body.play-view .arena-view .below-court {
   margin-top: 14px;
 }
 @media (max-width: 900px) {
-  .courts-view .court-list {
+  .home-courts .court-list {
     grid-template-columns: 1fr 1fr;
   }
-  .courts-view {
+  .home-view {
     padding: 14px 14px 22px;
   }
   .menu-item {
@@ -2097,7 +2142,7 @@ body.play-view .arena-view .below-court {
   }
 }
 @media (max-width: 560px) {
-  .courts-view .court-list {
+  .home-courts .court-list {
     grid-template-columns: 1fr;
   }
   .courts-bar {

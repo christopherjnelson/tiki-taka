@@ -561,7 +561,7 @@ async function offlineReload(baseURL) {
     // A reload is a cold load, and cold loads open the title screen whatever
     // the hash says, so the way to the arena offline is the same menu a player
     // would use. That the menu renders at all is itself the precache working.
-    await page.locator('#title-view').waitFor({ state: 'visible' });
+    await page.locator('#home-view').waitFor({ state: 'visible' });
     await page.locator('#title-play').click();
     await page.locator('#arena-view').waitFor({ state: 'visible' });
     // Play view hides the court heading, so read the arena's live labels instead.

@@ -411,7 +411,7 @@ await check(
       await page.locator("html").getAttribute("data-theme"),
       "light",
     );
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     await page.locator("#title-play").click();
     await page.locator("#arena-view").waitFor({ state: "visible" });
     await useSettingsControl(page, "#theme-button");
@@ -439,16 +439,16 @@ await check(
     );
     await closePauseMenu(page);
     await page.reload();
-    // A reload is a cold load, so it opens the title screen rather than
+    // A reload is a cold load, so it opens home rather than
     // dropping straight back into the arena. Once the player asks for the
     // arena again it is still Play view, which is what this is checking.
-    await page.locator("#title-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(
       await page
         .locator("body")
         .evaluate((el) => el.classList.contains("play-view")),
       false,
-      "a cold load lands on the title screen, not in Play view",
+      "a cold load lands on home, not in Play view",
     );
     await page.locator("#title-play").click();
     await page.locator("#arena-view").waitFor({ state: "visible" });
@@ -518,10 +518,10 @@ await check(
     await page.screenshot({
       path: new URL("interface-play-view.png", outputDir).pathname,
     });
-    // Pause -> Courts leaves the play-view presentation for the courts screen.
+    // Pause -> Home leaves the play-view presentation for the home screen.
     await openPauseMenu(page);
     await page.locator("#pause-courts").click();
-    await page.locator("#courts-view").waitFor({ state: "visible" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
     assert.equal(
       await page
         .locator("body")
@@ -588,7 +588,7 @@ await check(
       if (await page.locator("#arena-view").isVisible()) {
         await openPauseMenu(page);
         await page.locator("#pause-courts").click();
-        await page.locator("#courts-view").waitFor({ state: "visible" });
+        await page.locator("#home-view").waitFor({ state: "visible" });
       }
       await page.locator(".court-item").nth(i).click();
       await page.locator("#arena-view").waitFor({ state: "visible" });
