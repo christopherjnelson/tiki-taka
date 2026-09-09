@@ -91,11 +91,24 @@ const installPad = () => {
   };
 };
 
-async function pulsePad(page, button) {
+// Activation is edge-triggered and polled once per animation frame, so a short
+// synthetic press can sit entirely between two polls on a CPU-starved runner.
+// D-pad presses must stay short: holding past the 0.2s repeat gate moves focus
+// twice. See the same helper in tests/browser.mjs.
+const isDpad = button => button >= 12 && button <= 15;
+async function pulsePad(page, button, hold = isDpad(button) ? 80 : 250) {
   await page.evaluate(index => window.__setTestPad({ button: index, pressed: true }), button);
-  await page.waitForTimeout(80);
+  await page.waitForTimeout(hold);
   await page.evaluate(index => window.__setTestPad({ button: index, pressed: false }), button);
-  await page.waitForTimeout(80);
+  await page.waitForTimeout(hold);
+}
+// A real player presses again when a press does not register; so does this.
+async function padUntil(page, button, ready, attempts = 6) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (await ready()) return true;
+    await pulsePad(page, button);
+  }
+  return await ready();
 }
 
 const audioState = page => page.evaluate(() => ({
@@ -248,7 +261,7 @@ await check('the volumes are reachable and operable by gamepad and survive a rel
     await pulsePad(page, 13);
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'settings-button',
     'the d-pad must reach Settings on the title menu');
-  await pulsePad(page, 0);
+  await padUntil(page, 0, () => page.locator('#settings-dialog').isVisible());
   await page.locator('#settings-dialog').waitFor({ state: 'visible' });
 
   // And reach the effects slider inside the dialog the same way.
