@@ -42,7 +42,7 @@
     "packages/engine/src/settings.js": "180fc93d31f2dc6d1efb0bee2a225d50d48ae1d133d66bf88f5e2ba1f7a44ce8",
     "packages/engine/src/venues.js": "2560596133523623dc47484600caa35f4516ca706e31a59542c5cfa18c0b07fa",
     "packages/presentation/package.json": "99087ff29c9dc8f0356342d3a1f44b370455266a7cbbcec6aebb3edc4857b2fd",
-    "packages/presentation/src/audio.js": "e08912908b492cf3bc4a6ab8113822bab4c6b5a5feb61e860302b57cc4c5619a",
+    "packages/presentation/src/audio.js": "966e6a7b1f91a84a53fdb51101967500fff70f129d407b930f55ed24dc367637",
     "packages/presentation/src/renderer.js": "6b00372a3f0511ee046edd71c4292fdd611cea9965442fdc21b4562caea2f206",
     "public/fonts/Poppins-LICENSE.txt": "fbc4c9a72266d66689621c1c438f71e214c2141a6416b667f9c5e556bbc2e7b3",
     "public/fonts/Roboto-LICENSE.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
