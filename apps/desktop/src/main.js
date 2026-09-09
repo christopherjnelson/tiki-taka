@@ -108,7 +108,14 @@ let mode = "career",
   courtIndex = progress.lastCourt,
   game,
   phase = "ready",
-  view = viewForHash(),
+  // A cold load always opens the title screen. applyView() pushes #play when a
+  // round starts, so that hash outlives the session in history, bookmarks and
+  // reopened tabs; honouring it on boot drops a returning player straight into
+  // the arena, where the ready-state overlay reads as a pause menu they never
+  // asked for. Within a session the hash still drives the view (see the
+  // hashchange listener), so back and forward behave — only this first paint
+  // ignores it, and the boot below rewrites the URL so it cannot then lie.
+  view = "title",
   bank = false,
   focusToggle = false;
 let keys = new Set(),
@@ -362,16 +369,28 @@ function setPauseState(paused) {
     settings.bindings.pause.map(readableKey).join(" / ") || "unbound";
   $("pause-button").title = `${paused ? "Resume" : "Pause"} (${pauseKeys})`;
 }
+// Every announcement carries a sequence number so the deferred paint and the
+// 2.5s wipe belong to one specific call. Without it a later announcement (or a
+// clearAnnouncement) could be undone a frame afterwards by an earlier call's
+// pending rAF, which is how a stale line ends up sitting under a newer one.
+let announcementSeq = 0;
 function announce(text) {
   clearTimeout(announcementTimeout);
+  const seq = ++announcementSeq;
   $("game-announcement").textContent = "";
   requestAnimationFrame(() => {
+    if (seq !== announcementSeq) return;
     $("game-announcement").textContent = text;
   });
-  announcementTimeout = setTimeout(
-    () => ($("game-announcement").textContent = ""),
-    2500,
-  );
+  announcementTimeout = setTimeout(() => {
+    if (seq !== announcementSeq) return;
+    $("game-announcement").textContent = "";
+  }, 2500);
+}
+function clearAnnouncement() {
+  announcementSeq++;
+  clearTimeout(announcementTimeout);
+  $("game-announcement").textContent = "";
 }
 function prepare() {
   renderer.effects.length = 0;
@@ -539,6 +558,10 @@ function beginHold(reason) {
   if (awaitingResume) return;
   awaitingResume = true;
   holdElapsed = 0;
+  // The hold overlay owns the message from here. Anything the announcement
+  // strip is still showing would sit underneath #resume-reason and read as a
+  // second, smaller copy of the same words.
+  clearAnnouncement();
   holdKeys = new Set(keys);
   holdPointers = new Set(
     [pointerId, joystickId].filter((id) => id !== null && id !== undefined),
@@ -1628,7 +1651,6 @@ function frame(now) {
     // so tests can wait on the gate itself rather than race a stopwatch.
     document.body.dataset.resumeReady = holdElapsed < 0.3 ? "0" : "1";
   }
-  let turnoverText = null;
   if (view === "arena" && phase === "playing" && !awaitingResume) {
     let x =
       Number(actionDown(settings.bindings, keys, "moveRight")) -
@@ -1657,8 +1679,16 @@ function frame(now) {
         actionDown(settings.bindings, keys, "focusHold") ||
         gamepadFocus,
     });
+    // Found before the loop rather than during it: the engine can emit a score
+    // and the turnover that ended it in the same batch, in either order, and
+    // the turnover is what decides whether anything else is allowed to speak.
+    const turnoverEvent = game.events.find((e) => e.type === "turnover") || null;
     for (const event of game.events) {
-      renderer.addEvent(event);
+      // The turnover's floating canvas text is deferred until after the loop,
+      // because whether the hold takes over is only known once "end" has had
+      // its chance to finish the round. When it does take over, #resume-reason
+      // is the one place the message appears.
+      if (event !== turnoverEvent) renderer.addEvent(event);
       sound.play(event.type);
       if (event.type === "focus") {
         clearTimeout(focusEarnedTimeout);
@@ -1680,10 +1710,9 @@ function frame(now) {
       // The engine is shared with Android and still resumes on its own timer;
       // the desktop shell holds the round on top of that instead of changing
       // packages/engine.
-      if (event.type === "turnover") turnoverText = event.text;
       if (
         event.type === "score" &&
-        !turnoverText &&
+        !turnoverEvent &&
         now - announcementTime > 3500
       ) {
         announce(event.text);
@@ -1692,11 +1721,14 @@ function frame(now) {
       if (event.type === "end") finish();
     }
     game.events = [];
-    // A third turnover ends the round outright, and the finish overlay owns
-    // the screen from there: never hold on top of it.
-    if (turnoverText && phase === "playing") beginHold(turnoverText);
-    else if (turnoverText) announce(turnoverText);
-    turnoverText = null;
+    if (turnoverEvent) {
+      // A third turnover ends the round outright, and the finish overlay owns
+      // the screen from there: never hold on top of it. In that case the
+      // announcement strip is the only home for the reason, and finish() has
+      // already wiped the renderer's effects, so nothing is re-added.
+      if (phase === "playing") beginHold(turnoverEvent.text);
+      else announce(turnoverEvent.text);
+    }
   }
   if (view === "arena") {
     syncHud();
@@ -1721,6 +1753,11 @@ syncFullscreen();
 syncAccountDialog();
 prepare();
 syncPauseMenu();
+// Drop a stale #play or #courts so the address bar agrees with the title screen
+// the player is actually looking at. replaceState, not pushState: the boot must
+// not leave a history entry that Back would return to.
+if (location.hash)
+  history.replaceState(null, "", location.pathname + location.search);
 applyView(view, { updateHash: false });
 // The packaged shell sets autoplayPolicy to no-user-gesture-required, so this
 // first attempt is all it ever needs. A browser tab is likely to refuse it and

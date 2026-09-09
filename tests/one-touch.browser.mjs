@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { accessSync, constants, statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { freePort } from "./free-port.mjs";
+import { gotoArena } from "./open-arena.mjs";
 
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -60,7 +61,7 @@ try {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(`${baseURL}/#play`);
+  await gotoArena(page, baseURL);
   await page.locator("#start-button").click();
   await page.evaluate(async () => {
     const { Game } = await import("/src/game.js");

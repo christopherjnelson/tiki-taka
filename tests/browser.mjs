@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { accessSync, constants } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { freePort } from './free-port.mjs';
+import { gotoArena } from "./open-arena.mjs";
 
 const moduleName = process.env.PLAYWRIGHT_MODULE || '@playwright/test';
 const playwright = await import(moduleName);
@@ -140,7 +141,7 @@ await check('desktop gameplay, controls, progression, help, and full run', async
   })));
   const page = await context.newPage();
   const errors = watchErrors(page);
-  await page.goto(`${baseURL}/#play`, { waitUntil: 'networkidle' });
+  await gotoArena(page, baseURL, { waitUntil: 'networkidle' });
 
   assert.match(await page.locator('#level-label').textContent(), /LEVEL 3/);
   assert.equal(await page.locator('#court-title').textContent(), 'El Patio');
@@ -269,7 +270,7 @@ await check('a complete playable career run clears and unlocks the next court', 
   const context = await browser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
   const page = await context.newPage();
   const errors = watchErrors(page);
-  await page.goto(`${baseURL}/#play`);
+  await gotoArena(page, baseURL);
   await page.clock.install();
   await page.locator('#start-button').click();
   await runRound(page, {
@@ -321,7 +322,7 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
     true,
     'gamepad focus should be visibly marked',
   );
-  await page.goto(`${baseURL}/#play`);
+  await gotoArena(page, baseURL);
   await page.waitForTimeout(150);
   await page.locator('#start-button').focus();
   await pulsePad(page, 0);
@@ -422,7 +423,7 @@ await check('portrait and landscape touch layouts remain usable without horizont
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
   const page = await context.newPage();
   const errors = watchErrors(page);
-  await page.goto(`${baseURL}/#play`);
+  await gotoArena(page, baseURL);
   assert.equal(await page.locator('#joystick').isVisible(), true);
   assert.equal(await page.locator('#touch-pass').isVisible(), true);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
@@ -477,7 +478,7 @@ await check('portrait and landscape touch layouts remain usable without horizont
   const landscapeContext = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
   const landscape = await landscapeContext.newPage();
   const landscapeErrors = watchErrors(landscape);
-  await landscape.goto(`${baseURL}/#play`);
+  await gotoArena(landscape, baseURL);
   assert.equal(await landscape.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
   assert.equal(await landscape.locator('#joystick').isVisible(), true);
   assert.equal(await landscape.locator('#touch-pass').isVisible(), true);
@@ -519,7 +520,7 @@ async function offlineReload(baseURL) {
   const context = await browser.newContext({ serviceWorkers: 'allow' });
   const page = await context.newPage();
   const errors = watchErrors(page);
-  await page.goto(`${baseURL}/#play`, { waitUntil: 'networkidle' });
+  await gotoArena(page, baseURL, { waitUntil: 'networkidle' });
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
     if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
@@ -544,7 +545,7 @@ await check('losing possession holds the round until a fresh button press', asyn
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
   const page = await context.newPage();
   const errors = watchErrors(page);
-  await page.goto(`${baseURL}/#play`);
+  await gotoArena(page, baseURL);
   await page.locator('#start-button').click();
   await observeGame(page);
   // A key held from before the turnover must not dismiss the prompt: this is
@@ -619,7 +620,7 @@ await check('the right stick picks the smart-pass target and marks it on the cou
   });
   const page = await context.newPage();
   const errors = watchErrors(page);
-  await page.goto(`${baseURL}/#play`);
+  await gotoArena(page, baseURL);
   await page.locator('#start-button').click();
   await observeGame(page);
   await page.evaluate(async () => {

@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { freePort } from "./free-port.mjs";
+import { gotoArena } from "./open-arena.mjs";
 
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -285,7 +286,7 @@ await check(
       );
     await page.locator("#close-settings").click();
     // ...and on the pause menu once a round is on screen.
-    await page.goto(`${baseURL}/#play`);
+    await gotoArena(page, baseURL);
     assert.equal(
       await page
         .locator("body")
@@ -342,7 +343,7 @@ await check(
     );
     const page = await context.newPage(),
       errors = errorsFor(page);
-    await page.goto(`${baseURL}/#play`);
+    await gotoArena(page, baseURL);
     await page.locator("#start-button").click();
     // A remapped pause key still opens the menu in the arena.
     await page.keyboard.press("KeyP");
@@ -441,7 +442,7 @@ await check(
       });
       const page = await context.newPage(),
         errors = errorsFor(page);
-      await page.goto(`${baseURL}/#play`);
+      await gotoArena(page, baseURL);
       await settled(page);
       assert.equal(
         await page.evaluate(

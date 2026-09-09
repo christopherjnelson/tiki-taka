@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { accessSync, constants, statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { freePort } from "./free-port.mjs";
+import { gotoArena } from "./open-arena.mjs";
 
 const playwright = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -185,7 +186,7 @@ await check(
     });
     const page = await context.newPage(),
       errors = errorsFor(page);
-    await page.goto(`${baseURL}/#play`);
+    await gotoArena(page, baseURL);
     await page.locator("#start-button").click();
     await observeGame(page);
     const timeBefore = await page.evaluate(
@@ -385,7 +386,7 @@ await check(
     });
     const page = await context.newPage(),
       errors = errorsFor(page);
-    await page.goto(`${baseURL}/#play`);
+    await gotoArena(page, baseURL);
     assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
     const dark = await page
       .locator("html")
@@ -536,7 +537,7 @@ await check(
     );
     const page = await context.newPage(),
       errors = errorsFor(page);
-    await page.goto(`${baseURL}/#play`);
+    await gotoArena(page, baseURL);
     await useSettingsControl(page, "#fullscreen-button");
     await page.waitForTimeout(100);
     const fullscreen = await page.evaluate(
@@ -620,7 +621,7 @@ await check(
       });
       const page = await context.newPage(),
         errors = errorsFor(page);
-      await page.goto(`${baseURL}/#play`);
+      await gotoArena(page, baseURL);
       assert.equal(
         await page.locator("#touch-pass").isVisible(),
         true,
