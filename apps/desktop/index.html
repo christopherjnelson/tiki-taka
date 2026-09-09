@@ -4,7 +4,9 @@
     <meta charset="UTF-8" />
     <!-- Mirrors the header injected by apps/electron/main.mjs, minus
     frame-ancestors, which a meta element cannot deliver: browser deployments
-    must send that one as a real HTTP response header. -->
+    must send that one as a real HTTP response header. media-src is not listed
+    because default-src 'self' already covers the soundtrack, which is served
+    from the app origin. -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'"
@@ -26,116 +28,80 @@
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to the court</a>
-    <button
-      id="sidebar-backdrop"
-      class="sidebar-backdrop"
-      type="button"
-      aria-label="Close menu"
-      tabindex="-1"
-    ></button>
     <div class="app-shell">
-      <aside id="game-sidebar" class="sidebar" aria-label="Game navigation">
-        <button id="sidebar-close" type="button" aria-label="Close menu">
-          ×
-        </button>
-        <a class="brand" href="./" aria-label="tiki-taka home"
-          ><span class="brand-mark" aria-hidden="true"
-            ><i></i><i></i><i></i></span
-          >tiki-taka</a
-        >
-        <p class="brand-tagline">NO GOALS. ALL FLOW.</p>
-        <div class="sidebar-rule"></div>
-        <button id="home-button" class="sidebar-home" type="button">
-          <span aria-hidden="true">⌂</span> Home
-        </button>
-        <p class="section-label">YOUR GAME</p>
-        <nav class="mode-nav" aria-label="Game mode">
-          <button
-            class="mode-button active"
-            data-mode="career"
-            aria-pressed="true"
-          >
-            <span class="nav-symbol" aria-hidden="true">↗</span> World tour
-            <span class="nav-arrow" aria-hidden="true">→</span>
-          </button>
-          <button class="mode-button" data-mode="daily" aria-pressed="false">
-            <span class="nav-symbol" aria-hidden="true">◷</span> Daily circuit
-          </button>
-          <button class="mode-button" data-mode="endless" aria-pressed="false">
-            <span class="nav-symbol" aria-hidden="true">∞</span> Endless flow
-          </button>
-          <button class="mode-button" data-mode="practice" aria-pressed="false">
-            <span class="nav-symbol" aria-hidden="true">◇</span> Free practice
-          </button>
-        </nav>
-        <div class="sidebar-bottom">
-          <div class="utility-buttons sidebar-utilities">
-            <button id="help-button">
-              <span aria-hidden="true">?</span> How to play</button
-            ><button
-              id="sound-button"
-              aria-pressed="false"
-              title="Toggle sound"
-            >
-              Sound off
-            </button>
-            <button id="settings-button" type="button" aria-haspopup="dialog">
-              <span aria-hidden="true">⚙</span> Settings
-            </button>
-            <button id="fullscreen-button" type="button">
-              <span aria-hidden="true">⌗</span> Fullscreen
-            </button>
-            <button id="theme-button" type="button" aria-pressed="false">
-              <span aria-hidden="true">◐</span> Light
-            </button>
-            <button id="account-button" type="button">
-              <span aria-hidden="true">◎</span> Local profile
-            </button>
-          </div>
-          <p class="sidebar-note">A little space. A beautiful game.</p>
-        </div>
-      </aside>
-
       <main id="main" class="main" tabindex="-1">
-        <header class="workspace-bar">
-          <button
-            id="sidebar-toggle"
-            type="button"
-            aria-controls="game-sidebar"
-            aria-expanded="true"
-          >
-            ☰ Menu
-          </button>
-          <span id="workspace-label">Home</span>
-          <button id="arena-home-button" type="button">Home</button>
-        </header>
-        <section id="home-view" class="home-view" aria-labelledby="home-title">
-          <div class="home-hero">
+        <!-- The shell opens here: a title card and one vertical menu, so a
+        controller has something to drive from the very first frame. -->
+        <section
+          id="title-view"
+          class="title-view"
+          aria-labelledby="title-heading"
+        >
+          <div class="title-card">
             <p class="eyebrow">THE POSSESSION CLUB</p>
-            <h1 id="home-title">Find your flow.</h1>
-            <p>
-              Four players. One ball. Build rhythm, beat the press, and take
-              your game around the world.
+            <h1 id="title-heading" class="game-title">
+              tiki<span>-</span>taka
+            </h1>
+            <p class="title-tagline">NO GOALS. ALL FLOW.</p>
+            <nav id="title-menu" class="menu-list" aria-label="Main menu">
+              <button id="title-play" type="button" class="menu-item primary">
+                <span class="menu-key" aria-hidden="true">▸</span> Play
+              </button>
+              <button id="title-courts" type="button" class="menu-item">
+                <span class="menu-key" aria-hidden="true">▸</span> Courts
+              </button>
+              <button
+                id="settings-button"
+                type="button"
+                class="menu-item"
+                aria-haspopup="dialog"
+              >
+                <span class="menu-key" aria-hidden="true">▸</span> Settings
+              </button>
+              <button id="title-quit" type="button" class="menu-item" hidden>
+                <span class="menu-key" aria-hidden="true">▸</span> Quit
+              </button>
+            </nav>
+            <p id="title-play-copy" class="title-note">
+              The Courtyard · Lisbon
             </p>
-            <button id="home-continue" class="primary-button" type="button">
-              Continue tour ↗
+            <p class="title-hint">
+              Gamepad: D-pad or left stick to move · A to select · Start pauses
+            </p>
+          </div>
+        </section>
+
+        <!-- Everything the old web dashboard showed about your progress lives
+        here, one step behind the menu. -->
+        <section
+          id="courts-view"
+          class="courts-view"
+          aria-labelledby="courts-title"
+          hidden
+        >
+          <header class="courts-bar">
+            <button id="courts-back" type="button" class="menu-item back">
+              <span aria-hidden="true">←</span> Back
             </button>
-            <p id="home-continue-copy">The Courtyard · Lisbon</p>
+            <h1 id="courts-title">Choose your court.</h1>
+            <span class="courts-count">06 COURTS</span>
+          </header>
+          <div id="court-list" class="court-list" aria-label="Choose a court">
           </div>
           <div class="home-modes" aria-label="Choose a game mode">
-            <button data-home-mode="career">
+            <button data-home-mode="career" type="button">
               <strong>World tour</strong
               ><span>Clear six venues and collect every star.</span>
             </button>
-            <button data-home-mode="daily">
+            <button data-home-mode="daily" type="button">
               <strong>Daily circuit</strong
               ><span>A fresh seeded challenge every day.</span>
             </button>
-            <button data-home-mode="endless">
+            <button data-home-mode="endless" type="button">
               <strong>Endless flow</strong
               ><span>Keep the run alive as the press builds.</span>
             </button>
-            <button data-home-mode="practice">
+            <button data-home-mode="practice" type="button">
               <strong>Free practice</strong
               ><span>Learn the rhythm without a turnover limit.</span>
             </button>
@@ -174,21 +140,8 @@
               </div>
             </dl>
           </section>
-          <section id="home-tour" class="home-tour">
-            <div class="tour-heading">
-              <div>
-                <p class="section-label">THE WORLD TOUR</p>
-                <h2>Choose your court.</h2>
-              </div>
-              <span>06 COURTS</span>
-            </div>
-            <div
-              id="court-list"
-              class="court-list"
-              aria-label="Choose a court"
-            ></div>
-          </section>
         </section>
+
         <section id="arena-view" class="arena-view" hidden>
           <section class="court-heading" aria-labelledby="court-title">
             <div>
@@ -269,6 +222,59 @@
                   <p id="invitation-note" class="invitation-note">
                     75 SECONDS · 3 POSSESSIONS · YOUR RHYTHM
                   </p>
+                </div>
+              </div>
+              <!-- Losing the ball stops the world until the player says go, so
+              putting the controller down never costs a possession. -->
+              <div id="resume-prompt" class="resume-prompt" hidden>
+                <p
+                  id="resume-reason"
+                  class="resume-reason"
+                  role="status"
+                  aria-live="assertive"
+                ></p>
+                <p class="resume-cue">PRESS ANY BUTTON</p>
+                <p class="resume-sub">to pick the ball back up</p>
+              </div>
+              <div
+                id="pause-menu"
+                class="pause-menu"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="pause-title"
+                hidden
+              >
+                <div class="pause-card">
+                  <p class="eyebrow">TAKE A BREATH</p>
+                  <h2 id="pause-title">Paused.</h2>
+                  <nav id="pause-menu-list" class="menu-list">
+                    <button id="pause-resume" type="button" class="menu-item primary">
+                      <span class="menu-key" aria-hidden="true">▸</span> Resume
+                    </button>
+                    <button id="pause-restart" type="button" class="menu-item">
+                      <span class="menu-key" aria-hidden="true">▸</span> Restart
+                    </button>
+                    <button id="pause-courts" type="button" class="menu-item">
+                      <span class="menu-key" aria-hidden="true">▸</span> Courts
+                    </button>
+                    <button
+                      id="pause-settings"
+                      type="button"
+                      class="menu-item"
+                      aria-haspopup="dialog"
+                    >
+                      <span class="menu-key" aria-hidden="true">▸</span>
+                      Settings
+                    </button>
+                    <button
+                      id="pause-quit"
+                      type="button"
+                      class="menu-item"
+                      hidden
+                    >
+                      <span class="menu-key" aria-hidden="true">▸</span> Quit
+                    </button>
+                  </nav>
                 </div>
               </div>
               <div
@@ -470,6 +476,8 @@
         aria-live="polite"
       ></p>
     </dialog>
+    <!-- The old sidebar drawer is gone; every utility it held lives here, and
+    both the title menu and the pause menu open this dialog. -->
     <dialog id="settings-dialog" aria-labelledby="settings-title">
       <div class="dialog-top">
         <p class="eyebrow">PLAYER SETUP / CONTROL ROOM</p>
@@ -478,6 +486,23 @@
         </button>
       </div>
       <h2 id="settings-title">Tune your setup.</h2>
+      <div class="utility-buttons settings-utilities">
+        <button id="sound-button" aria-pressed="false" title="Toggle sound">
+          Sound off
+        </button>
+        <button id="theme-button" type="button" aria-pressed="false">
+          <span aria-hidden="true">◐</span> Light
+        </button>
+        <button id="fullscreen-button" type="button">
+          <span aria-hidden="true">⌗</span> Fullscreen
+        </button>
+        <button id="help-button" type="button">
+          <span aria-hidden="true">?</span> How to play
+        </button>
+        <button id="account-button" type="button">
+          <span aria-hidden="true">◎</span> Local profile
+        </button>
+      </div>
       <div class="settings-preset">
         <label for="preset-select">CONTROL PRESET</label>
         <select id="preset-select">
@@ -613,10 +638,12 @@
             LT before using newly earned Focus.
           </p>
           <p>
-            <strong>Gamepad:</strong> left stick moves, right stick aims. A
-            passes, X arms the wall pass so A plays it off the wall, LT holds
-            focus, Start pauses. Use the
-            D-pad and A in menus.
+            <strong>Gamepad:</strong> left stick moves, right stick aims and
+            picks the teammate A will pass to — the chosen player is ringed on
+            the court, so you can deliberately thread a lane between two
+            defenders for SPLIT THE PRESS. X arms the wall pass, LT holds focus,
+            Start opens the pause menu. Use the D-pad and A in menus, B to go
+            back.
           </p>
           <p>
             <strong>Touch:</strong> move with the joystick, tap a teammate to

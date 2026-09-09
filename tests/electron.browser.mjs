@@ -62,8 +62,8 @@ try {
   page.on("console", (message) => {
     if (message.type() === "error") rendererErrors.push(message.text());
   });
-  await page.waitForSelector("#home-view:not([hidden])");
-  mark("local home loaded");
+  await page.waitForSelector("#title-view:not([hidden])");
+  mark("title screen loaded");
   assert.match(await page.title(), /tiki-taka/i);
   assert.equal(new URL(page.url()).protocol, "tiki:");
   assert.equal(await page.evaluate(() => typeof process), "undefined");
@@ -117,6 +117,9 @@ try {
   }
   // Windowed, the in-page button still performs a real HTML fullscreen
   // round-trip; it only refuses (and toasts) while the shell owns fullscreen.
+  // It lives in the settings dialog now that the sidebar drawer is gone.
+  await page.locator("#settings-button").click();
+  await page.locator("#settings-dialog").waitFor({ state: "visible" });
   await page.locator("#fullscreen-button").click();
   await page.waitForFunction(
     () => document.fullscreenElement === document.documentElement,
@@ -129,32 +132,51 @@ try {
   });
   await waitForNativeFullscreen(app, false);
   mark("HTML fullscreen toggled");
+  // The soundtrack is fetched and decoded from tiki://app/audio under a
+  // default-src 'self' policy with no media-src of its own; this is the proof
+  // that the packaged CSP actually admits it.
+  await page.waitForFunction(
+    () => document.body.dataset.music === "playing",
+    null,
+    { timeout: 15_000 },
+  );
+  assert.equal(
+    await page.locator("#sound-button").getAttribute("aria-pressed"),
+    "true",
+  );
+  await page.locator("#sound-button").click();
+  await page.waitForFunction(() => document.body.dataset.music === "muted");
+  await page.locator("#sound-button").click();
+  await page.waitForFunction(() => document.body.dataset.music === "playing");
+  mark("soundtrack loads under the packaged CSP and follows the sound toggle");
+  await page.locator("#close-settings").click();
   // And F11 restores the shell fullscreen it started in.
   await pressF11();
   await waitForNativeFullscreen(app, true);
   mark("F11 fullscreen toggled");
-  await page.locator("#home-continue").click();
+  await page.locator("#title-play").click();
   await page.locator("#start-button").click();
   await page.keyboard.press("Space");
+  // The pause menu has absorbed the drawer: pausing reaches Settings directly.
   await page.locator("#pause-button").click();
-  // Play view is permanent, so the sidebar is always a drawer in the arena and
-  // settings live behind the menu toggle until the pause menu absorbs them.
-  await page.locator("#sidebar-toggle").click();
-  await page.locator("#settings-button").click();
+  await page.locator("#pause-menu").waitFor({ state: "visible" });
+  assert.equal(
+    await page.locator("#pause-quit").isVisible(),
+    true,
+    "the shell build offers Quit",
+  );
+  await page.locator("#pause-settings").click();
   assert.equal(
     await page.locator("#settings-dialog").evaluate((dialog) => dialog.open),
     true,
   );
   mark("gameplay and settings controls exercised");
   await page.locator("#close-settings").click();
-  // Dismiss the drawer we opened to reach settings; its backdrop would
-  // otherwise sit over the overlay buttons.
-  await page.locator("#sidebar-backdrop").click();
-  await page.waitForFunction(
-    () => !document.body.classList.contains("sidebar-open"),
-    null,
-    { timeout: 5_000 },
-  );
+  await page.locator("#pause-courts").click();
+  await page.locator("#courts-view").waitFor({ state: "visible" });
+  mark("pause menu reaches Courts");
+  await page.locator(".court-item").first().click();
+  await page.locator("#arena-view").waitFor({ state: "visible" });
   if (await page.locator("#game-overlay").isVisible())
     await page.locator("#start-button").click();
   const stabilityEnd = Date.now() + stabilityMs;
@@ -221,7 +243,7 @@ app = await launch();
 try {
   const page = await app.firstWindow();
   page.setDefaultTimeout(5_000);
-  await page.waitForSelector("#home-view:not([hidden])");
+  await page.waitForSelector("#title-view:not([hidden])");
   assert.equal(
     await page.evaluate(() => localStorage.getItem("electron.package.probe")),
     "stable",
@@ -249,11 +271,25 @@ try {
   console.log(
     `✓ gameplay remained responsive for ${Math.round(stabilityMs / 1000)} seconds`,
   );
+  // Quit must really end the app. The renderer has no Node bridge, so it calls
+  // window.close(); window-all-closed then quits the process.
+  assert.equal(await page.locator("#title-quit").isVisible(), true);
+  expectedClose = true;
+  const closed = new Promise((resolve) => app.once("close", resolve));
+  await page.locator("#title-quit").click();
+  await Promise.race([
+    closed,
+    new Promise((_resolve, reject) =>
+      setTimeout(() => reject(new Error("Quit did not close the app")), 10_000),
+    ),
+  ]);
+  assert.equal(page.isClosed(), true);
+  console.log("✓ Quit closes the window and exits the packaged app");
 } catch (error) {
   error.message += `\nElectron output:\n${processLogs.join("\n")}`;
   throw error;
 } finally {
   expectedClose = true;
-  await app.close();
+  await app.close().catch(() => {});
   await rm(testRoot, { recursive: true, force: true });
 }

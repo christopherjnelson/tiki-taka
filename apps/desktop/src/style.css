@@ -48,10 +48,10 @@ html,
 body,
 .app-shell,
 .main,
-.sidebar,
-.home-view,
+.title-view,
+.courts-view,
 .arena-view,
-.mode-nav,
+.menu-list,
 .court-list,
 .control-list,
 .bindings-list,
@@ -65,10 +65,10 @@ html::-webkit-scrollbar,
 body::-webkit-scrollbar,
 .app-shell::-webkit-scrollbar,
 .main::-webkit-scrollbar,
-.sidebar::-webkit-scrollbar,
-.home-view::-webkit-scrollbar,
+.title-view::-webkit-scrollbar,
+.courts-view::-webkit-scrollbar,
 .arena-view::-webkit-scrollbar,
-.mode-nav::-webkit-scrollbar,
+.menu-list::-webkit-scrollbar,
 .court-list::-webkit-scrollbar,
 .control-list::-webkit-scrollbar,
 .bindings-list::-webkit-scrollbar,
@@ -140,101 +140,28 @@ select:focus-visible {
       0 0 26px 8px rgb(39 234 216 / 85%);
   }
 }
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 8px;
+  z-index: 200;
+  padding: 10px 14px;
+  color: #0d0620;
+  background: var(--cyan);
+  font: 700 11px var(--sign);
+}
+.skip-link:focus {
+  left: 8px;
+}
 [hidden] {
   display: none !important;
 }
-.skip-link {
-  position: fixed;
-  top: -70px;
-  left: 12px;
-  z-index: 99;
-  padding: 13px;
-  background: var(--pink);
-  color: #fff;
-}
-.skip-link:focus {
-  top: 12px;
-}
 .app-shell {
-  max-width: 1900px;
-  margin: auto;
+  /* One column now that the navigation sidebar is gone: the shell is the
+     title card, the courts screen, or the court itself. */
   min-height: 100svh;
-  display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-}
-.sidebar {
-  position: relative;
-  z-index: 3;
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  padding: 28px 21px 22px;
-  background-color: var(--surface);
-  background-image: linear-gradient(180deg, #ff3aa710, var(--surface));
-  border-right: 2px solid var(--pink);
-  box-shadow: 10px 0 35px #03010f77;
-}
-.sidebar:after {
-  content: "";
-  position: absolute;
-  right: -8px;
-  top: 90px;
-  width: 14px;
-  height: 84px;
-  background: var(--cyan);
-  clip-path: polygon(0 0, 100% 12%, 100% 88%, 0 100%);
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--ink);
-  text-decoration: none;
-  text-transform: uppercase;
-  font: italic 800 37px/0.9 var(--display);
-}
-.brand-mark {
-  width: 33px;
-  height: 34px;
-  position: relative;
-  flex: none;
-}
-.brand-mark i {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  background: var(--cyan);
-  box-shadow: 0 0 10px var(--cyan);
-}
-.brand-mark i:nth-child(1) {
-  left: 12px;
-}
-.brand-mark i:nth-child(2) {
-  left: 0;
-  bottom: 1px;
-  background: var(--pink);
-}
-.brand-mark i:nth-child(3) {
-  right: 0;
-  bottom: 1px;
-}
-.brand-mark:after {
-  content: "";
-  position: absolute;
-  inset: 8px 7px 5px;
-  border: 3px solid var(--ink);
-  transform: rotate(30deg);
-}
-.brand-tagline {
-  margin: 9px 0 0 44px;
-  color: var(--cyan);
-  font: 700 9px var(--sign);
-  letter-spacing: 3px;
-}
-.sidebar-rule {
-  height: 2px;
-  margin: 23px 0;
-  background: linear-gradient(90deg, var(--pink), var(--cyan), transparent);
 }
 .section-label,
 .mode-label,
@@ -244,47 +171,6 @@ select:focus-visible {
   font: 700 9px var(--sign);
   letter-spacing: 2px;
   text-transform: uppercase;
-}
-.mode-nav {
-  display: grid;
-  gap: 7px;
-  margin-top: 12px;
-}
-.mode-button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 45px;
-  padding: 9px 12px;
-  border: 1px solid transparent;
-  background: transparent;
-  text-align: left;
-  text-transform: uppercase;
-  font: 700 12px var(--sign);
-  clip-path: polygon(0 0, 95% 0, 100% 25%, 100% 100%, 0 100%);
-}
-.mode-button.active,
-.mode-button[aria-pressed="true"] {
-  color: #100923;
-  background: var(--cyan);
-  box-shadow: 0 0 18px #27ead855;
-}
-.nav-symbol {
-  width: 22px;
-  font-size: 20px;
-}
-.nav-arrow {
-  margin-left: auto;
-}
-.tour-heading {
-  display: flex;
-  justify-content: space-between;
-  margin: 25px 0 12px;
-}
-.tour-heading > span {
-  color: var(--pink);
-  font: 700 8px var(--sign);
-  letter-spacing: 1px;
 }
 .court-list {
   display: grid;
@@ -346,28 +232,6 @@ select:focus-visible {
   color: var(--gold);
   font-size: 9px;
 }
-.court-lock {
-  margin-left: auto;
-}
-.sidebar-bottom {
-  margin-top: auto;
-  padding-top: 20px;
-}
-.progress-card {
-  padding: 13px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-}
-.progress-top {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font: 700 10px var(--sign);
-}
-.level-icon {
-  color: var(--pink);
-  font-size: 19px;
-}
 .progress-track,
 .goal-track {
   height: 5px;
@@ -392,24 +256,23 @@ select:focus-visible {
 }
 .utility-buttons {
   display: flex;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 7px;
-  margin-top: 11px;
+  margin: 14px 0 18px;
 }
 .utility-buttons button {
-  min-height: 36px;
+  min-height: 38px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
   background: transparent;
-  font-size: 9px;
-}
-.sidebar-note {
-  color: var(--muted);
   font-size: 10px;
-  font-style: italic;
 }
 .main {
   min-width: 0;
-  padding: 0 38px 22px;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
 }
 .mode-label {
   font-size: 8px;
@@ -909,64 +772,42 @@ dialog::backdrop {
   padding: 20px;
   background: var(--pink);
 }
-body.play-view .sidebar,
 body.play-view .court-heading,
 body.play-view .below-court,
 body.play-view .game-footer {
   display: none;
 }
-/* Play view is permanent in the arena, so the sidebar is always a drawer here.
-   The drawer styling below lives only inside height-constrained media queries,
-   which left tall desktop screens showing a backdrop over a display:none
-   sidebar - i.e. no way to reach settings mid-game. */
-body.play-view.sidebar-open .sidebar {
-  position: fixed;
-  inset: 0 auto 0 0;
-  z-index: 70;
-  display: flex;
-  width: min(300px, 86vw);
-  height: 100svh;
-  overflow-y: auto;
-}
-body.play-view.sidebar-open .sidebar-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: block;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  background: #060311b8;
-  border: 0;
-}
+/* The play view reclaims the whole window for the court. Nothing reserves a
+   horizontal band any more: the panel is the viewport, the canvas grows to the
+   largest 1000:620 rectangle that fits inside it, and the HUD and action bar
+   float on top hugging the court's own edges. The canvas keeps its 1000x620
+   backing store, so courtPoint() and the engine's LIMITS are untouched. */
 body.play-view .app-shell {
   display: block;
   max-width: none;
 }
 body.play-view .main {
   height: 100svh;
-  padding: 0 12px 10px;
+  padding: 0;
   display: flex;
   flex-direction: column;
 }
 body.play-view .game-panel {
+  position: relative;
   min-height: 0;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-body.play-view .scoreboard,
-body.play-view .court-toolbar {
-  flex: none;
+  flex: 1 1 0;
+  display: block;
+  container-type: size;
+  overflow: hidden;
+  border: 0;
+  box-shadow: none;
+  background: #060311;
 }
 body.play-view .court-wrap {
-  position: relative;
-  width: 100%;
+  position: absolute;
+  inset: 0;
+  width: auto;
   container-type: size;
-  min-height: 0;
-  flex: 1;
-  display: grid;
-  place-items: center;
   background: #060311;
 }
 body.play-view #court {
@@ -980,16 +821,96 @@ body.play-view #court {
   aspect-ratio: 1000/620;
   transform: translate(-50%, -50%);
 }
+/* Both bars are sized to the court, not the window, so they never sit over the
+   letterbox and never steal a row from the canvas. */
+body.play-view .scoreboard {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  left: 50%;
+  width: min(100cqw, 161.2903cqh);
+  min-height: 0;
+  padding: 6px 18px 14px;
+  background: linear-gradient(180deg, #0a0520e8, #0a052000);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+/* Score and clock hug the left, multiplier and possessions the right, so the
+   canvas keeps its own venue banner across the middle. */
+body.play-view .scoreboard {
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
+  align-items: start;
+  gap: 0 20px;
+}
+body.play-view .scoreboard .pause-button {
+  grid-column: 6;
+  align-self: start;
+  margin-top: 2px;
+}
+body.play-view .scoreboard .stat {
+  padding-left: 0;
+  border: 0;
+  text-shadow: 0 2px 10px #05021acc;
+}
+body.play-view .scoreboard .stat:nth-child(3) {
+  grid-column: 4;
+  text-align: right;
+}
+body.play-view .scoreboard .lives-stat {
+  grid-column: 5;
+  text-align: right;
+}
+body.play-view .scoreboard .stat-label {
+  color: #efe7ff;
+  text-shadow: 0 1px 6px #05021a;
+}
+body.play-view .scoreboard .stat strong {
+  font-size: clamp(20px, 2.2vw, 34px);
+}
+body.play-view .scoreboard .pause-button {
+  pointer-events: auto;
+}
+body.play-view .court-toolbar {
+  position: absolute;
+  z-index: 4;
+  bottom: 0;
+  left: 50%;
+  width: min(100cqw, 161.2903cqh);
+  min-height: 0;
+  padding: 12px 16px 8px;
+  background: linear-gradient(0deg, #0a0520e8, #0a052000);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+body.play-view .court-toolbar .play-actions,
+body.play-view .court-toolbar .target-info {
+  pointer-events: auto;
+}
+body.play-view .court-toolbar .play-actions button {
+  min-height: 34px;
+  padding: 5px 9px;
+  background: #120a2ce8;
+}
+body.play-view .court-toolbar .target-info {
+  color: #efe7ff;
+  text-shadow: 0 1px 8px #05021a;
+}
+body.play-view #focus-button {
+  min-width: 150px;
+}
+/* A gamepad never needs the on-screen buttons, so they fade back until the
+   pointer comes near them. Mouse and touch still get full-size hit targets. */
+@media (hover: hover) and (min-width: 901px) {
+  body.play-view .court-toolbar {
+    opacity: 0.42;
+    transition: opacity 0.18s;
+  }
+  body.play-view .court-toolbar:hover,
+  body.play-view .court-toolbar:focus-within {
+    opacity: 1;
+  }
+}
 @media (max-width: 900px) {
-  .app-shell {
-    grid-template-columns: 220px minmax(0, 1fr);
-  }
-  .sidebar {
-    padding-inline: 15px;
-  }
-  .brand {
-    font-size: 30px;
-  }
   .main {
     padding-inline: 20px;
   }
@@ -1004,36 +925,6 @@ body.play-view #court {
   }
 }
 @media (max-width: 700px) {
-  .app-shell {
-    display: block;
-  }
-  .sidebar {
-    padding: 15px;
-    border: 0;
-    border-bottom: 2px solid var(--pink);
-  }
-  .sidebar:after,
-  .sidebar-rule {
-    display: none;
-  }
-  .brand {
-    font-size: 29px;
-  }
-  .mode-nav {
-    display: flex;
-    overflow: auto;
-  }
-  .mode-button {
-    min-width: 112px;
-    justify-content: center;
-    font-size: 10px;
-  }
-  .nav-arrow {
-    display: none;
-  }
-  .tour-heading {
-    margin: 14px 0 8px;
-  }
   .court-list {
     display: flex;
     overflow: auto;
@@ -1196,13 +1087,12 @@ body.play-view #court {
   }
 }
 @media (max-width: 700px) and (orientation: landscape) {
-  .sidebar,
   .court-heading,
   .below-court,
   .game-footer {
     display: none;
   }
-  .main {
+  body.play-view .main {
     padding: 0 190px 4px 4px;
   }
   .game-panel {
@@ -1462,130 +1352,6 @@ body.play-view #court {
 .app-shell {
   grid-template-columns: 248px minmax(0, 1fr);
 }
-.sidebar {
-  padding-inline: 18px;
-}
-.sidebar-backdrop {
-  display: none;
-}
-#sidebar-close {
-  display: none;
-}
-body.sidebar-open #sidebar-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  color: var(--ink);
-  background: var(--panel);
-  border: 1px solid var(--pink);
-  font: 700 25px/1 var(--sign);
-}
-body.sidebar-open .brand {
-  padding-right: 48px;
-}
-.sidebar-home {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  min-height: 46px;
-  margin-bottom: 14px;
-  padding: 10px 12px;
-  color: var(--ink);
-  background: transparent;
-  border: 1px solid var(--line);
-  text-align: left;
-  text-transform: uppercase;
-  font: 700 12px var(--sign);
-}
-.sidebar-home[aria-current="page"] {
-  color: #100923;
-  background: var(--pink);
-  border-color: var(--pink);
-}
-.sidebar-utilities {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-}
-.sidebar-utilities button {
-  width: 100%;
-  padding: 8px;
-  text-transform: uppercase;
-  font-family: var(--sign);
-  font-weight: 700;
-}
-.workspace-bar {
-  flex: none;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 14px;
-  min-height: 52px;
-  border-bottom: 1px solid var(--line);
-}
-.workspace-bar button {
-  min-height: 34px;
-  padding: 7px 11px;
-  color: var(--ink);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  text-transform: uppercase;
-  font: 700 9px var(--sign);
-  letter-spacing: 0.8px;
-}
-#workspace-label {
-  color: var(--muted);
-  text-align: center;
-  text-transform: uppercase;
-  font: 700 9px var(--sign);
-  letter-spacing: 2px;
-}
-.home-view {
-  max-width: 1280px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 22px 0 42px;
-}
-.home-hero {
-  position: relative;
-  min-height: 232px;
-  padding: 24px 30px;
-  background: linear-gradient(
-    125deg,
-    var(--panel),
-    color-mix(in srgb, var(--panel), var(--pink) 15%)
-  );
-  border: 1px solid var(--pink);
-  box-shadow: 12px 12px 0 color-mix(in srgb, var(--cyan), transparent 12%);
-  clip-path: polygon(0 0, 97% 0, 100% 14%, 100% 100%, 0 100%);
-}
-.home-hero h1 {
-  max-width: 700px;
-  margin: 7px 0 10px;
-  font-size: clamp(58px, 5.2vw, 68px);
-  line-height: 0.9;
-}
-.home-hero > p:not(.eyebrow) {
-  max-width: 610px;
-  color: var(--muted);
-  line-height: 1.55;
-}
-#home-continue {
-  width: min(340px, 100%);
-  margin-top: 10px;
-}
-#home-continue-copy {
-  margin: 9px 0 0;
-  color: var(--cyan);
-  font: 700 10px var(--sign);
-  letter-spacing: 1px;
-}
 .home-modes {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1700,25 +1466,6 @@ body.sidebar-open .brand {
   color: var(--pink);
   font: italic 800 26px var(--display);
 }
-.home-tour {
-  margin-top: 32px;
-}
-.home-tour .tour-heading {
-  align-items: end;
-}
-.home-tour h2 {
-  margin: 7px 0 0;
-  text-transform: uppercase;
-  font: italic 800 clamp(34px, 5vw, 58px) var(--display);
-}
-.home-tour .court-list {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.home-tour .court-list button {
-  min-height: 82px;
-}
 .arena-view {
   flex: 1 1 0;
   min-height: 0;
@@ -1735,142 +1482,12 @@ body.sidebar-open .brand {
   .app-shell {
     height: 100svh;
   }
-  .sidebar {
-    position: sticky;
-    top: 0;
-    height: 100svh;
-    overflow-y: auto;
-  }
   .main {
     height: 100svh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
-  .home-view {
-    overflow-y: auto;
-  }
-  .arena-view .court-heading {
-    flex: none;
-    min-height: 88px;
-    padding: 12px 0;
-  }
-  .arena-view h1 {
-    font-size: clamp(48px, 5.5vh, 70px);
-    line-height: 0.82;
-  }
-  .arena-view #court-description {
-    margin-top: 8px;
-  }
-  .arena-view .game-panel {
-    flex: 1 1 0;
-    min-height: 250px;
-    display: flex;
-    flex-direction: column;
-  }
-  .arena-view .scoreboard {
-    flex: none;
-    min-height: 68px;
-    height: 68px;
-  }
-  .arena-view .court-toolbar {
-    flex: none;
-    min-height: 58px;
-  }
-  .arena-view .court-wrap {
-    position: relative;
-    width: 100%;
-    min-height: 0;
-    flex: 1 1 0;
-    container-type: size;
-    overflow: hidden;
-  }
-  .arena-view #court {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: min(100cqw, 161.2903cqh);
-    height: auto;
-    max-width: none;
-    max-height: none;
-    transform: translate(-50%, -50%);
-  }
-  .arena-view .below-court {
-    flex: none;
-    min-height: 68px;
-    margin-top: 8px;
-  }
-  .arena-view .objective-card,
-  .arena-view .tactic-card {
-    padding: 10px 14px;
-  }
-  .arena-view .objective-card > p {
-    margin: 7px 0;
-  }
-  .arena-view .game-footer {
-    flex: none;
-    margin-top: 7px;
-  }
-}
-@media (min-width: 901px) and (max-height: 800px) {
-  .arena-view .court-heading {
-    min-height: 70px;
-    padding: 8px 0;
-  }
-  .arena-view h1 {
-    font-size: 44px;
-  }
-  .arena-view #court-description,
-  .arena-view .court-stamp,
-  .arena-view .game-footer {
-    display: none;
-  }
-  .arena-view .scoreboard {
-    height: 60px;
-    min-height: 60px;
-  }
-  .arena-view .court-toolbar {
-    min-height: 54px;
-  }
-  .arena-view .below-court {
-    min-height: 62px;
-  }
-}
-body.sidebar-collapsed .sidebar {
-  display: none;
-}
-body.sidebar-collapsed .app-shell {
-  display: block;
-  max-width: none;
-}
-body.sidebar-open {
-  overflow: hidden;
-}
-body.sidebar-open .sidebar {
-  position: fixed;
-  inset: 0 auto 0 0;
-  z-index: 70;
-  display: flex;
-  width: min(300px, 86vw);
-  height: 100svh;
-  overflow-y: auto;
-}
-body.sidebar-open .sidebar-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: block;
-  width: 100%;
-  height: 100%;
-  padding: 0;
-  background: #060311b8;
-  border: 0;
-}
-body.play-view #home-view {
-  display: none;
-}
-body.play-view .workspace-bar {
-  display: grid;
 }
 body.play-view .arena-view .below-court {
   display: none;
@@ -1879,65 +1496,11 @@ body.play-view .arena-view .below-court {
   body {
     overflow-x: hidden;
   }
-  .app-shell {
-    display: block;
-  }
-  .sidebar {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 70;
-    display: none;
-    width: min(300px, 86vw);
-    height: 100svh;
-    overflow-y: auto;
-    border-right: 2px solid var(--pink);
-    border-bottom: 0;
-  }
-  .sidebar .mode-nav {
-    display: grid;
-    grid-template-columns: 1fr;
-    overflow: visible;
-  }
-  .sidebar .mode-button {
-    min-width: 0;
-    justify-content: flex-start;
-  }
-  body.sidebar-open .sidebar {
-    display: flex;
-  }
-  body.sidebar-open .sidebar-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    display: block;
-    width: 100%;
-    height: 100%;
-    padding: 0;
-    background: #060311b8;
-    border: 0;
-  }
   .main {
     padding: 0 13px 18px;
   }
-  .workspace-bar {
-    position: sticky;
-    top: 0;
-    z-index: 30;
-    margin: 0 -13px;
-    padding: 0 13px;
-    background: var(--bg);
-  }
-  /* Play view gives .main 12px of padding, so the bar bleeds by 12px too and
-     the page keeps its exact viewport width. */
-  body.play-view .workspace-bar {
-    margin: 0 -12px;
-    padding: 0 12px;
-  }
-  .home-view {
-    padding-top: 20px;
-  }
   .home-modes,
-  .home-tour .court-list {
+  .courts-view .court-list {
     grid-template-columns: 1fr 1fr;
   }
   .home-progress {
@@ -1945,11 +1508,8 @@ body.play-view .arena-view .below-court {
   }
 }
 @media (max-width: 560px) {
-  .home-hero h1 {
-    font-size: clamp(52px, 18vw, 76px);
-  }
   .home-modes,
-  .home-tour .court-list {
+  .courts-view .court-list {
     grid-template-columns: 1fr;
   }
   .home-progress dl {
@@ -1957,5 +1517,263 @@ body.play-view .arena-view .below-court {
   }
   .account-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ── Game shell ─────────────────────────────────────────────────────────────
+   The app opens on a title card with one vertical menu instead of a web
+   dashboard, and every menu here is driven by the same padNavigate helper the
+   arena uses, so a controller can reach everything from the first frame. */
+.title-view {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px 20px;
+  overflow-y: auto;
+}
+.title-view[hidden],
+.courts-view[hidden] {
+  display: none;
+}
+.title-card {
+  width: min(520px, 100%);
+  text-align: center;
+}
+.game-title {
+  margin: 6px 0 0;
+  color: var(--ink);
+  text-transform: lowercase;
+  font: italic 800 clamp(64px, 11vw, 132px) / 0.82 var(--display);
+  letter-spacing: -3px;
+  text-shadow: 6px 6px 0 #ff3aa7cc;
+}
+.game-title span {
+  color: var(--cyan);
+}
+.title-tagline {
+  margin: 12px 0 0;
+  color: var(--cyan);
+  font: 700 11px var(--sign);
+  letter-spacing: 5px;
+}
+.menu-list {
+  display: grid;
+  gap: 9px;
+  margin: 30px 0 0;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 20px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+  text-align: left;
+  text-transform: uppercase;
+  font: 700 18px var(--sign);
+  clip-path: polygon(0 0, 97% 0, 100% 30%, 100% 100%, 0 100%);
+  transition:
+    background 0.14s,
+    border-color 0.14s,
+    transform 0.14s;
+}
+.menu-item .menu-key {
+  color: var(--cyan);
+  opacity: 0;
+  transition: opacity 0.14s;
+}
+.menu-item.primary {
+  border-left-color: var(--cyan);
+}
+.menu-item:hover,
+.menu-item:focus-visible,
+.menu-item.pad-focus {
+  color: #100923;
+  background: var(--cyan);
+  border-color: var(--cyan);
+  transform: translateX(4px);
+  outline: none;
+}
+.menu-item:hover .menu-key,
+.menu-item:focus-visible .menu-key,
+.menu-item.pad-focus .menu-key {
+  color: #100923;
+  opacity: 1;
+}
+.title-note {
+  margin: 18px 0 0;
+  color: var(--cyan);
+  font: 700 10px var(--sign);
+  letter-spacing: 2px;
+}
+.title-hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.courts-view {
+  flex: 1 1 0;
+  min-height: 0;
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 18px 26px 26px;
+  overflow-y: auto;
+}
+.courts-bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+.courts-bar h1 {
+  flex: 1;
+  margin: 0;
+  font-size: clamp(28px, 4vw, 52px);
+}
+.menu-item.back {
+  width: auto;
+  min-height: 44px;
+  padding: 8px 16px;
+  font-size: 13px;
+}
+.courts-count {
+  color: var(--pink);
+  font: 700 9px var(--sign);
+  letter-spacing: 1px;
+}
+.courts-view .court-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.courts-view .home-modes {
+  margin-top: 16px;
+}
+.courts-view .home-progress {
+  margin-top: 16px;
+}
+.court-list button.pad-focus,
+.home-modes button.pad-focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 2px var(--cyan);
+  outline: none;
+}
+
+/* ── Pause menu ─────────────────────────────────────────────────────────────
+   Absorbs the settings drawer: Courts, Settings and Quit are all one press
+   away from pausing, and the round underneath stays visible but frozen. */
+.pause-menu {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #06031ce0;
+  backdrop-filter: blur(3px);
+}
+.pause-menu[hidden] {
+  display: none;
+}
+.pause-card {
+  width: min(360px, 100%);
+  padding: 24px 26px;
+  color: #fff;
+  background: #160c2df2;
+  border: 1px solid var(--cyan);
+  box-shadow: 0 20px 60px #03010fcc;
+  text-align: center;
+}
+.pause-card h2 {
+  margin: 6px 0 0;
+  text-transform: uppercase;
+  font: italic 800 40px var(--display);
+}
+.pause-card .menu-list {
+  margin-top: 18px;
+}
+.pause-card .menu-item {
+  min-height: 46px;
+  font-size: 15px;
+}
+
+/* ── Press any button ───────────────────────────────────────────────────────
+   The engine still clears a turnover on its own timer for Android; the desktop
+   shell freezes the round instead, so a player who put the controller down
+   never loses the next possession. */
+.resume-prompt {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 6px;
+  padding: 20px;
+  text-align: center;
+  background: radial-gradient(ellipse at center, #06031cd0 30%, #06031c70);
+  pointer-events: none;
+}
+.resume-prompt[hidden] {
+  display: none;
+}
+.resume-reason {
+  margin: 0 0 10px;
+  color: #fff;
+  font: italic 800 clamp(20px, 3.2vw, 42px) var(--display);
+  text-shadow: 3px 3px var(--pink);
+}
+.resume-cue {
+  margin: 0;
+  color: var(--cyan);
+  font: 700 clamp(15px, 2.1vw, 26px) var(--sign);
+  letter-spacing: 6px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .resume-cue {
+    animation: resume-pulse 1.1s ease-in-out infinite;
+  }
+}
+@keyframes resume-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.resume-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+/* The turnover message owns the middle of the court during a hold, so the
+   live announcement banner steps aside instead of overlapping it. */
+.court-wrap.is-held .game-announcement {
+  display: none;
+}
+.settings-utilities {
+  margin-top: 14px;
+}
+@media (max-width: 900px) {
+  .courts-view .court-list {
+    grid-template-columns: 1fr 1fr;
+  }
+  .courts-view {
+    padding: 14px 14px 22px;
+  }
+  .menu-item {
+    min-height: 50px;
+    font-size: 15px;
+  }
+}
+@media (max-width: 560px) {
+  .courts-view .court-list {
+    grid-template-columns: 1fr;
+  }
+  .courts-bar {
+    flex-wrap: wrap;
   }
 }

@@ -72,14 +72,22 @@ async function settled(page) {
   );
   await page.waitForTimeout(100);
 }
-async function openSidebar(page) {
-  if (!(await page.locator("#home-button").isVisible()))
-    await page.locator("#sidebar-toggle").click();
-  await page.locator("#home-button").waitFor({ state: "visible" });
+async function openPauseMenu(page) {
+  if (!(await page.locator("#pause-menu").isVisible())) {
+    await page.keyboard.press("Escape");
+    await page.locator("#pause-menu").waitFor({ state: "visible" });
+  }
+}
+// Leaving the arena now goes through the pause menu, which is the replacement
+// for both the old workspace Home button and the sidebar drawer.
+async function leaveToCourts(page) {
+  await openPauseMenu(page);
+  await page.locator("#pause-courts").click();
+  await page.locator("#courts-view").waitFor({ state: "visible" });
 }
 
 await check(
-  "fresh launch presents a complete Home with real modes, tour, and progress",
+  "fresh launch presents a gamepad-ready title screen with the progress one step behind it",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
@@ -88,13 +96,44 @@ await check(
     const page = await context.newPage(),
       errors = errorsFor(page);
     await page.goto(baseURL, { waitUntil: "networkidle" });
-    assert.equal(await page.locator("#home-view").isVisible(), true);
+    assert.equal(await page.locator("#title-view").isVisible(), true);
+    assert.equal(await page.locator("#courts-view").isHidden(), true);
     assert.equal(await page.locator("#arena-view").isHidden(), true);
+    // A game, not a dashboard: one vertical menu and nothing else.
+    assert.deepEqual(
+      await page.evaluate(() =>
+        [...document.querySelectorAll("#title-menu button")]
+          .filter((el) => !el.hidden)
+          .map((el) => el.id),
+      ),
+      ["title-play", "title-courts", "settings-button"],
+      "the browser build hides Quit, which only works in the shell",
+    );
+    // Keyboard and controller both start on the menu with no clicking first.
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.id),
+      "title-play",
+    );
+    // Every earned statistic the old dashboard showed still exists, on Courts.
+    await page.locator("#title-courts").click();
+    await page.locator("#courts-view").waitFor({ state: "visible" });
+    assert.equal(page.url().endsWith("#courts"), true);
     assert.equal(await page.locator("[data-home-mode]").count(), 4);
     assert.equal(await page.locator(".court-item").count(), 6);
     assert.match(await page.locator("#level-label").textContent(), /LEVEL 1/i);
     assert.equal(await page.locator("#home-stars").textContent(), "0");
     assert.match(await page.locator("#home-cleared").textContent(), /^0/);
+    for (const id of [
+      "home-best",
+      "home-games",
+      "home-total-passes",
+      "home-best-one-touch",
+    ])
+      assert.equal(
+        await page.locator(`#${id}`).isVisible(),
+        true,
+        `${id} must survive the redesign`,
+      );
     for (const selector of [".home-modes", ".home-progress"]) {
       const box = await page.locator(selector).boundingBox();
       assert.ok(
@@ -106,13 +145,16 @@ await check(
       path: new URL("home-desktop.png", outputDir).pathname,
       fullPage: true,
     });
+    // Escape walks back out of Courts without touching the mouse.
+    await page.keyboard.press("Escape");
+    await page.locator("#title-view").waitFor({ state: "visible" });
     assert.deepEqual(errors, []);
     await context.close();
   },
 );
 
 await check(
-  "Continue, Home modes, unlocked courts, leave confirmation, and history preserve rounds",
+  "Play, Courts modes, unlocked courts, leave confirmation, and history preserve rounds",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
@@ -137,10 +179,10 @@ await check(
       errors = errorsFor(page);
     await page.goto(baseURL);
     assert.match(
-      await page.locator("#home-continue-copy").textContent(),
+      await page.locator("#title-play-copy").textContent(),
       /El Patio|Barcelona/i,
     );
-    await page.locator("#home-continue").click();
+    await page.locator("#title-play").click();
     assert.equal(page.url().endsWith("#play"), true);
     assert.equal(await page.locator("#court-title").textContent(), "El Patio");
     await page.evaluate(async () => {
@@ -158,12 +200,11 @@ await check(
     const beforeHome = await page.evaluate(() => ({
       time: window.__navGame.time,
     }));
-    await page.locator("#arena-home-button").click();
-    assert.equal(await page.locator("#home-view").isVisible(), true);
-    assert.match(
-      await page.locator("#home-continue").textContent(),
-      /Resume round/i,
-    );
+    await leaveToCourts(page);
+    assert.equal(await page.locator("#courts-view").isVisible(), true);
+    await page.locator("#courts-back").click();
+    await page.locator("#title-view").waitFor({ state: "visible" });
+    assert.match(await page.locator("#title-play").textContent(), /Resume/i);
     const frozen = await page.evaluate(() => window.__navGame.time);
     await page.waitForTimeout(180);
     assert.equal(
@@ -172,8 +213,10 @@ await check(
         frozen,
       ),
       true,
-      "Home must freeze the active round",
+      "leaving the arena must freeze the active round",
     );
+    await page.locator("#title-courts").click();
+    await page.locator("#courts-view").waitFor({ state: "visible" });
     await page.locator('[data-home-mode="daily"]').click();
     assert.match(
       await page.locator("#overlay-kicker").textContent(),
@@ -194,13 +237,15 @@ await check(
       true,
       "resume keeps the same round time",
     );
-    await page.locator("#arena-home-button").click();
+    await leaveToCourts(page);
     await page.locator('[data-home-mode="daily"]').click();
     await page.locator("#secondary-button").click();
     assert.match(await page.locator("#mode-label").textContent(), /DAILY/i);
+    // The arena still pushes its own history entry, so Back leaves the court.
     await page.goBack();
-    await page.waitForFunction(() => !location.hash);
-    assert.equal(await page.locator("#home-view").isVisible(), true);
+    await page.waitForFunction(() => location.hash !== "#play");
+    assert.equal(await page.locator("#arena-view").isHidden(), true);
+    await page.locator("#courts-view").waitFor({ state: "visible" });
     await page.locator(".court-item").nth(4).click();
     assert.match(await page.locator("#court-title").textContent(), /The Cage/i);
     assert.equal(page.url().endsWith("#play"), true);
@@ -210,7 +255,7 @@ await check(
 );
 
 await check(
-  "desktop sidebar collapse persists and settings remain reachable in Play view",
+  "the pause menu reaches Courts, Settings and Quit two presses from pausing",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -218,23 +263,28 @@ await check(
     });
     const page = await context.newPage(),
       errors = errorsFor(page);
-    // Home keeps the docked sidebar, so collapse is exercised there.
     await page.goto(`${baseURL}/`);
-    await page.locator("#sidebar-toggle").click();
+    // Settings is on the title menu on the way in.
+    await page.locator("#settings-button").click();
     assert.equal(
-      await page
-        .locator("body")
-        .evaluate((el) => el.classList.contains("sidebar-collapsed")),
+      await page.locator("#settings-dialog").evaluate((el) => el.open),
       true,
     );
-    await page.reload();
-    assert.equal(
-      await page
-        .locator("body")
-        .evaluate((el) => el.classList.contains("sidebar-collapsed")),
-      true,
-    );
-    // The arena is always Play view: no toggle, sidebar becomes a drawer.
+    // Everything the sidebar used to hold moved into settings.
+    for (const id of [
+      "sound-button",
+      "theme-button",
+      "fullscreen-button",
+      "help-button",
+      "account-button",
+    ])
+      assert.equal(
+        await page.locator(`#${id}`).isVisible(),
+        true,
+        `${id} must stay reachable after the drawer was removed`,
+      );
+    await page.locator("#close-settings").click();
+    // ...and on the pause menu once a round is on screen.
     await page.goto(`${baseURL}/#play`);
     assert.equal(
       await page
@@ -243,25 +293,40 @@ await check(
       true,
     );
     assert.equal(await page.locator("#play-view-button").count(), 0);
-    assert.equal(await page.locator(".sidebar").isHidden(), true);
-    await openSidebar(page);
+    assert.equal(await page.locator(".sidebar").count(), 0);
+    assert.equal(await page.locator("#sidebar-toggle").count(), 0);
+    await page.locator("#start-button").click();
+    await page.keyboard.press("Escape");
+    await page.locator("#pause-menu").waitFor({ state: "visible" });
+    assert.deepEqual(
+      await page.evaluate(() =>
+        [...document.querySelectorAll("#pause-menu button")]
+          .filter((el) => !el.hidden)
+          .map((el) => el.id),
+      ),
+      ["pause-resume", "pause-restart", "pause-courts", "pause-settings"],
+    );
     await page.screenshot({
       path: new URL("play-view-menu-desktop.png", outputDir).pathname,
       fullPage: true,
     });
-    await page.locator("#settings-button").click();
+    await page.locator("#pause-settings").click();
     assert.equal(
       await page.locator("#settings-dialog").evaluate((el) => el.open),
       true,
     );
     await page.locator("#close-settings").click();
+    // Courts is one press away from the same menu.
+    await page.locator("#pause-courts").click();
+    await page.locator("#courts-view").waitFor({ state: "visible" });
+    assert.equal(await page.locator(".court-item").count(), 6);
     assert.deepEqual(errors, []);
     await context.close();
   },
 );
 
 await check(
-  "mobile drawer traps intent, closes by Escape and backdrop, and restores focus",
+  "the pause menu traps gameplay intent, closes by Escape, and restores focus",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 390, height: 844 },
@@ -286,45 +351,46 @@ await check(
       "custom pause key works in Arena",
     );
     await page.locator("#start-button").click();
-    await page.locator("#sidebar-toggle").focus();
-    await page.locator("#sidebar-toggle").click();
+    // The custom pause key opens the menu, and the menu takes focus.
+    await page.keyboard.press("KeyP");
+    await page.locator("#pause-menu").waitFor({ state: "visible" });
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.id),
+      "pause-resume",
+    );
     assert.equal(
       await page
         .locator("body")
-        .evaluate((el) => el.classList.contains("sidebar-open")),
+        .evaluate((el) => el.classList.contains("menu-open")),
       true,
     );
-    assert.equal(await page.locator("#settings-button").isVisible(), true);
-    await page.keyboard.press("KeyP");
+    assert.equal(await page.locator("#pause-settings").isVisible(), true);
+    // A gameplay key must not reach the court from behind the menu.
+    await page.keyboard.press("KeyD");
+    assert.equal(await page.locator("#pause-menu").isVisible(), true);
+    assert.equal(await page.locator("#game-overlay").getAttribute("inert"), "");
+    // Tab stays inside the menu instead of wandering into the court.
+    await page.keyboard.press("Tab");
     assert.equal(
-      await page.locator("#game-overlay").isVisible(),
+      await page.evaluate(() =>
+        Boolean(
+          document.querySelector("#pause-menu")?.contains(document.activeElement),
+        ),
+      ),
       true,
-      "gameplay key cannot resume behind drawer",
-    );
-    assert.equal(await page.locator("#arena-view").getAttribute("inert"), "");
-    assert.equal(
-      await page.evaluate(() => document.activeElement?.id),
-      "home-button",
     );
     await page.keyboard.press("Escape");
-    assert.equal(
-      await page
-        .locator("body")
-        .evaluate((el) => el.classList.contains("sidebar-open")),
-      false,
-    );
+    await page.locator("#pause-menu").waitFor({ state: "hidden" });
     assert.equal(
       await page.evaluate(() => document.activeElement?.id),
-      "sidebar-toggle",
+      "court",
+      "leaving the menu hands focus back to the court",
     );
-    await page.locator("#sidebar-toggle").click();
-    await page.mouse.click(385, 420);
-    assert.equal(
-      await page
-        .locator("body")
-        .evaluate((el) => el.classList.contains("sidebar-open")),
-      false,
-    );
+    // Escape a second time re-opens it; Resume closes it the same way.
+    await page.keyboard.press("KeyP");
+    await page.locator("#pause-menu").waitFor({ state: "visible" });
+    await page.locator("#pause-resume").click();
+    await page.locator("#pause-menu").waitFor({ state: "hidden" });
     assert.equal(
       await page.evaluate(() => {
         const el = document.activeElement;
@@ -332,12 +398,14 @@ await check(
       }),
       true,
     );
-    await page.locator("#arena-home-button").click();
+    await page.keyboard.press("KeyP");
+    await page.locator("#pause-courts").click();
+    await page.locator("#courts-view").waitFor({ state: "visible" });
     await page.keyboard.press("KeyP");
     assert.equal(
-      await page.locator("#home-view").isVisible(),
+      await page.locator("#courts-view").isVisible(),
       true,
-      "custom pause key cannot activate hidden Arena controls from Home",
+      "custom pause key cannot activate hidden Arena controls from Courts",
     );
     await page.screenshot({
       path: new URL("mobile-menu.png", outputDir).pathname,
@@ -437,7 +505,7 @@ await check(
 );
 
 await check(
-  "Home and its complete menu remain usable at portrait and compact landscape sizes",
+  "the title screen and its menus remain usable at portrait and compact landscape sizes",
   async () => {
     for (const [width, height, suffix] of [
       [390, 844, "mobile"],
@@ -453,18 +521,38 @@ await check(
         errors = errorsFor(page);
       await page.goto(baseURL);
       await settled(page);
-      assert.equal(await page.locator("#home-view").isVisible(), true);
+      assert.equal(await page.locator("#title-view").isVisible(), true);
+      for (const id of ["title-play", "title-courts", "settings-button"]) {
+        const box = await page.locator(`#${id}`).boundingBox();
+        assert.ok(
+          box && box.x >= -1 && box.x + box.width <= width + 1,
+          `${suffix} ${id} bounded ${JSON.stringify(box)}`,
+        );
+      }
       await page.screenshot({
         path: new URL(`home-${suffix}.png`, outputDir).pathname,
         fullPage: true,
       });
-      await page.locator("#sidebar-toggle").click();
-      assert.equal(await page.locator("#settings-button").isVisible(), true);
+      await page.locator("#settings-button").tap();
+      await page.locator("#settings-dialog").waitFor({ state: "visible" });
       assert.equal(await page.locator("#fullscreen-button").isVisible(), true);
+      assert.equal(await page.locator("#sound-button").isVisible(), true);
       await page.screenshot({
         path: new URL(`menu-${suffix}.png`, outputDir).pathname,
         fullPage: true,
       });
+      await page.locator("#close-settings").tap();
+      await page.locator("#title-courts").tap();
+      await page.locator("#courts-view").waitFor({ state: "visible" });
+      assert.equal(
+        await page.evaluate(
+          () =>
+            document.documentElement.scrollWidth <=
+            document.documentElement.clientWidth,
+        ),
+        true,
+        `${suffix} courts screen must not overflow horizontally`,
+      );
       assert.deepEqual(errors, []);
       await context.close();
     }

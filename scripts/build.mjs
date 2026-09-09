@@ -13,6 +13,13 @@ for (const asset of [
   "icon-512.png",
 ])
   await cp(path.join("public", asset), path.join("dist/desktop", asset));
+// The soundtrack lives in a subdirectory, so it needs the folder made first.
+await mkdir("dist/desktop/audio", { recursive: true });
+for (const track of ["neon-biscayne.ogg"])
+  await cp(
+    path.join("public/audio", track),
+    path.join("dist/desktop/audio", track),
+  );
 await mkdir("dist/desktop/licenses", { recursive: true });
 await mkdir("dist/mobile/licenses", { recursive: true });
 for (const license of ["Poppins-LICENSE.txt", "Roboto-LICENSE.txt"]) {

@@ -132,15 +132,21 @@ await check('desktop gameplay, controls, progression, help, and full run', async
   assert.equal(await page.locator('.court-item').nth(3).isDisabled(), false);
   assert.equal(await page.locator('.court-item').nth(4).isDisabled(), true);
 
-  // The arena always presents Play view, so sidebar controls open in a drawer.
+  // The arena always presents Play view, and the pause menu is now the only
+  // route to Settings, which is where the utility buttons live.
   assert.equal(await page.evaluate(() => document.body.classList.contains('play-view')), true);
-  await page.locator('#sidebar-toggle').click();
+  assert.equal(await page.locator('#sidebar-toggle').count(), 0, 'the navigation drawer is gone');
+  await page.keyboard.press('Escape');
+  await page.locator('#pause-menu').waitFor({ state: 'visible' });
+  await page.locator('#pause-settings').click();
+  assert.equal(await page.locator('#settings-dialog').evaluate(dialog => dialog.open), true);
   await page.locator('#help-button').click();
   assert.equal(await page.locator('#help-dialog').evaluate(dialog => dialog.open), true);
   await expectText(page.locator('#help-dialog'), /Gamepad:.*left stick/s);
   await page.locator('#close-help').click();
+  await page.locator('#close-settings').click();
   await page.keyboard.press('Escape');
-  await page.locator('.sidebar').waitFor({ state: 'hidden' });
+  await page.locator('#pause-menu').waitFor({ state: 'hidden' });
 
   await page.locator('#start-button').click();
   await observeGame(page);
@@ -284,9 +290,9 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   const nextFocus = await page.evaluate(() => document.activeElement?.textContent?.trim());
   assert.notEqual(nextFocus, firstFocus, 'D-pad should move menu focus');
   assert.equal(
-    await page.evaluate(() => Boolean(document.querySelector('#home-view')?.contains(document.activeElement))),
+    await page.evaluate(() => Boolean(document.querySelector('#title-menu')?.contains(document.activeElement))),
     true,
-    'home-view navigation should stay inside the home view',
+    'title-screen navigation should stay inside the title menu',
   );
   assert.equal(
     await page.evaluate(() => document.activeElement?.classList.contains('pad-focus')),
@@ -338,9 +344,10 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   assert.ok(playingAims.some(aim => aim && (aim.x || aim.y)),
     `the stick should aim the court while playing, got ${JSON.stringify(playingAims.slice(0, 5))}`);
   await pulsePad(page, 9);
-  await expectText(page.locator('#overlay-title'), /ball can wait/i);
+  await page.locator('#pause-menu').waitFor({ state: 'visible' });
+  await expectText(page.locator('#pause-title'), /paused/i);
   // A paused round must ignore the stick: no aim reaches the renderer, so the
-  // court cannot keep repainting target lanes behind the pause overlay.
+  // court cannot keep repainting target lanes behind the pause menu.
   await page.evaluate(() => { window.__renderAims.length = 0; });
   await page.evaluate(() => window.__setTestPad({ axes: [1, -1, 1, -1] }));
   await page.waitForTimeout(300);
@@ -355,33 +362,36 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   assert.equal(await page.evaluate(() => window.__observedGame.movementX), pausedMovement,
     'the stick must not move the carrier while paused');
   await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 0, 0] }));
-  const overlayButtons = await page.evaluate(() => [...document.querySelectorAll('#game-overlay button')]
+  const menuButtons = await page.evaluate(() => [...document.querySelectorAll('#pause-menu button')]
     .filter(el => !el.disabled && !el.closest('[hidden]') && el.getClientRects().length).map(el => el.id));
-  assert.deepEqual(overlayButtons, ['start-button', 'secondary-button'], 'pause overlay should offer two buttons');
+  assert.deepEqual(menuButtons, ['pause-resume', 'pause-restart', 'pause-courts', 'pause-settings'],
+    'the pause menu should offer resume, restart, courts and settings (quit is shell only)');
   await page.evaluate(() => document.activeElement?.blur());
   const visited = [];
   for (let step = 0; step < 4; step++) {
     await pulsePad(page, 13);
     visited.push(await page.evaluate(() => ({
       id: document.activeElement?.id,
-      inOverlay: Boolean(document.querySelector('#game-overlay')?.contains(document.activeElement)),
+      inMenu: Boolean(document.querySelector('#pause-menu')?.contains(document.activeElement)),
       marked: Boolean(document.activeElement?.classList.contains('pad-focus')),
     })));
   }
-  assert.equal(visited.every(v => v.inOverlay && v.marked), true,
-    `paused d-pad focus must stay inside the overlay, got ${JSON.stringify(visited)}`);
-  assert.deepEqual([...new Set(visited.map(v => v.id))].sort(), ['secondary-button', 'start-button'],
-    `paused d-pad should cycle only the overlay buttons, got ${JSON.stringify(visited)}`);
+  assert.equal(visited.every(v => v.inMenu && v.marked), true,
+    `paused d-pad focus must stay inside the pause menu, got ${JSON.stringify(visited)}`);
+  assert.deepEqual([...new Set(visited.map(v => v.id))].sort(),
+    ['pause-courts', 'pause-restart', 'pause-resume', 'pause-settings'],
+    `paused d-pad should cycle only the pause menu, got ${JSON.stringify(visited)}`);
   const upFrom = visited.at(-1).id;
   await pulsePad(page, 12);
   assert.notEqual(await page.evaluate(() => document.activeElement?.id), upFrom, 'up on the d-pad should move too');
-  assert.equal(await page.evaluate(() => Boolean(document.querySelector('#game-overlay')?.contains(document.activeElement))), true);
+  assert.equal(await page.evaluate(() => Boolean(document.querySelector('#pause-menu')?.contains(document.activeElement))), true);
   await pulsePad(page, 9);
-  assert.equal(await page.locator('#game-overlay').isHidden(), true);
+  assert.equal(await page.locator('#pause-menu').isHidden(), true);
   await page.evaluate(() => window.__setTestPad({ connected: false }));
   await page.waitForFunction(() => document.querySelector('#toast')?.textContent.includes('Controller disconnected'));
   await expectText(page.locator('#toast'), /Controller disconnected/);
-  await expectText(page.locator('#overlay-title'), /ball can wait/i);
+  await page.locator('#pause-menu').waitFor({ state: 'visible' });
+  await expectText(page.locator('#pause-title'), /paused/i);
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -504,6 +514,141 @@ async function offlineReload(baseURL) {
   await context.setOffline(false);
   await context.close();
 }
+
+
+await check('losing possession holds the round until a fresh button press', async () => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const errors = watchErrors(page);
+  await page.goto(`${baseURL}/#play`);
+  await page.locator('#start-button').click();
+  await observeGame(page);
+  // A key held from before the turnover must not dismiss the prompt: this is
+  // exactly the "still pressing pass when I lost it" case.
+  await page.keyboard.down('KeyW');
+  await page.evaluate(() => window.__observedGame.game.turnover('PASS INTERCEPTED'));
+  await page.locator('#resume-prompt').waitFor({ state: 'visible' });
+  await expectText(page.locator('#resume-reason'), /INTERCEPTED/i);
+  await page.waitForTimeout(450);
+  assert.equal(await page.locator('#resume-prompt').isVisible(), true,
+    'a key that was already down must not release the hold');
+  // The round is genuinely frozen while it waits.
+  const held = await page.evaluate(() => window.__observedGame.game.time);
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => Math.abs(window.__observedGame.game.time - held) < 0.01), true,
+    'the clock must not run while the round waits for the player');
+  // The turnover message stays legible for as long as the hold lasts, instead
+  // of timing out after 2.5s the way the live announcement banner does.
+  await expectText(page.locator('#resume-reason'), /INTERCEPTED/i);
+  await page.keyboard.up('KeyW');
+  // Pausing on top of a hold works, and coming back returns to the hold.
+  await page.keyboard.press('Escape');
+  await page.locator('#pause-menu').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#resume-prompt').isHidden(), true,
+    'the pause menu owns the screen while it is open');
+  await page.locator('#pause-resume').click();
+  await page.locator('#resume-prompt').waitFor({ state: 'visible' });
+  // Any fresh key resumes.
+  await page.waitForTimeout(350);
+  await page.keyboard.press('KeyW');
+  await page.locator('#resume-prompt').waitFor({ state: 'hidden' });
+  const resumed = await page.evaluate(() => window.__observedGame.game.time);
+  await page.waitForTimeout(250);
+  assert.equal(await page.evaluate(time => window.__observedGame.game.time < time, resumed), true,
+    'the clock runs again once the player is back');
+  // A pointer press works too, for mouse and touch players.
+  await page.evaluate(() => window.__observedGame.game.turnover('CAUGHT IN POSSESSION'));
+  await page.locator('#resume-prompt').waitFor({ state: 'visible' });
+  await page.waitForTimeout(350);
+  await page.mouse.click(200, 400);
+  await page.locator('#resume-prompt').waitFor({ state: 'hidden' });
+  // The third turnover ends the round outright, so the finish overlay wins and
+  // the hold never appears on top of it.
+  await page.evaluate(() => {
+    const game = window.__observedGame.game;
+    game.turnovers = 2;
+    game.turnover('CAUGHT IN POSSESSION');
+  });
+  await page.locator('#game-overlay').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#resume-prompt').isHidden(), true,
+    'the end of a round must not leave a press-any-button prompt behind');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+await check('the right stick picks the smart-pass target and marks it on the court', async () => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
+  await context.addInitScript(() => {
+    const state = { connected: true, axes: [0, 0, 0, 0], pressed: Array(16).fill(false) };
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => state.connected ? [{
+      connected: true, index: 0, id: 'Injected standards gamepad', mapping: 'standard',
+      axes: [...state.axes], buttons: state.pressed.map(pressed => ({ pressed, touched: pressed, value: Number(pressed) })),
+    }] : [] });
+    window.__setTestPad = ({ button, pressed, axes, connected }) => {
+      if (button !== undefined) state.pressed[button] = pressed;
+      if (axes) state.axes = axes;
+      if (connected !== undefined) state.connected = connected;
+    };
+  });
+  const page = await context.newPage();
+  const errors = watchErrors(page);
+  await page.goto(`${baseURL}/#play`);
+  await page.locator('#start-button').click();
+  await observeGame(page);
+  await page.evaluate(async () => {
+    const { Renderer } = await import('/src/renderer.js');
+    window.__targets = [];
+    const render = Renderer.prototype.render;
+    Renderer.prototype.render = function (game, options = {}) {
+      window.__targets.push(options.target);
+      return render.call(this, game, options);
+    };
+  });
+  // Park the four players at known spots so aiming is deterministic, then sweep
+  // the right stick around and collect which teammate A would pass to.
+  await page.evaluate(() => {
+    const game = window.__observedGame.game;
+    game.carrier = 0;
+    game.players[0].x = 500; game.players[0].y = 310;
+    game.players[1].x = 500; game.players[1].y = 110;
+    game.players[2].x = 850; game.players[2].y = 310;
+    game.players[3].x = 500; game.players[3].y = 520;
+  });
+  const chosen = new Set();
+  for (const axes of [[0, 0, 0, -1], [0, 0, 1, 0], [0, 0, 0, 1]]) {
+    await page.evaluate(a => window.__setTestPad({ axes: a }), axes);
+    await page.waitForTimeout(200);
+    const target = await page.locator('#court-wrap').getAttribute('data-target');
+    assert.match(target || '', /^[0-3]$/, `the stick must select a teammate, got ${target}`);
+    chosen.add(target);
+    // The renderer is told about the same player, so the lane preview and the
+    // selection ring both point at it.
+    assert.equal(await page.evaluate(() => window.__targets.at(-1)), Number(target));
+    assert.match(await page.locator('#target-label').textContent(), new RegExp(`→\\s*${Number(target) + 1}`));
+  }
+  await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 0, 0] }));
+  assert.ok(chosen.size >= 2,
+    `sweeping the right stick must change the chosen teammate, got ${[...chosen].join()}`);
+  // The highlight is painted onto the canvas, so a frame drawn with a target
+  // must differ from one drawn without: pausing clears the selection.
+  await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 1, 0] }));
+  await page.waitForTimeout(200);
+  const withTarget = await page.locator('#court').evaluate(c => c.toDataURL());
+  await page.keyboard.press('Escape');
+  await page.locator('#pause-menu').waitFor({ state: 'visible' });
+  await page.waitForTimeout(150);
+  assert.equal(await page.locator('#court-wrap').getAttribute('data-target'), '',
+    'a paused round selects nobody');
+  assert.equal(await page.evaluate(() => window.__targets.at(-1)), null);
+  await page.locator('#pause-menu').evaluate(el => (el.style.display = 'none'));
+  await page.waitForTimeout(120);
+  const withoutTarget = await page.locator('#court').evaluate(c => c.toDataURL());
+  await page.locator('#pause-menu').evaluate(el => (el.style.display = ''));
+  assert.notEqual(withTarget, withoutTarget,
+    'the selected teammate must be visibly marked on the court');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
 
 await browser.close();
 server?.kill();

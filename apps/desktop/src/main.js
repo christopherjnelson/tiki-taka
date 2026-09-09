@@ -30,7 +30,12 @@ import {
   captureAllowed,
 } from "../../../packages/engine/src/settings.js";
 import { createLocalDataAdapter } from "../../../packages/data/src/index.js";
+import { createMusic } from "./music.js";
 const $ = (id) => document.getElementById(id);
+// Running inside the Electron shell rather than a browser tab. window.close()
+// only ends the app for a window the shell opened itself, so Quit is offered
+// nowhere else.
+const inShell = location.protocol === "tiki:";
 let storage;
 try {
   storage = window.localStorage;
@@ -67,12 +72,29 @@ let settings = initialData.settings;
 let accountStats = initialData.stats;
 let profile = (await dataAdapter.getSession())?.profile || null;
 const sound = new Sound(progress.sound);
+const music = createMusic({
+  // A build copies the track next to index.html (scripts/build.mjs); the
+  // source tree is served straight from public/. Picking one rather than
+  // probing both keeps a 404 out of the console.
+  sources: [
+    import.meta.env?.PROD
+      ? new URL("./audio/neon-biscayne.ogg", document.baseURI).href
+      : new URL("/public/audio/neon-biscayne.ogg", location.origin).href,
+  ],
+});
+music.setEnabled(progress.sound);
 const renderer = new Renderer($("court"));
+const viewForHash = () =>
+  location.hash === "#play"
+    ? "arena"
+    : location.hash === "#courts"
+      ? "courts"
+      : "title";
 let mode = "career",
   courtIndex = progress.lastCourt,
   game,
   phase = "ready",
-  view = location.hash === "#play" ? "arena" : "home",
+  view = viewForHash(),
   bank = false,
   focusToggle = false;
 let keys = new Set(),
@@ -93,8 +115,16 @@ let padPrevious = [],
   focusEarnedTimeout;
 let capture = null;
 let padFocusElement = null;
-let sidebarOpen = false;
-let sidebarReturnFocus = null;
+// The pause menu is the shell's one in-round menu. It owns Resume, Restart,
+// Courts, Settings and Quit so nothing important hides behind a drawer.
+let menuOpen = false;
+let menuReturnFocus = null;
+// A turnover freezes the round until the player asks for it back, so putting
+// the controller down for a moment never costs the next possession.
+let awaitingResume = false,
+  holdKeys = new Set(),
+  holdPointers = new Set(),
+  holdElapsed = 0;
 let pointerId = null,
   joystickId = null,
   joystickOrigin = null;
@@ -123,65 +153,64 @@ function toast(text) {
   clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => $("toast").classList.remove("visible"), 4000);
 }
-const mobileSidebar = () => matchMedia("(max-width: 900px)").matches;
-// Play view is the only desktop presentation now, so the arena always drawers
-// the sidebar away rather than docking it beside the court.
-const drawerSidebar = () => mobileSidebar() || view === "arena";
-function syncSidebar() {
-  const expanded = drawerSidebar() ? sidebarOpen : !settings.sidebarCollapsed;
-  document.body.classList.toggle(
-    "sidebar-open",
-    drawerSidebar() && sidebarOpen,
-  );
-  document.body.classList.toggle(
-    "sidebar-collapsed",
-    !drawerSidebar() && settings.sidebarCollapsed,
-  );
-  $("sidebar-toggle").setAttribute("aria-expanded", String(expanded));
-  $("sidebar-toggle").textContent = expanded ? "Hide sidebar" : "Show sidebar";
-  $("sidebar-backdrop").hidden = !(drawerSidebar() && sidebarOpen);
-  if ($("arena-view")) $("arena-view").inert = drawerSidebar() && sidebarOpen;
-  if ($("home-view")) $("home-view").inert = drawerSidebar() && sidebarOpen;
+const anyDialogOpen = () =>
+  $("settings-dialog").open || $("help-dialog").open || $("account-dialog").open;
+// Any menu that must swallow gameplay input before it reaches the court.
+const menuBlocking = () => menuOpen || anyDialogOpen();
+function syncPauseMenu() {
+  const open = menuOpen && view === "arena";
+  $("pause-menu").hidden = !open;
+  document.body.classList.toggle("menu-open", open);
+  // The pause menu covers the court, so the start/finish overlay and the
+  // resume prompt step aside rather than stacking underneath it.
+  $("game-overlay").inert = open;
+  syncResumePrompt();
 }
-function closeSidebar({ restoreFocus = true } = {}) {
-  sidebarOpen = false;
-  syncSidebar();
-  if (restoreFocus) sidebarReturnFocus?.focus({ preventScroll: true });
-  sidebarReturnFocus = null;
+function openMenu() {
+  if (view !== "arena" || menuOpen) return;
+  clearInput();
+  menuReturnFocus = document.activeElement;
+  menuOpen = true;
+  syncPauseMenu();
+  padFocus($("pause-resume"));
 }
-function toggleSidebar() {
-  if (drawerSidebar()) {
-    if (sidebarOpen) closeSidebar();
-    else {
-      if (phase === "playing") pause();
-      clearInput();
-      sidebarReturnFocus = document.activeElement;
-      sidebarOpen = true;
-      syncSidebar();
-      $("home-button")?.focus({ preventScroll: true });
-    }
-  } else {
-    const opening = settings.sidebarCollapsed;
-    if (opening) {
-      if (phase === "playing") pause();
-      clearInput();
-    }
-    settings.sidebarCollapsed = !settings.sidebarCollapsed;
-    persistSettings();
-    syncSidebar();
-  }
+// Pausing always lands on the menu; from a ready or finished court the menu is
+// still the way to reach Courts, Settings and Quit.
+function openPauseMenu() {
+  if (view !== "arena") return;
+  if (phase === "playing") pause();
+  else openMenu();
 }
-function syncHome() {
-  const resumable = phase === "paused";
+function closePauseMenu({ restoreFocus = true } = {}) {
+  if (!menuOpen) return;
+  menuOpen = false;
+  syncPauseMenu();
+  if (restoreFocus)
+    (menuReturnFocus?.isConnected ? menuReturnFocus : $("court"))?.focus({
+      preventScroll: true,
+    });
+  menuReturnFocus = null;
+}
+// Leaving the menu resumes the round when there was one to resume.
+function dismissPauseMenu() {
+  const wasPaused = phase === "paused";
+  closePauseMenu({ restoreFocus: !wasPaused });
+  if (wasPaused) resume();
+}
+function syncTitle() {
+  const resumable = phase === "paused" || phase === "playing";
   const court = COURTS[resumable ? courtIndex : progress.lastCourt];
-  $("home-continue").textContent = resumable
-    ? "Resume round"
+  $("title-play").lastChild.textContent = resumable
+    ? " Resume"
     : progress.xp > 0
-      ? "Continue World Tour"
-      : "Start World Tour";
-  $("home-continue-copy").textContent = resumable
+      ? " Continue"
+      : " Play";
+  $("title-play-copy").textContent = resumable
     ? `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`
     : `${court.name} · ${court.place}`;
+}
+function syncHome() {
+  if ($("title-view")) syncTitle();
   const courtProgress = Object.values(progress.courts || {});
   $("home-stars").textContent = String(
     courtProgress.reduce((total, item) => total + (item.stars || 0), 0),
@@ -194,48 +223,26 @@ function syncHome() {
   $("home-total-passes").textContent = String(accountStats.totalPasses);
   $("home-best-one-touch").textContent = String(accountStats.bestOneTouch);
 }
-function arenaWorkspaceLabel() {
-  const modeName =
-    mode === "career"
-      ? "WORLD TOUR"
-      : mode === "daily"
-        ? "DAILY CIRCUIT"
-        : mode === "endless"
-          ? "ENDLESS FLOW"
-          : "FREE PRACTICE";
-  return `${modeName} / ${game?.config?.name || COURTS[courtIndex].name}`;
-}
 function applyView(next, { updateHash = true } = {}) {
-  if (next === "home" && phase === "playing") pause();
   view = next;
-  $("home-view").hidden = view !== "home";
+  if (next !== "arena" && phase === "playing") pause();
+  $("title-view").hidden = view !== "title";
+  $("courts-view").hidden = view !== "courts";
   $("arena-view").hidden = view !== "arena";
-  $("arena-home-button").hidden = view !== "arena";
-  $("workspace-label").textContent =
-    view === "arena" ? arenaWorkspaceLabel() : "HOME";
-  $("home-button").setAttribute(
-    "aria-current",
-    view === "home" ? "page" : "false",
-  );
-  if (view === "home") {
-    closeSidebar({ restoreFocus: false });
-    syncHome();
-  }
+  if (view !== "arena") closePauseMenu({ restoreFocus: false });
   syncProgress();
   syncSettingChrome();
-  syncSidebar();
+  syncPauseMenu();
   requestAnimationFrame(() => {
-    if ($("settings-dialog").open || $("help-dialog").open || sidebarOpen)
-      return;
-    if (view === "home") {
-      $("home-title").tabIndex = -1;
-      $("home-title").focus({ preventScroll: true });
-    } else if ($("game-overlay").hidden)
-      $("court").focus({ preventScroll: true });
-    else $("start-button").focus({ preventScroll: true });
+    if (anyDialogOpen() || menuOpen) return;
+    if (view === "title") padFocus($("title-play"));
+    else if (view === "courts") padFocus($("courts-back"));
+    else if ($("game-overlay").hidden) $("court").focus({ preventScroll: true });
+    else padFocus($("start-button"));
   });
   if (updateHash) {
-    const hash = view === "arena" ? "#play" : "";
+    const hash =
+      view === "arena" ? "#play" : view === "courts" ? "#courts" : "";
     if (location.hash !== hash)
       history.pushState(null, "", hash || location.pathname + location.search);
   }
@@ -299,12 +306,12 @@ function syncProgress() {
     btn.addEventListener("click", () => switchMode("career", i));
     $("court-list").append(btn);
   });
-  document.querySelectorAll("[data-mode]").forEach((btn) => {
-    const active = view === "arena" && btn.dataset.mode === mode;
+  document.querySelectorAll("[data-home-mode]").forEach((btn) => {
+    const active = view === "arena" && btn.dataset.homeMode === mode;
     btn.classList.toggle("active", active);
     btn.setAttribute("aria-pressed", String(active));
   });
-  if ($("home-view")) syncHome();
+  syncHome();
 }
 function setOverlay(kicker, title, copy, primary, secondary = "") {
   $("game-overlay").hidden = false;
@@ -364,11 +371,10 @@ function prepare() {
   roundCleared = false;
   bank = false;
   focusToggle = false;
+  endHold();
   clearInput();
   $("eyebrow").textContent = game.config.place;
   $("court-title").textContent = game.config.name;
-  if (view === "arena")
-    $("workspace-label").textContent = arenaWorkspaceLabel();
   $("court-description").textContent = game.config.description;
   $("mode-label").textContent =
     mode === "career"
@@ -415,7 +421,7 @@ function prepare() {
   syncHud();
 }
 function switchMode(next, index = courtIndex) {
-  if (sidebarOpen) closeSidebar({ restoreFocus: false });
+  closePauseMenu({ restoreFocus: false });
   if (phase === "playing" || phase === "paused") {
     pause();
     applyView("arena");
@@ -438,8 +444,8 @@ function switchMode(next, index = courtIndex) {
 }
 let pendingSwitch = null;
 function start() {
-  if ($("settings-dialog").open || $("help-dialog").open || sidebarOpen) return;
-  sound.unlock();
+  if (menuBlocking()) return;
+  unlockAudio();
   if (
     phase === "ready" &&
     mode === "daily" &&
@@ -470,8 +476,63 @@ function start() {
       : `Keep it moving. Click a teammate or use ${settings.bindings.smartPass.map(readableKey).join(" / ")} for a smart pass.`,
   );
 }
-// The court only takes movement and aim while a round is actually running.
-const acceptingPlayInput = () => view === "arena" && phase === "playing";
+// The court only takes movement and aim while a round is actually running and
+// is not waiting for the player to pick the ball back up.
+const acceptingPlayInput = () =>
+  view === "arena" && phase === "playing" && !awaitingResume;
+// One gesture unlocks both the effects engine and the soundtrack. Browsers
+// block audio until a real user interaction, so every entry point routes here.
+function unlockAudio() {
+  sound.unlock();
+  music.unlock();
+  syncMusicState();
+}
+function syncMusicState() {
+  document.body.dataset.music = music.state;
+}
+function syncResumePrompt() {
+  const showing = awaitingResume && view === "arena" && !menuOpen;
+  $("resume-prompt").hidden = !showing;
+  $("court-wrap").classList.toggle("is-held", showing);
+}
+// A turnover holds the round. The buttons and keys that were already down when
+// the hold started are remembered so the press the player was still making
+// cannot dismiss the message they need to read.
+function beginHold(reason) {
+  if (awaitingResume) return;
+  awaitingResume = true;
+  holdElapsed = 0;
+  holdKeys = new Set(keys);
+  holdPointers = new Set(
+    [pointerId, joystickId].filter((id) => id !== null && id !== undefined),
+  );
+  $("resume-reason").textContent = reason || "POSSESSION LOST";
+  focusToggle = false;
+  clearInput();
+  setControlsEnabled(false);
+  syncFocusButtons();
+  syncResumePrompt();
+}
+function endHold() {
+  if (!awaitingResume) return;
+  awaitingResume = false;
+  holdKeys.clear();
+  holdPointers.clear();
+  syncResumePrompt();
+  if (phase === "playing") {
+    setControlsEnabled(true);
+    $("court").focus({ preventScroll: true });
+  }
+}
+// Any *fresh* press releases the hold: a button still held from before does
+// not count, and a short grace period covers a press that straddles the event.
+function releaseHold() {
+  if (!awaitingResume || menuOpen || anyDialogOpen()) return false;
+  if (phase !== "playing") return false;
+  if (holdElapsed < 0.3) return false;
+  endHold();
+  return true;
+}
 function clearInput() {
   keys.clear();
   stick = { x: 0, y: 0 };
@@ -493,42 +554,45 @@ function pause() {
   $("focus-button").setAttribute("aria-pressed", "false");
   $("touch-focus").setAttribute("aria-pressed", "false");
   setPauseState(true);
-  setOverlay(
-    "TAKE A BREATH",
-    "The ball can wait.",
-    "Your round is paused. Come back when you’re ready.",
-    "Keep playing",
-    "Restart round",
-  );
+  syncResumePrompt();
+  openMenu();
 }
 function resume() {
-  if (
-    phase !== "paused" ||
-    view !== "arena" ||
-    $("settings-dialog").open ||
-    $("help-dialog").open ||
-    sidebarOpen
-  )
-    return;
+  if (phase !== "paused" || view !== "arena" || menuBlocking()) return;
   phase = "playing";
   pendingSwitch = null;
   $("game-overlay").hidden = true;
   setPauseState(false);
-  setControlsEnabled(true);
+  // A round paused mid-hold comes back to the hold, not straight into play.
+  setControlsEnabled(!awaitingResume);
+  if (awaitingResume) holdElapsed = 0;
+  syncResumePrompt();
   $("court").focus({ preventScroll: true });
 }
+// Start / Esc / the HUD pause button all land here: it is the one route into
+// the pause menu, and the one route back out of it.
 function togglePause() {
   if (view !== "arena") return;
-  if (phase === "playing") pause();
-  else if (phase === "paused") resume();
+  if (menuOpen) dismissPauseMenu();
+  else openPauseMenu();
+}
+function quitGame() {
+  if (!inShell) {
+    toast("Close the browser tab to leave the game.");
+    return;
+  }
+  persist();
+  // The renderer has no Node bridge by design. window.close() ends a window
+  // the shell opened, and apps/electron/main.mjs quits on window-all-closed.
+  window.close();
 }
 function queuedSmartTarget() {
   if (!game.ball) return game.bestTarget(aim);
   return game.bestQueuedTarget(aim);
 }
 function doPass(id, forceBank = false) {
-  if (phase !== "playing") return;
-  sound.unlock();
+  if (phase !== "playing" || awaitingResume) return;
+  unlockAudio();
   const target = id ?? queuedSmartTarget();
   const useBank =
     forceBank || bank || actionDown(settings.bindings, keys, "wallHold");
@@ -613,6 +677,7 @@ function finish() {
   phase = "finished";
   focusToggle = false;
   clearInput();
+  endHold();
   $("pause-button").disabled = true;
   setPauseState(false);
   setControlsEnabled(false);
@@ -717,7 +782,10 @@ soundLabel();
 $("sound-button").addEventListener("click", () => {
   progress.sound = !progress.sound;
   sound.enabled = progress.sound;
-  sound.unlock();
+  // One switch for effects and soundtrack: muting stops both, unmuting brings
+  // the music back where it left off.
+  music.setEnabled(progress.sound);
+  unlockAudio();
   $("sound-button").setAttribute("aria-pressed", String(progress.sound));
   soundLabel();
   persist();
@@ -725,6 +793,7 @@ $("sound-button").addEventListener("click", () => {
 function syncSettingChrome() {
   document.documentElement.dataset.theme = settings.theme;
   document.body.classList.toggle("play-view", view === "arena");
+  document.body.dataset.view = view;
   $("theme-button").setAttribute(
     "aria-pressed",
     String(settings.theme === "light"),
@@ -936,12 +1005,7 @@ $("fullscreen-button").addEventListener("click", async () => {
 document.addEventListener("fullscreenchange", syncFullscreen);
 // F11 is handled by the shell, which only tells the page by resizing it.
 window.addEventListener("resize", syncFullscreen);
-$("sidebar-toggle").addEventListener("click", toggleSidebar);
-$("sidebar-close")?.addEventListener("click", () => closeSidebar());
-$("sidebar-backdrop").addEventListener("click", () => closeSidebar());
-$("home-button").addEventListener("click", () => applyView("home"));
-$("arena-home-button").addEventListener("click", () => applyView("home"));
-$("home-continue").addEventListener("click", () => {
+function playFromMenu() {
   const resumeRound = phase === "paused";
   if (!resumeRound) {
     mode = "career";
@@ -950,34 +1014,33 @@ $("home-continue").addEventListener("click", () => {
   }
   applyView("arena");
   if (resumeRound) resume();
+}
+$("title-play").addEventListener("click", playFromMenu);
+$("title-courts").addEventListener("click", () => applyView("courts"));
+$("title-quit").addEventListener("click", quitGame);
+$("courts-back").addEventListener("click", () => applyView("title"));
+$("pause-resume").addEventListener("click", dismissPauseMenu);
+$("pause-restart").addEventListener("click", () => {
+  closePauseMenu({ restoreFocus: false });
+  prepare();
+  start();
 });
-$("game-sidebar")
-  .querySelector(".brand")
-  ?.addEventListener("click", (event) => {
-    if (
-      event.button === 0 &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.shiftKey &&
-      !event.altKey
-    ) {
-      event.preventDefault();
-      applyView("home");
-    }
-  });
+$("pause-courts").addEventListener("click", () => {
+  closePauseMenu({ restoreFocus: false });
+  applyView("courts");
+});
+$("pause-settings").addEventListener("click", openSettings);
+$("pause-quit").addEventListener("click", quitGame);
+// Quit only appears in the packaged shell: window.close() does nothing for a
+// normal browser tab, and a dead menu item is worse than no menu item.
+for (const id of ["title-quit", "pause-quit"]) $(id).hidden = !inShell;
 document.querySelectorAll("[data-home-mode]").forEach((button) => {
   button.addEventListener("click", () =>
     switchMode(button.dataset.homeMode, courtIndex),
   );
 });
 addEventListener("hashchange", () => {
-  applyView(location.hash === "#play" ? "arena" : "home", {
-    updateHash: false,
-  });
-});
-addEventListener("resize", () => {
-  if (!drawerSidebar()) sidebarOpen = false;
-  syncSidebar();
+  applyView(viewForHash(), { updateHash: false });
 });
 $("help-button").addEventListener("click", () => {
   pause();
@@ -996,11 +1059,6 @@ $("help-dialog").addEventListener("click", (e) => {
       e.target.close();
   }
 });
-document
-  .querySelectorAll("[data-mode]")
-  .forEach((btn) =>
-    btn.addEventListener("click", () => switchMode(btn.dataset.mode)),
-  );
 window.addEventListener("keydown", (e) => {
   if (capture) {
     e.preventDefault();
@@ -1047,31 +1105,33 @@ window.addEventListener("keydown", (e) => {
     syncSettingChrome();
     return;
   }
-  if ($("settings-dialog").open) return;
-  if ($("help-dialog").open) return;
-  if (e.code === "Escape" && sidebarOpen) {
-    e.preventDefault();
-    closeSidebar();
-    return;
-  }
-  if (e.code === "Tab" && drawerSidebar() && sidebarOpen) {
-    const elements = [
-      ...$("game-sidebar").querySelectorAll(
-        "button:not(:disabled),a[href],select:not(:disabled)",
-      ),
-    ].filter((element) => element.getClientRects().length);
-    if (elements.length) {
+  if (anyDialogOpen()) return;
+  if (menuOpen) {
+    const action = actionForCode(settings.bindings, e.code);
+    if (e.code === "Escape" || action === "pause") {
       e.preventDefault();
-      const current = elements.indexOf(document.activeElement);
-      const direction = e.shiftKey ? -1 : 1;
-      elements[
-        (current + direction + elements.length) % elements.length
-      ].focus();
+      dismissPauseMenu();
+      return;
     }
+    // Tab cycles the menu only; gameplay keys must not leak to the court.
+    if (e.code === "Tab") {
+      const elements = padFocusables($("pause-menu"));
+      if (elements.length) {
+        e.preventDefault();
+        const current = elements.indexOf(document.activeElement);
+        const direction = e.shiftKey ? -1 : 1;
+        padFocus(
+          elements[(current + direction + elements.length) % elements.length],
+        );
+      }
+      return;
+    }
+    if (action) e.preventDefault();
     return;
   }
-  if (drawerSidebar() && sidebarOpen) {
-    if (actionForCode(settings.bindings, e.code)) e.preventDefault();
+  if (e.code === "Escape" && view === "courts") {
+    e.preventDefault();
+    applyView("title");
     return;
   }
   const action = actionForCode(settings.bindings, e.code);
@@ -1081,6 +1141,16 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (phase !== "playing" || e.target instanceof HTMLSelectElement) return;
+  // The press that was still down when possession was lost is remembered, so
+  // only a genuinely new key wakes the round back up.
+  if (awaitingResume) {
+    if (!holdKeys.has(e.code) && !e.repeat) {
+      if (action) e.preventDefault();
+      releaseHold();
+    }
+    keys.add(e.code);
+    return;
+  }
   if (action) e.preventDefault();
   keys.add(e.code);
   if (e.repeat) return;
@@ -1088,7 +1158,10 @@ window.addEventListener("keydown", (e) => {
   if (action === "smartPass") doPass();
   if (action === "wallToggle") toggleBank();
 });
-window.addEventListener("keyup", (e) => keys.delete(e.code));
+window.addEventListener("keyup", (e) => {
+  keys.delete(e.code);
+  holdKeys.delete(e.code);
+});
 window.addEventListener("blur", () => {
   if (capture) cancelCapture("Binding cancelled when the window lost focus.");
   if (phase === "playing") pause();
@@ -1113,9 +1186,23 @@ $("court").addEventListener("pointermove", (e) => {
   };
   if (e.pointerId === pointerId) pointerMove = p;
 });
+// A pointer press anywhere also picks the ball back up, which keeps touch and
+// mouse players on the same footing as the controller.
+document.addEventListener(
+  "pointerdown",
+  (e) => {
+    if (!awaitingResume) return;
+    if (holdPointers.has(e.pointerId)) return;
+    if (releaseHold()) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  },
+  true,
+);
 $("court").addEventListener("pointerdown", (e) => {
-  if (phase !== "playing") return;
-  sound.unlock();
+  if (phase !== "playing" || awaitingResume) return;
+  unlockAudio();
   const p = courtPoint(e),
     radius = e.pointerType === "touch" ? 70 : 46;
   const target = game.players
@@ -1242,11 +1329,20 @@ function pollGamepad(dt) {
   if (!padConnected) {
     padConnected = true;
     toast(
-      "Controller connected. X to arm the wall pass · A to play it · LT to focus.",
+      "Controller connected. Right stick picks the pass · A plays it · X arms the wall · LT focuses.",
     );
   }
   const pressed = pad.buttons.map((b) => b.pressed),
     tap = (i) => pressed[i] && !padPrevious[i];
+  // Any button at all resumes after a turnover, but only on a fresh press:
+  // tap() is edge-triggered, so a button still held from before is ignored.
+  if (awaitingResume && !menuOpen && !anyDialogOpen()) {
+    const anyTap = pressed.some((down, i) => down && !padPrevious[i]);
+    if (anyTap && !tap(9) && releaseHold()) {
+      padPrevious = pressed;
+      return;
+    }
+  }
   const dead = (v) => (Math.abs(v || 0) > 0.18 ? v : 0);
   // Sticks only drive the court while the round is actually accepting play.
   // Otherwise a nudge behind the pause overlay would keep repainting aim lanes.
@@ -1271,7 +1367,10 @@ function pollGamepad(dt) {
     padNavigate(root, { dt, direction, activate: tap(0), fallback });
   // Most modal context first: navigation is scoped to whatever is actually on
   // screen so the d-pad never wanders into controls the player cannot see.
-  if ($("account-dialog").open) {
+  if ($("help-dialog").open) {
+    if (tap(1) || tap(9)) $("help-dialog").close();
+    else nav($("help-dialog"));
+  } else if ($("account-dialog").open) {
     if (tap(1) || tap(9)) $("account-dialog").close();
     else nav($("account-dialog"));
   } else if ($("settings-dialog").open) {
@@ -1284,31 +1383,92 @@ function pollGamepad(dt) {
       direction,
       activate: tap(0) && !capture,
     });
-  } else if ($("help-dialog").open) {
-    if (tap(1) || tap(9)) $("help-dialog").close();
-    else nav($("help-dialog"));
-  } else if (drawerSidebar() && sidebarOpen) {
-    if (tap(1) || tap(9)) closeSidebar();
-    else nav($("game-sidebar"));
-  } else if (view === "arena" && phase === "playing") {
+  } else if (menuOpen) {
+    if (tap(1) || tap(9)) dismissPauseMenu();
+    else nav($("pause-menu"), () => $("pause-resume").click());
+  } else if (view === "arena" && phase === "playing" && !awaitingResume) {
     if (tap(0)) doPass();
     if (tap(2)) toggleBank();
-    if (tap(9)) pause();
+    if (tap(9)) openPauseMenu();
+  } else if (view === "arena" && awaitingResume) {
+    if (tap(9)) openPauseMenu();
   } else if (view === "arena" && !$("game-overlay").hidden) {
-    if ((tap(9) || tap(1)) && phase === "paused") resume();
+    if (tap(9)) openPauseMenu();
     else nav($("game-overlay"), () => $("start-button").click());
-  } else if (view === "home") {
-    nav($("home-view"), () => $("home-continue").click());
+  } else if (view === "courts") {
+    if (tap(1)) applyView("title");
+    else nav($("courts-view"), () => $("courts-back").click());
+  } else if (view === "title") {
+    nav($("title-menu"), () => $("title-play").click());
   } else {
     nav(document.body);
   }
   padPrevious = pressed;
 }
+// The engine's targetValue() scores lanes by distance from defenders, so the
+// smart pass drifts away from exactly the tight lane SPLIT THE PRESS rewards.
+// The right stick already outweighs that safety term through `aim`; this makes
+// the resulting choice unmistakable, so a controller player can aim a split on
+// purpose instead of hoping for one. The renderer's own selection ring is a
+// 2px circle, which is not enough to steer by.
+function drawTargetHighlight(target) {
+  const c = renderer.ctx;
+  if (!c || !Number.isInteger(target)) return;
+  const player = game?.players?.[target];
+  if (!player || target === (game.ball?.to ?? game.carrier)) return;
+  const pulse = 1 + Math.sin(performance.now() / 150) * 0.06;
+  const accent =
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--venue-accent")
+      .trim() || "#27ead8";
+  c.save();
+  c.globalAlpha = 0.9;
+  c.strokeStyle = accent;
+  c.lineWidth = 4;
+  c.shadowColor = accent;
+  c.shadowBlur = 18;
+  c.beginPath();
+  c.arc(player.x, player.y, 42 * pulse, 0, Math.PI * 2);
+  c.stroke();
+  c.shadowBlur = 0;
+  c.globalAlpha = 1;
+  c.lineWidth = 2;
+  c.strokeStyle = "#fff";
+  c.beginPath();
+  c.arc(player.x, player.y, 50 * pulse, 0, Math.PI * 2);
+  c.stroke();
+  // Four corner brackets read as a reticle even against a busy court.
+  c.lineWidth = 3.5;
+  c.strokeStyle = accent;
+  const r = 56 * pulse,
+    span = Math.PI / 9;
+  for (let i = 0; i < 4; i++) {
+    const mid = Math.PI / 4 + (i * Math.PI) / 2;
+    c.beginPath();
+    c.arc(player.x, player.y, r, mid - span, mid + span);
+    c.stroke();
+  }
+  c.font = '900 15px "Tiki Signage","Arial Narrow",sans-serif';
+  c.textAlign = "center";
+  c.textBaseline = "middle";
+  c.fillStyle = "rgba(6,12,26,.85)";
+  c.beginPath();
+  c.roundRect(player.x - 40, player.y - 78, 80, 22, 11);
+  c.fill();
+  c.strokeStyle = accent;
+  c.lineWidth = 1.5;
+  c.stroke();
+  c.fillStyle = "#fff";
+  c.fillText(bank ? "WALL ↗" : "PASS ↗", player.x, player.y - 66);
+  c.restore();
+}
 function frame(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000 || 0);
   lastTime = now;
   pollGamepad(dt);
-  if (view === "arena" && phase === "playing") {
+  if (awaitingResume) holdElapsed += dt;
+  let turnoverText = null;
+  if (view === "arena" && phase === "playing" && !awaitingResume) {
     let x =
       Number(actionDown(settings.bindings, keys, "moveRight")) -
       Number(actionDown(settings.bindings, keys, "moveLeft")) +
@@ -1356,9 +1516,14 @@ function frame(now) {
         announce(event.text || `${event.streak} ONE-TOUCH PASSES`);
         announcementTime = now;
       }
+      // The engine is shared with Android and still resumes on its own timer;
+      // the desktop shell holds the round on top of that instead of changing
+      // packages/engine.
+      if (event.type === "turnover") turnoverText = event.text;
       if (
-        event.type === "turnover" ||
-        (event.type === "score" && now - announcementTime > 3500)
+        event.type === "score" &&
+        !turnoverText &&
+        now - announcementTime > 3500
       ) {
         announce(event.text);
         announcementTime = now;
@@ -1366,16 +1531,27 @@ function frame(now) {
       if (event.type === "end") finish();
     }
     game.events = [];
+    // A third turnover ends the round outright, and the finish overlay owns
+    // the screen from there: never hold on top of it.
+    if (turnoverText && phase === "playing") beginHold(turnoverText);
+    else if (turnoverText) announce(turnoverText);
+    turnoverText = null;
   }
   if (view === "arena") {
     syncHud();
+    const target =
+      phase === "playing" && !awaitingResume ? queuedSmartTarget() : null;
     renderer.render(game, {
       preview: phase === "ready",
-      target: phase === "playing" ? queuedSmartTarget() : null,
+      target,
       aim,
       bank: bank || actionDown(settings.bindings, keys, "wallHold"),
-      paused: phase === "paused" || phase === "finished",
+      paused: phase === "paused" || phase === "finished" || awaitingResume,
     });
+    drawTargetHighlight(target);
+    $("court-wrap").dataset.target = Number.isInteger(target)
+      ? String(target)
+      : "";
   }
   requestAnimationFrame(frame);
 }
@@ -1383,8 +1559,15 @@ syncSettingChrome();
 syncFullscreen();
 syncAccountDialog();
 prepare();
-syncSidebar();
+syncPauseMenu();
 applyView(view, { updateHash: false });
+// Electron does not require a gesture, so the shell starts the soundtrack at
+// once; a browser tab keeps this armed until the first real interaction.
+music.unlock();
+syncMusicState();
+for (const type of ["pointerdown", "keydown", "touchstart"])
+  window.addEventListener(type, unlockAudio, { capture: true, passive: true });
+setInterval(syncMusicState, 500);
 requestAnimationFrame(frame);
 if (storageFallback)
   toast("Browser storage is unavailable. Progress will last for this session.");
