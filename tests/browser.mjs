@@ -328,6 +328,9 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   await page.waitForTimeout(150);
   await page.locator('#start-button').focus();
   await pulsePad(page, 0);
+  // Activation lands on the next rAF tick, which is slower on a CI runner than
+  // on a workstation, so wait for the state rather than sampling immediately.
+  await page.locator('#game-overlay').waitFor({ state: 'hidden', timeout: 10000 });
   assert.equal(await page.locator('#game-overlay').isHidden(), true, 'A should activate focused start');
   await observeGame(page);
   await pulsePad(page, 0);
