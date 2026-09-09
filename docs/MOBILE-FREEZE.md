@@ -22,7 +22,9 @@ This checks the 47 tracked mobile/shared source files against the saved hashes. 
 
 ## Reopened on 2026-09-08 for the split-the-press bonus
 
-The user explicitly reopened this freeze on 2026-09-08 to add the split-the-press bonus to shared gameplay and to stop reward popups overlapping each other. Two frozen files changed and had their hashes in `docs/mobile-freeze-1.1.1.json` regenerated: `packages/engine/src/game.js` (split-the-press scoring, bonus label precedence) and `packages/presentation/src/renderer.js` (popups now stack instead of drawing on top of one another). The other 45 entries are untouched.
+The user explicitly reopened this freeze on 2026-09-08 to add the split-the-press bonus to shared gameplay, to stop reward popups overlapping each other, and to make the sound effects audible. Three frozen files changed and had their hashes in `docs/mobile-freeze-1.1.1.json` regenerated: `packages/engine/src/game.js` (split-the-press scoring, bonus label precedence), `packages/presentation/src/renderer.js` (popups now stack instead of drawing on top of one another) and `packages/presentation/src/audio.js` (effect gains raised). The other 44 entries are untouched.
+
+The audio change is a mix level, not a behaviour change. Measured with an `OfflineAudioContext`, every effect peaked between -21 and -32 dBFS, roughly 15-20 dB below normal game levels, which is why the game sounded silent at ordinary listening volumes. Effects now peak between -8 and -16 dBFS and the five-voice crowd cheer at -12 dBFS, with no clipping. Mobile gets the same fix.
 
 Mobile gameplay therefore no longer matches the shipped 1.1.1 APK. Scoring, Focus rewards, and the on-court label set all differ from the build in `release/mobile/tiki-taka-1.1.1.apk`. Mobile needs re-verification and a version bump (Android version name and version code) before the next Android release; do not ship the new engine under 1.1.1.
 

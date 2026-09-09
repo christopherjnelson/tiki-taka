@@ -72,7 +72,7 @@ export class Sound {
       this.crowdVoice(
         now + 0.025 + voice * 0.013,
         1 + spread * 0.021,
-        emphatic ? 0.055 : 0.042,
+        emphatic ? 0.32 : 0.24,
       );
     }
   }
@@ -137,7 +137,7 @@ export class Sound {
         notes[i],
         start + i * 0.07,
         0.14,
-        type === "turnover" ? 0.09 : type === "focus" ? 0.025 : 0.045,
+        type === "turnover" ? 0.4 : type === "focus" ? 0.15 : 0.25,
         type === "kick" ? "triangle" : "sine",
       );
   }
