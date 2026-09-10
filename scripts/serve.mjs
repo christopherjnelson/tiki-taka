@@ -4,6 +4,20 @@ import path from "node:path";
 const root = path.resolve(process.env.SERVE_DIR || ".");
 const servingBuild = Boolean(process.env.SERVE_DIR);
 const port = Number(process.env.PORT || 5173);
+// The deployed browser can call just its configured Supabase project. Keep
+// this origin exact rather than loosening connect-src to all of Supabase.
+// Vite exposes VITE_SUPABASE_* to the client; this server only reads the URL
+// to mirror that origin in its development/preview CSP header.
+let supabaseConnectSource = "";
+try {
+  const value = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  if (value) {
+    const parsed = new URL(value);
+    if (parsed.protocol === "https:") supabaseConnectSource = ` ${parsed.origin}`;
+  }
+} catch {
+  // An invalid optional URL simply leaves the strict self-only policy intact.
+}
 const types = {
   ".html": "text/html",
   ".js": "text/javascript",
@@ -21,7 +35,7 @@ const types = {
 // clickjacking protection.
 const securityHeaders = {
   "Content-Security-Policy":
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'${supabaseConnectSource}; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`,
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
 };

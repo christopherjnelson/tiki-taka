@@ -4,6 +4,8 @@ import {
   normalizeSettings,
   readProgress,
 } from "../../engine/src/index.js";
+import { createConfiguredSupabaseDataAdapter } from "./supabase.js";
+export { createSupabaseDataAdapter, createConfiguredSupabaseDataAdapter } from "./supabase.js";
 
 const PREFIX = "tiki-taka.local-data.v1";
 const ACCOUNTS_KEY = `${PREFIX}.accounts`;
@@ -24,6 +26,16 @@ const statsDefaults = () => ({
   totalPasses: 0,
   bestOneTouch: 0,
 });
+
+const preferencesDefaults = () => ({ scoreSaveChoice: "ask" });
+
+function cleanPreferences(value) {
+  const scoreSaveChoice = value?.scoreSaveChoice;
+  return {
+    scoreSaveChoice:
+      scoreSaveChoice === "always" || scoreSaveChoice === "never" ? scoreSaveChoice : "ask",
+  };
+}
 
 const cleanStats = (value) => ({
   games: integer(value?.games),
@@ -51,6 +63,7 @@ function normalizeData(value) {
     progress: normalizeProgress(value?.progress),
     settings: normalizeSettings(value?.settings),
     stats: cleanStats(value?.stats),
+    preferences: cleanPreferences(value?.preferences),
   };
 }
 
@@ -245,6 +258,7 @@ export function createLocalDataAdapter({ storage, crypto = globalThis.crypto } =
         progress: update.progress ?? current.progress,
         settings: update.settings ?? current.settings,
         stats: update.stats ?? current.stats,
+        preferences: update.preferences ?? current.preferences,
       });
       write(key, next);
       return next;
@@ -432,10 +446,24 @@ export function createRemoteDataAdapter({
 // adapter and the caller never needs to know the difference.
 export async function selectDataAdapter({
   apiBase,
+  supabaseUrl,
+  supabasePublishableKey,
+  supabaseClient,
   storage,
   crypto = globalThis.crypto,
   fetch: fetchImpl = globalThis.fetch,
 } = {}) {
+  if (supabaseUrl || supabasePublishableKey || supabaseClient) {
+    if (!supabaseClient && (!supabaseUrl || !supabasePublishableKey))
+      return createLocalDataAdapter({ storage, crypto });
+    return createConfiguredSupabaseDataAdapter({
+      url: supabaseUrl,
+      publishableKey: supabasePublishableKey,
+      client: supabaseClient,
+      storage,
+      crypto,
+    });
+  }
   if (!apiBase) return createLocalDataAdapter({ storage, crypto });
   const remote = createRemoteDataAdapter({ apiBase, storage, crypto, fetch: fetchImpl });
   try {
