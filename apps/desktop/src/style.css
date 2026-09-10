@@ -1104,10 +1104,9 @@ dialog::backdrop {
   color: var(--muted);
   font-size: 11px;
 }
-/* Thirteen bindings in one column ran the dialog to ~1370px, which meant
-   scrolling inside it on a 1080x1024 screen. auto-fit gives two columns
-   wherever there is room for them and falls back to one on a phone, with no
-   media query to keep in step with the dialog's own width. */
+/* Keep the default footprint suitable for the existing narrow/touch layout.
+   Desktop gets its denser three-column presentation below, without letting a
+   binding row paint wider than the grid track that contains it. */
 .bindings-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
@@ -1137,6 +1136,31 @@ dialog::backdrop {
 .binding-key.listening {
   border-color: var(--cyan);
   color: var(--cyan);
+}
+/* Above the tablet/touch range, the dialog is wide enough for three short rows. The
+   compact controls leave the label a flexible column, rather than forcing its
+   old 110px minimum and overflowing a 300px grid track. */
+@media (min-width: 901px) {
+  .bindings-list {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .binding-row {
+    grid-template-columns: minmax(0, 1fr) minmax(76px, auto) minmax(76px, auto);
+    gap: 5px;
+    padding: 7px;
+  }
+  .binding-row label {
+    min-width: 0;
+    font-size: 9px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+  .binding-key {
+    min-width: 76px;
+    min-height: 34px;
+    padding: 6px 7px;
+    font-size: 10px;
+  }
 }
 .binding-status {
   min-height: 18px;

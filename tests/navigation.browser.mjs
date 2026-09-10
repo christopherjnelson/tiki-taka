@@ -716,6 +716,33 @@ await check(
       await page.locator("#settings-button").click();
       await page.locator("#settings-dialog").waitFor({ state: "visible" });
       await noScroll("the settings screen");
+      const bindings = await page.locator("#bindings-list").evaluate((list) => ({
+        scrollWidth: list.scrollWidth,
+        clientWidth: list.clientWidth,
+        rows: [...list.querySelectorAll(".binding-row")].map((row) => ({
+          scrollWidth: row.scrollWidth,
+          clientWidth: row.clientWidth,
+          buttons: [...row.querySelectorAll(".binding-key")].map((button) => ({
+            width: button.getBoundingClientRect().width,
+            height: button.getBoundingClientRect().height,
+          })),
+        })),
+      }));
+      assert.ok(
+        bindings.scrollWidth <= bindings.clientWidth,
+        `binding grid scrolls sideways at ${width}x${height}: ${bindings.scrollWidth} > ${bindings.clientWidth}`,
+      );
+      for (const row of bindings.rows) {
+        assert.ok(
+          row.scrollWidth <= row.clientWidth,
+          `binding row scrolls sideways at ${width}x${height}: ${row.scrollWidth} > ${row.clientWidth}`,
+        );
+        for (const button of row.buttons)
+          assert.ok(
+            button.width >= 76 && button.height >= 34,
+            `binding control is too small at ${width}x${height}: ${JSON.stringify(button)}`,
+          );
+      }
       // A dialog that fits the page but scrolls inside itself still hides the
       // controls at the bottom of it, which is the thing being asked for here.
       if (height >= 1024) {
