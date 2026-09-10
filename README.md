@@ -38,16 +38,23 @@ See the [gameplay guide](docs/GAMEPLAY.md) for scoring, controls, modes, progres
 
 ## Local demo profiles and saves
 
-The account interface is a local demo. Registration accepts an email and username, but there are no passwords, verification emails, server accounts, or real authentication. Profiles, settings, progress, and stats remain in browser storage on that device. They do not synchronize, and clearing site data removes them.
+By default the account interface is a local demo. Registration accepts an email and username, but there are no passwords, verification emails, server accounts, or real authentication. Profiles, settings, progress, and stats remain in browser storage on that device. They do not synchronize, and clearing site data removes them.
 
-Pages on the same origin share profiles. The data-provider API is an integration point for a future authenticated backend; the repository does not include one.
+Pages on the same origin share profiles.
+
+### Optional accounts server
+
+`server/` is a small, zero-dependency accounts and leaderboard backend (Node's built-in `http`, `sqlite`, and `crypto` only — see `server/README.md`). It's entirely optional: with no server configured, or if a configured one is unreachable, the app falls back to the local demo behavior above and a player notices no difference. When it is configured (`<meta name="tiki-taka-api-base">` in `apps/desktop/index.html`, see that README), accounts get real passwords and there's a leaderboard — honestly labeled as client-reported, since all game logic runs in the browser and scores aren't currently verifiable.
+
+Run it locally alongside the web app with `npm run dev:full`, or the server alone with `npm run server`.
 
 ## Repository layout
 
 - `apps/desktop/` — the browser interface and controls.
 - `packages/engine/` — simulation, AI, modes, progression, and settings.
 - `packages/presentation/` — shared renderer and synthesized audio.
-- `packages/data/` — data-provider API and local demo implementation.
+- `packages/data/` — data-provider API: the local demo adapter and the optional accounts-server adapter.
+- `server/` — optional accounts and leaderboard backend (see `server/README.md`).
 - `src/` — compatibility exports retained for regression coverage.
 - `tests/` — Node and browser integration tests.
 
