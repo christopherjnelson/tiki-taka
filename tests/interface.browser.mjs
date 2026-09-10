@@ -147,13 +147,24 @@ async function bind(page, action, slot, key) {
   await page.keyboard.press(key);
 }
 async function pulsePad(page, button) {
-  await page.evaluate((index) => window.__setInterfacePad(index, true), button);
-  await page.waitForTimeout(80);
-  await page.evaluate(
-    (index) => window.__setInterfacePad(index, false),
-    button,
-  );
-  await page.waitForTimeout(80);
+  // Input is polled from the frame loop. A wall-clock pulse can start and end
+  // entirely between polls on a loaded runner, leaving its edge unseen. Wait
+  // until the mock gamepad has been sampled in each state instead: this keeps
+  // a d-pad press to one navigation step while proving both edges reached the
+  // application's poll.
+  for (const pressed of [true, false]) {
+    const polls = await page.evaluate(
+      ([index, value]) => window.__setInterfacePad(index, value),
+      [button, pressed],
+    );
+    await page.waitForFunction(
+      ([after, index, value]) => {
+        const pad = window.__interfacePad;
+        return pad.polls > after && pad.buttons[index] === value;
+      },
+      [polls, button, pressed],
+    );
+  }
 }
 
 await check(
@@ -171,21 +182,28 @@ await check(
           JSON.stringify({ playView: true }),
         );
       const pressed = Array(16).fill(false);
+      window.__interfacePad = { polls: 0, buttons: pressed.slice() };
       Object.defineProperty(navigator, "getGamepads", {
         configurable: true,
-        value: () => [
-          {
-            connected: true,
-            axes: [0, 0, 0, 0],
-            buttons: pressed.map((value) => ({
-              pressed: value,
-              value: Number(value),
-            })),
-          },
-        ],
+        value: () => {
+          const buttons = pressed.slice();
+          window.__interfacePad.polls++;
+          window.__interfacePad.buttons = buttons;
+          return [
+            {
+              connected: true,
+              axes: [0, 0, 0, 0],
+              buttons: buttons.map((value) => ({
+                pressed: value,
+                value: Number(value),
+              })),
+            },
+          ];
+        },
       });
       window.__setInterfacePad = (index, value) => {
         pressed[index] = value;
+        return window.__interfacePad.polls;
       };
     });
     const page = await context.newPage(),
