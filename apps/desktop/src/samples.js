@@ -8,8 +8,9 @@
 // drop-in: one file, one line, no code.
 //
 //   name   the effect the sample replaces. The names the game plays are
-//          "kick", "wall", "score", "focus", "turnover", "end", "one-touch"
-//          and "ole" (the crowd chant at a ten-pass milestone). A name that is
+//          "kick", "wall", "score", "focus", "turnover", "end", "victory",
+//          "defeat", "one-touch" and "ole" (the crowd chant at a ten-pass
+//          milestone). A name that is
 //          not listed keeps its synthesised voice; an unknown name is simply
 //          never played.
 //   file   the filename inside public/audio/effects. Keep it lowercase,
@@ -27,9 +28,13 @@
 //     { name: "score", file: "crowd-cheer.ogg" },
 //   ];
 //
-// The list is empty on purpose: no placeholder audio ships with the game, and
-// every effect falls back to the synthesised voice in packages/presentation/
-// src/audio.js until a real file is listed here.
-export const SAMPLES = [];
+// Everything not listed here falls back to the synthesised voice in
+// packages/presentation/src/audio.js.
+export const SAMPLES = [
+  // Recorded applause under the clear fanfare. Registering "victory" also
+  // suppresses the synthesised crowd swell audio.js plays as its stand-in —
+  // see the note beside that fallback — so the two never stack.
+  { name: "victory", file: "crowd-cheer.ogg", gain: 0.8 },
+];
 
 export const SAMPLE_FILES = SAMPLES.map((sample) => sample.file);

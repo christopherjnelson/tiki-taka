@@ -315,8 +315,16 @@ await check('desktop gameplay, controls, progression, help, and full run', async
   await page.clock.install();
   await page.locator('#start-button').click();
   await runRound(page, { steps: 40, stepMs: 1000 });
-  // Every ending says which ending it was, and none of them says "courts".
-  await expectText(page.locator('#overlay-kicker'), /^ROUND OVER · (POSSESSIONS GONE|TARGET MISSED|A NEW PERSONAL BEST)$|^COURT CLEARED/);
+  // Full time is a distinct result screen, with its outcome and match stats
+  // visible before any action can take another input.
+  await expectText(page.locator('#overlay-kicker'), /^(VICTORY · COURT CLEARED|DEFEAT · (POSSESSIONS LOST|TARGET MISSED))/);
+  assert.match(await page.locator('#game-overlay').getAttribute('data-result'), /^(victory|defeat)$/);
+  for (const selector of ['#result-score', '#result-passes', '#result-streak', '#result-xp'])
+    assert.equal(await page.locator(selector).isVisible(), true, `${selector} is visible at full time`);
+  const resultCard = await page.locator('#overlay-card').boundingBox();
+  assert.ok(resultCard && resultCard.width * resultCard.height < 1440 * 1000 * .3,
+    `the result card should occupy roughly a quarter-screen, got ${JSON.stringify(resultCard)}`);
+  await page.clock.runFor(1200);
   // Both buttons on this overlay replay the court; they must say which is
   // which rather than leaving the player to guess.
   await expectText(page.locator('#start-button'), /^Play (the next court|this court again|today’s circuit again)$|^Start a new run$|^Practise this court again$/);
@@ -326,7 +334,8 @@ await check('desktop gameplay, controls, progression, help, and full run', async
     false,
     'the round-end overlay must not offer "courts" now that home is the court picker',
   );
-  await expectText(page.locator('#overlay-copy'), /points · \d+ passes · \d+ triangles · best one-touch \d+ · \+\d+ XP/);
+  assert.match(await page.locator('#result-score').textContent(), /^\d+$/);
+  assert.match(await page.locator('#result-xp').textContent(), /^\+\d+$/);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tiki-taka.progress.v1')));
   assert.ok(saved.xp > 650, 'finished run should persist awarded XP');
   await page.screenshot({ path: new URL('desktop.png', outputDir).pathname, fullPage: true });
@@ -348,7 +357,10 @@ await check('a complete playable career run clears and unlocks the next court', 
       if (target) await page.keyboard.press(`Digit${target[1]}`);
     },
   });
-  await expectText(page.locator('#overlay-kicker'), /COURT CLEARED/);
+  await expectText(page.locator('#overlay-kicker'), /^VICTORY · COURT CLEARED/);
+  assert.equal(await page.locator('#game-overlay').getAttribute('data-result'), 'victory');
+  await expectText(page.locator('#result-cheer'), /COURT ERUPTS/);
+  await page.clock.runFor(1200);
   // A cleared career court is the one case where the primary button advances
   // rather than replays, and it has to say so — this is exactly the "does it
   // replay, advance or abandon?" the old "Next court"/"Back to court" pair
@@ -514,6 +526,59 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   await expectText(page.locator('#toast'), /Controller disconnected/);
   await page.locator('#pause-menu').waitFor({ state: 'visible' });
   await expectText(page.locator('#pause-title'), /paused/i);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+await check('full-time results consume early gamepad presses before revealing actions', async () => {
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
+  await context.addInitScript(() => {
+    const state = { pressed: Array(16).fill(false) };
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => [{
+      connected: true, index: 0, id: 'Injected standards gamepad', mapping: 'standard',
+      axes: [0, 0, 0, 0],
+      buttons: state.pressed.map(pressed => ({ pressed, touched: pressed, value: Number(pressed) })),
+    }] });
+    window.__setTestPad = ({ button, pressed }) => { state.pressed[button] = pressed; };
+  });
+  const page = await context.newPage();
+  const errors = watchErrors(page);
+  await gotoArena(page, baseURL);
+  await page.locator('#start-button').click();
+  await observeGame(page);
+  await page.evaluate(() => {
+    const overlay = document.querySelector('#game-overlay');
+    const observer = new MutationObserver(() => {
+      if (overlay.dataset.actions !== 'waiting') return;
+      observer.disconnect();
+      // Press on the first full-time frame, release only after the app has
+      // polled that edge, then let it poll the release as a separate state.
+      window.__setTestPad({ button: 0, pressed: true });
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          window.__setTestPad({ button: 0, pressed: false });
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => { window.__resultPulseComplete = true; }),
+          );
+        }),
+      );
+    });
+    observer.observe(overlay, { attributes: true, attributeFilter: ['data-actions'] });
+    const game = window.__observedGame.game;
+    game.turnovers = 2;
+    game.turnover('CAUGHT IN POSSESSION');
+  });
+  await page.locator('#game-overlay[data-result="defeat"]').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => window.__resultPulseComplete === true);
+  assert.equal(await page.locator('#game-overlay').isVisible(), true,
+    'A during the result beat must not replay the round');
+  assert.equal(await page.locator('#overlay-actions').isHidden(), true,
+    'actions stay absent during the result beat');
+  await page.locator('#game-overlay[data-actions="ready"]').waitFor({ state: 'visible', timeout: 4000 });
+  assert.equal(await page.locator('#overlay-actions').isVisible(), true);
+  const replayed = await padUntil(page, 0,
+    () => page.locator('#game-overlay').isHidden());
+  assert.equal(replayed, true, 'a fresh A after the reveal may replay');
   assert.deepEqual(errors, []);
   await context.close();
 });

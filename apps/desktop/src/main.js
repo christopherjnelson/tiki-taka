@@ -150,7 +150,10 @@ let padPrevious = [],
   toastTimeout,
   announcementTimeout,
   announcementTime = 0,
-  focusEarnedTimeout;
+  focusEarnedTimeout,
+  resultRevealTimeout,
+  resultActionsReady = true;
+const RESULT_ACTION_DELAY = 1200;
 let capture = null;
 let padFocusElement = null;
 // The pause menu is the one in-round menu. It owns Resume, Restart, Home and
@@ -344,6 +347,14 @@ function startAttract() {
   attractPassIn = 0.9;
   attractPassCount = 0;
   attractBankEvery = 4 + Math.floor(Math.random() * 3);
+  // The band over the demo names the venue the demo is actually painting.
+  // Read it back through getVenue() rather than from COURTS[1]: the config
+  // above carries practice rules and its own seed, and getVenue() weighs both
+  // before it settles on a venue, so the court's own entry is not the answer.
+  // Renderer does exactly this on its side, so the two can never disagree.
+  const band = document.querySelector(".stage-venue"),
+    venue = getVenue(attractGame.config);
+  if (band) band.textContent = `${venue.name} / ${venue.vibe}`.toUpperCase();
 }
 function stopAttract() {
   attractGame = null;
@@ -476,6 +487,17 @@ function syncProgress() {
   syncHome();
 }
 function setOverlay(kicker, title, copy, primary, secondary = "") {
+  clearTimeout(resultRevealTimeout);
+  resultActionsReady = true;
+  const overlay = $("game-overlay");
+  delete overlay.dataset.result;
+  delete overlay.dataset.actions;
+  $("result-burst").hidden = true;
+  $("result-stats").hidden = true;
+  $("result-cheer").hidden = true;
+  $("overlay-actions").hidden = false;
+  $("start-button").disabled = false;
+  $("secondary-button").disabled = false;
   $("game-overlay").hidden = false;
   $("overlay-kicker").textContent = kicker;
   $("overlay-title").textContent = title;
@@ -483,6 +505,52 @@ function setOverlay(kicker, title, copy, primary, secondary = "") {
   $("start-button").textContent = primary;
   $("secondary-button").textContent = secondary;
   $("secondary-button").hidden = !secondary;
+}
+function showRoundResults({
+  cleared,
+  kicker,
+  title,
+  copy,
+  primary,
+  secondary,
+  stars,
+  xp,
+}) {
+  setOverlay(kicker, title, copy, primary, secondary);
+  const overlay = $("game-overlay"),
+    actions = $("overlay-actions");
+  overlay.dataset.result = cleared ? "victory" : "defeat";
+  overlay.dataset.actions = "waiting";
+  $("result-score").textContent = String(game.score);
+  $("result-passes").textContent = String(game.passes);
+  $("result-streak").textContent = String(game.bestOneTouch || 0);
+  $("result-xp").textContent = `+${xp}`;
+  $("result-burst").hidden = false;
+  $("result-stats").hidden = false;
+  $("result-cheer").hidden = false;
+  $("result-cheer").textContent = cleared
+    ? `THE COURT ERUPTS${stars ? ` · ${"★".repeat(stars)}` : ""}`
+    : "THE CROWD IS STILL WITH YOU";
+  $("invitation-note").textContent = "CHOOSE YOUR NEXT MOVE";
+  actions.hidden = true;
+  $("start-button").disabled = true;
+  $("secondary-button").disabled = true;
+  resultActionsReady = false;
+  $("overlay-card").focus({ preventScroll: true });
+  resultRevealTimeout = setTimeout(() => {
+    resultActionsReady = true;
+    overlay.dataset.actions = "ready";
+    actions.hidden = false;
+    $("start-button").disabled = false;
+    $("secondary-button").disabled = false;
+    if (
+      view === "arena" &&
+      phase === "finished" &&
+      !menuOpen &&
+      !anyDialogOpen()
+    )
+      padFocus($("start-button"));
+  }, RESULT_ACTION_DELAY);
 }
 function setControlsEnabled(enabled) {
   [
@@ -1131,13 +1199,6 @@ function finish() {
   persist();
   syncProgress();
   const outOfPossessions = game.turnovers >= 3 && !game.config.practice;
-  let title =
-    mode === "endless"
-      ? "What a run."
-      : result.cleared
-        ? "Beautifully played."
-        : "One more touch.";
-  const details = `${game.score} points · ${game.passes} passes · ${game.triangles} triangles · best one-touch ${game.bestOneTouch || 0} · +${result.xp} XP`;
   const extra =
     mode === "career" && result.cleared
       ? courtIndex === COURTS.length - 1
@@ -1153,33 +1214,41 @@ function finish() {
   // which now means the home screen. Leaving for home is the Menu button in
   // the top bar and the pause menu's Home entry, both of which are reachable
   // from here — this overlay never pretends to offer it.
-  setOverlay(
-    result.cleared
-      ? `COURT CLEARED ${"★".repeat(result.stars)}${result.newBest ? " · NEW BEST" : ""}`
-      : result.newBest
-        ? "ROUND OVER · A NEW PERSONAL BEST"
-        : outOfPossessions
-          ? "ROUND OVER · POSSESSIONS GONE"
-          : "ROUND OVER · TARGET MISSED",
-    title,
-    `${details}. ${extra}`,
-    mode === "career" && result.cleared && courtIndex < COURTS.length - 1
-      ? "Play the next court"
-      : mode === "daily"
-        ? "Play today’s circuit again"
-        : mode === "endless"
-          ? "Start a new run"
-          : mode === "practice"
-            ? "Practise this court again"
-            : "Play this court again",
-    "Back to the round intro",
-  );
-  $("start-button").focus({ preventScroll: true });
+  showRoundResults({
+    cleared: result.cleared,
+    kicker: result.cleared
+      ? `VICTORY · COURT CLEARED${result.newBest ? " · NEW BEST" : ""}`
+      : outOfPossessions
+        ? "DEFEAT · POSSESSIONS LOST"
+        : "DEFEAT · TARGET MISSED",
+    title:
+      mode === "endless"
+        ? "What a run."
+        : result.cleared
+          ? "Beautiful football."
+          : "Full time.",
+    copy: extra,
+    primary:
+      mode === "career" && result.cleared && courtIndex < COURTS.length - 1
+        ? "Play the next court"
+        : mode === "daily"
+          ? "Play today’s circuit again"
+          : mode === "endless"
+            ? "Start a new run"
+            : mode === "practice"
+              ? "Practise this court again"
+              : "Play this court again",
+    secondary: "Back to the round intro",
+    stars: result.stars,
+    xp: result.xp,
+  });
+  sound.play(result.cleared ? "victory" : "defeat");
   announce(
     `Round complete. ${game.score} points. ${result.cleared ? "Court cleared." : ""}`,
   );
 }
 $("start-button").addEventListener("click", () => {
+  if (phase === "finished" && !resultActionsReady) return;
   if (
     phase === "finished" &&
     mode === "career" &&
@@ -1196,6 +1265,7 @@ $("start-button").addEventListener("click", () => {
   start();
 });
 $("secondary-button").addEventListener("click", () => {
+  if (phase === "finished" && !resultActionsReady) return;
   if (pendingSwitch) {
     const next = pendingSwitch;
     pendingSwitch = null;
@@ -2084,7 +2154,8 @@ function pollGamepad(dt) {
     if (tap(9)) openPauseMenu();
   } else if (view === "arena" && !$("game-overlay").hidden) {
     if (tap(9)) openPauseMenu();
-    else nav($("game-overlay"), () => $("start-button").click());
+    else if (phase !== "finished" || resultActionsReady)
+      nav($("game-overlay"), () => $("start-button").click());
   } else if (view === "home") {
     // Home is one list: the menu, then the demo's neighbours — the courts and
     // the modes — then the bar. The menu comes first so the first d-pad step
@@ -2202,7 +2273,9 @@ function frame(now) {
       // its chance to finish the round. When it does take over, #resume-reason
       // is the one place the message appears.
       if (event !== turnoverEvent) renderer.addEvent(event);
-      sound.play(event.type);
+      // finish() chooses the outcome-specific full-time sound after progress
+      // has decided whether this was a clear or a defeat.
+      if (event.type !== "end") sound.play(event.type);
       if (event.type === "focus") {
         clearTimeout(focusEarnedTimeout);
         $("focus-button").classList.remove("focus-earned");
