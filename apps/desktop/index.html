@@ -24,8 +24,9 @@
     <!-- Empty by default: with no API base configured here, the app plays
     entirely off local storage, exactly as it always has. A deployment that
     stands up server/ (see server/README.md) sets this to that server's
-    origin (or leaves it same-origin, e.g. "/api" behind the nginx config in
-    that README) to turn on real accounts and leaderboards. -->
+    origin — origin only, no path, e.g. "https://tiki-taka.example.com" — to
+    turn on real accounts and leaderboards. Endpoints already start with
+    "/api/...", so this is not "/api" itself. -->
     <meta name="tiki-taka-api-base" content="" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon-192.png" />

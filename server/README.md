@@ -31,11 +31,23 @@ npm run dev:full
 | `DB_PATH`        | `./data/tiki-taka.sqlite`    | Path to the SQLite database file (created if missing).            |
 | `ALLOWED_ORIGIN` | *(empty)*                    | Comma-separated list of origins allowed to call the API with credentials (e.g. `https://tiki-taka.example.com`). Use `*` only for local development. |
 
-The client (`packages/data/src/index.js`, `createRemoteDataAdapter`) is
-pointed at this server by the web app's own runtime configuration (an API
-base URL) — see the root README / build docs for how that's set per
-deployment. This server has no knowledge of where the static site is hosted
-beyond `ALLOWED_ORIGIN`.
+The client (`packages/data/src/index.js`, `createRemoteDataAdapter`, selected
+at boot by `selectDataAdapter()`) is pointed at this server by a
+`<meta name="tiki-taka-api-base">` tag in `apps/desktop/index.html`. It ships
+empty, which is what keeps the game fully playable with no server: with no
+API base configured, or if the configured one doesn't answer, the app falls
+back to the local (browser-storage) adapter and behaves exactly as it does
+today. The adapter always calls `<api-base><endpoint>` where `<endpoint>`
+already starts with `/api/...` (see the table below) — so set that tag's
+`content` to the **origin only**, with no path and no trailing slash (e.g.
+`https://tiki-taka.example.com`), not to `/api` itself.
+
+With the nginx block below (static site and `/api/` proxy on the same host),
+that origin is the site's own origin — the request stays same-origin, so
+there's no CORS to configure and `connect-src 'self'` in the page's CSP needs
+no change. `ALLOWED_ORIGIN` only matters for a cross-origin deployment (API
+on a different host than the static site); this server has no other
+knowledge of where the static site is hosted.
 
 ## Database
 
