@@ -108,6 +108,19 @@ async function waitForPassToSettle(page, previousPasses = 0, timeout = 30000) {
 // the short press, because holding a direction past the 0.2s repeat gate moves
 // focus twice.
 const isDpad = button => button >= 12 && button <= 15;
+// The court repaints on a rAF loop whose rate collapses on a loaded runner, so
+// waiting a fixed number of milliseconds can capture a stale frame - which is
+// how two captures that must differ came back identical in CI. window.__targets
+// grows once per rendered frame, so wait on real render progress, not a clock.
+async function framesRendered(page, count, timeout = 20000) {
+  const from = await page.evaluate(() => window.__targets.length);
+  await page.waitForFunction(
+    ([start, n]) => window.__targets.length >= start + n,
+    [from, count],
+    { timeout },
+  );
+}
+
 async function pulsePad(page, button, hold = isDpad(button) ? 80 : 250) {
   await page.evaluate(index => window.__setTestPad({ button: index, pressed: true }), button);
   await page.waitForTimeout(hold);
@@ -803,7 +816,15 @@ await check('the right stick picks the smart-pass target and marks it on the cou
   // The highlight is painted onto the canvas, so a frame drawn with a target
   // must differ from one drawn without: pausing clears the selection.
   await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 1, 0] }));
-  await page.waitForTimeout(200);
+  // Wait for the app to actually select a target, then for frames painted with
+  // it, before sampling. The aim updates in pollGamepad but the highlight only
+  // exists once renderer.render has drawn a frame carrying that target.
+  await page.waitForFunction(
+    () => Number.isInteger(window.__targets.at(-1)),
+    null,
+    { timeout: 20000 },
+  );
+  await framesRendered(page, 3);
   const withTarget = await page.locator('#court').evaluate(c => c.toDataURL());
   await page.keyboard.press('Escape');
   await page.locator('#pause-menu').waitFor({ state: 'visible' });
@@ -812,7 +833,7 @@ await check('the right stick picks the smart-pass target and marks it on the cou
     'a paused round selects nobody');
   assert.equal(await page.evaluate(() => window.__targets.at(-1)), null);
   await page.locator('#pause-menu').evaluate(el => (el.style.display = 'none'));
-  await page.waitForTimeout(120);
+  await framesRendered(page, 3);
   const withoutTarget = await page.locator('#court').evaluate(c => c.toDataURL());
   await page.locator('#pause-menu').evaluate(el => (el.style.display = ''));
   assert.notEqual(withTarget, withoutTarget,
