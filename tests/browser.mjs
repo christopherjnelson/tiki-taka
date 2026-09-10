@@ -585,8 +585,10 @@ async function offlineReload(baseURL) {
     await expectText(page.locator('#overlay-kicker'), /FOUR PLAYERS/i);
     await page.locator('#start-button').click();
     assert.equal(await page.locator('#game-overlay').isHidden(), true);
-    // Every track is precached with everything else, so the soundtrack plays
-    // offline too.
+    // Only the playlist's opening track is precached at install; it's the one
+    // that plays here, so the soundtrack still comes up offline. The other
+    // five tracks are cached on first fetch instead (see scripts/build.mjs)
+    // and are not exercised by this reload, which never advances the playlist.
     await page.waitForFunction(() => document.body.dataset.music !== 'unavailable');
     assert.deepEqual(errors, []);
     await context.setOffline(false);
