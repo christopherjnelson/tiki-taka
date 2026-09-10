@@ -5,6 +5,7 @@ import {
   dailyConfig,
   distance,
   clamp,
+  bankPoint,
 } from "../../../packages/engine/src/game.js";
 import { Renderer } from "../../../packages/presentation/src/renderer.js";
 import {
@@ -306,7 +307,16 @@ function applyView(next, { updateHash = true } = {}) {
 const attractCanvas = $("attract-court");
 let attractGame = null,
   attractRenderer = null,
-  attractPassIn = 0;
+  attractPassIn = 0,
+  // Wall passes are real gameplay the player has tuned by hand
+  // (bestTarget() picks the safest lane, which is never a bank), so the demo
+  // fakes an occasional one on top of bestTarget's normal choice rather than
+  // touching how passing itself works. attractBankEvery randomizes "every
+  // fourth to sixth pass" so it doesn't read as a metronome; the count only
+  // advances on a real reception (see updateAttract), so a turnover can't
+  // skip it early or make it lag behind.
+  attractPassCount = 0,
+  attractBankEvery = 4 + Math.floor(Math.random() * 3);
 function startAttract() {
   if (!attractCanvas || attractGame) return;
   attractRenderer ||= new Renderer(attractCanvas);
@@ -332,6 +342,8 @@ function startAttract() {
     "balanced",
   );
   attractPassIn = 0.9;
+  attractPassCount = 0;
+  attractBankEvery = 4 + Math.floor(Math.random() * 3);
 }
 function stopAttract() {
   attractGame = null;
@@ -360,7 +372,30 @@ function updateAttract(dt) {
   if (!demo.ball && attractPassIn <= 0) {
     // bestTarget(null) is the same smart pass the pass button gives a player,
     // so the demo plays the game the way the game means it to be played.
-    demo.pass(demo.bestTarget(null));
+    const target = demo.bestTarget(null);
+    attractPassCount++;
+    let bank = false;
+    if (attractPassCount >= attractBankEvery) {
+      const passer = demo.players[demo.carrier],
+        receiver = demo.players[target];
+      const waypoint = bankPoint(passer, receiver);
+      const direct = distance(passer, receiver);
+      // Perpendicular distance of the bounce point from the direct line: a
+      // bank whose waypoint sits almost on that line looks identical to a
+      // normal pass, so it isn't worth spending the "every 4-6th" slot on —
+      // skip banking this cycle and try again in another 4-6 passes.
+      const offset =
+        direct > 1
+          ? Math.abs(
+              (receiver.x - passer.x) * (waypoint.y - passer.y) -
+                (receiver.y - passer.y) * (waypoint.x - passer.x),
+            ) / direct
+          : 0;
+      bank = offset > 40;
+      attractPassCount = 0;
+      attractBankEvery = 4 + Math.floor(Math.random() * 3);
+    }
+    demo.pass(target, bank);
     attractPassIn = 0.55 + Math.random() * 0.5;
   }
   for (const event of demo.events) attractRenderer.addEvent(event);
