@@ -72,8 +72,21 @@ for (const asset of desktopAssets) {
   cacheHash.update(await readFile(path.join("dist/desktop", asset.slice(2))));
 }
 const cacheVersion = cacheHash.digest("hex").slice(0, 12);
+// The soundtrack is 17+MB across six tracks but the app shell is ~150KB, so
+// precaching every track at install means a first-time visitor downloads the
+// whole soundtrack before they've heard track two. Only the track the
+// playlist opens on (apps/desktop/src/playlist.js, TRACKS[0]) is precached;
+// the rest are ordinary same-origin GETs that the fetch handler below caches
+// the first time the playlist reaches them, so a track played once is
+// available offline afterward without paying for the other five up front.
+const otherTracks = new Set(
+  TRACK_FILES.slice(1).map((track) => `./audio/${track}`),
+);
+const precacheAssets = desktopAssets.filter(
+  (asset) => !otherTracks.has(asset),
+);
 const serviceWorker = `const CACHE = "tiki-taka-desktop-${cacheVersion}";
-const ASSETS = ${JSON.stringify(desktopAssets, null, 2)};
+const ASSETS = ${JSON.stringify(precacheAssets, null, 2)};
 self.addEventListener("install", event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())));
 self.addEventListener("activate", event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith("tiki-taka-desktop-") && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));
 self.addEventListener("fetch", event => { if (event.request.method !== "GET" || new URL(event.request.url).origin !== self.location.origin) return; event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request).then(response => { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put(event.request, copy)); return response; }).catch(() => event.request.mode === "navigate" ? caches.match("./index.html") : Response.error()))); });
