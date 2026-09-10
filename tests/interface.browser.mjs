@@ -774,6 +774,19 @@ await check(
             document.querySelector("#combo-value"),
           ),
           courtShare: box("#court").width / window.innerWidth,
+          courtAreaShare:
+            (box("#court").width * box("#court").height) /
+            (window.innerWidth * window.innerHeight),
+          scrollWidth: document.documentElement.scrollWidth,
+          scrollHeight: document.documentElement.scrollHeight,
+          innerWidth: window.innerWidth,
+          innerHeight: window.innerHeight,
+          topBarVisible: (() => {
+            const bar = document.querySelector("#top-bar");
+            if (!bar) return false;
+            const box = bar.getBoundingClientRect();
+            return box.width > 0 && box.height > 0 && box.top >= 0;
+          })(),
         };
       });
       assert.equal(layout.rails, expected[label], `rail state at ${label}`);
@@ -784,6 +797,17 @@ await check(
           layout.courtShare > 0.869,
           `the court must keep its share of a 1920x1080 window, got ${(layout.courtShare * 100).toFixed(1)}%`,
         );
+      // No axis may scroll at any of the three sizes, and the top bar must
+      // stay on screen throughout.
+      assert.ok(
+        layout.scrollWidth <= layout.innerWidth + 1,
+        `no horizontal scroll at ${label}: scrollWidth ${layout.scrollWidth} > innerWidth ${layout.innerWidth}`,
+      );
+      assert.ok(
+        layout.scrollHeight <= layout.innerHeight + 1,
+        `no vertical scroll at ${label}: scrollHeight ${layout.scrollHeight} > innerHeight ${layout.innerHeight}`,
+      );
+      assert.ok(layout.topBarVisible, `the top bar must stay visible at ${label}`);
       if (layout.rails === "on") {
         assert.ok(layout.inLeftRail && layout.inRightRail,
           `the readouts must be in the rails at ${label}`);
