@@ -32,6 +32,7 @@ import {
 import { createLocalDataAdapter } from "../../../packages/data/src/index.js";
 import { createMusic } from "./music.js";
 import { TRACKS } from "./playlist.js";
+import { SAMPLES } from "./samples.js";
 const $ = (id) => document.getElementById(id);
 let storage;
 try {
@@ -81,6 +82,18 @@ if (!settings.audioMigrated) {
   settings.audioMigrated = true;
 }
 const sound = new Sound(settings.effectsOn, settings.effectsVolume);
+// Sampled effects, if any are listed. The URL is resolved exactly the way the
+// soundtrack's is — copied next to index.html by a build, served from public/
+// in the source tree — and an empty list (the default) leaves every effect on
+// its synthesised voice with no fetch at all. See apps/desktop/src/samples.js.
+sound.useSamples(
+  SAMPLES.map((sample) => ({
+    ...sample,
+    url: import.meta.env?.PROD
+      ? new URL(`./audio/effects/${sample.file}`, document.baseURI).href
+      : new URL(`/public/audio/effects/${sample.file}`, location.origin).href,
+  })),
+);
 const music = createMusic({
   tracks: TRACKS,
   // A build copies the tracks next to index.html (scripts/build.mjs); the
@@ -785,7 +798,202 @@ function syncFocusButtons() {
   $("focus-button").setAttribute("aria-pressed", String(focusToggle));
   $("touch-focus").setAttribute("aria-pressed", String(focusToggle));
 }
+// THE SIDE RAILS
+//
+// The court is a 1000:620 rectangle centred in the panel, and in a wide window
+// it is height-limited, so a band of unusable width is left down each side.
+// The scoreboard's readouts move into that band when it is wide enough to hold
+// them, which stops them competing with the court for the top of the frame.
+// They are the same elements, moved: nothing is duplicated, so every id, every
+// aria-label and every assertion that reads them still finds one node.
+//
+// The court's own size is not touched by any of this. It is still
+// min(100cqw, 161.2903cqh) of the panel, about 87% of the width of a 1920x1080
+// viewport, and the rails live in the letterbox beside it.
+const COURT_RATIO = 1000 / 620,
+  // A rail needs room for its widest label, "POSSESSIONS", at the rail's own
+  // 8px label size plus its padding. Below that the readouts stay in the band.
+  RAIL_MIN = 92;
+const gamePanel = document.querySelector(".game-panel");
+const statOf = (id) => $(id)?.closest(".stat") || null;
+let railsOn = null;
+function courtBox() {
+  if (!gamePanel) return null;
+  const { width, height } = gamePanel.getBoundingClientRect();
+  if (!width || !height) return null;
+  const courtWidth = Math.min(width, height * COURT_RATIO),
+    courtHeight = courtWidth / COURT_RATIO;
+  return {
+    width,
+    height,
+    courtWidth,
+    courtHeight,
+    left: (width - courtWidth) / 2,
+    top: (height - courtHeight) / 2,
+  };
+}
+function syncRails() {
+  const box = courtBox();
+  if (!box) return;
+  document.documentElement.style.setProperty(
+    "--court-gutter",
+    `${Math.floor(box.left)}px`,
+  );
+  // The touch layout parks its own controls in the right-hand space, so the
+  // rails stay out of its way whatever the arithmetic says.
+  const touch = document.querySelector(".touch-controls"),
+    touchLayout = Boolean(touch && touch.offsetParent);
+  const on =
+    document.body.classList.contains("play-view") &&
+    !touchLayout &&
+    box.left >= RAIL_MIN;
+  if (on === railsOn) return;
+  railsOn = on;
+  document.body.dataset.rails = on ? "on" : "off";
+  const score = statOf("score-value"),
+    time = statOf("time-value"),
+    combo = statOf("combo-value"),
+    lives = statOf("lives-value"),
+    pause = $("pause-button"),
+    board = $("scoreboard");
+  if (!score || !time || !combo || !lives || !pause || !board) return;
+  if (on) {
+    $("rail-left").append(score, time);
+    $("rail-right").append(combo, lives);
+  } else for (const stat of [score, time, combo, lives]) board.insertBefore(stat, pause);
+  publishScoreboardHeight();
+}
+
+// MUSIC-REACTIVE AMBIENCE
+//
+// One canvas behind the panel, painting only the letterbox the court cannot
+// use: the court rectangle is cut out of the clip, so nothing is ever drawn
+// over the game. It is driven by an AnalyserNode on the music bus, and it is
+// deliberately low-contrast — the ball has to stay the brightest thing moving.
+//
+// music.energy is null whenever there is nothing to measure: muted, switched
+// off, still loading, or blocked by autoplay. That is not an error state, it
+// is the idle state, and the wash keeps breathing gently on its own. With
+// prefers-reduced-motion the drift and the breathing both stop and the wash
+// holds a steady level, which is what renderer.reducedMotion already means
+// everywhere else.
+let ambienceClock = 0,
+  ambienceLevel = 0.15;
+const ambienceRgb = (accent) => {
+  const hex = String(accent || "").trim().replace("#", "");
+  const full = hex.length === 3 ? [...hex].map((c) => c + c).join("") : hex;
+  const value = Number.parseInt(full, 16);
+  if (full.length !== 6 || !Number.isFinite(value)) return [39, 234, 216];
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+};
+function paintAmbience(dt) {
+  const canvas = $("ambience");
+  if (!canvas || !document.body.classList.contains("play-view")) return;
+  const box = courtBox();
+  if (!box) return;
+  const width = Math.round(box.width),
+    height = Math.round(box.height),
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (canvas.width !== Math.round(width * dpr)) canvas.width = Math.round(width * dpr);
+  if (canvas.height !== Math.round(height * dpr)) canvas.height = Math.round(height * dpr);
+  const c = canvas.getContext("2d");
+  if (!c) return;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, width, height);
+  // A court that fills the panel leaves nothing to paint in.
+  if (box.left < 2 && box.top < 2) return;
+  const reduced = renderer.reducedMotion;
+  if (!reduced) ambienceClock += dt;
+  const measured = music.energy;
+  const idle = reduced ? 0.16 : 0.16 + 0.05 * Math.sin(ambienceClock * 0.55);
+  const target = measured === null ? idle : 0.12 + Math.min(1, measured) * 0.88;
+  // Slow towards the idle level, quicker towards the music: a track starting
+  // should feel like the room waking up, not a jump cut.
+  ambienceLevel +=
+    (target - ambienceLevel) *
+    Math.min(1, dt * (measured === null ? 1.5 : 6));
+  // The venue's accent, straight off the renderer rather than through a
+  // getComputedStyle() read on every frame.
+  const [r, g, b] = ambienceRgb(renderer.venue?.accent);
+  c.save();
+  c.beginPath();
+  c.rect(0, 0, width, height);
+  c.rect(box.left, box.top, box.courtWidth, box.courtHeight);
+  c.clip("evenodd");
+  const drift = reduced ? 0 : Math.sin(ambienceClock * 0.32);
+  const glow = (x, y, radius, strength) => {
+    const gradient = c.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, `rgba(${r},${g},${b},${strength})`);
+    gradient.addColorStop(0.55, `rgba(${r},${g},${b},${strength * 0.35})`);
+    gradient.addColorStop(1, "rgba(0,0,0,0)");
+    c.fillStyle = gradient;
+    c.beginPath();
+    c.arc(x, y, radius, 0, Math.PI * 2);
+    c.fill();
+  };
+  // Cap the contrast hard: this is atmosphere at the edge of vision, and it
+  // must never read as something happening on the court.
+  const strength = 0.05 + ambienceLevel * 0.09,
+    swell = 1 + ambienceLevel * 0.35;
+  if (box.left >= 2) {
+    const radius = Math.max(box.left, 90) * 2.1 * swell;
+    glow(box.left * 0.5, height * (0.36 + drift * 0.07), radius, strength);
+    glow(width - box.left * 0.5, height * (0.64 - drift * 0.07), radius, strength * 0.9);
+  }
+  if (box.top >= 2) {
+    const radius = Math.max(box.top, 90) * 2.1 * swell;
+    glow(width * (0.32 - drift * 0.05), box.top * 0.5, radius, strength * 0.85);
+    glow(width * (0.68 + drift * 0.05), height - box.top * 0.5, radius, strength * 0.85);
+  }
+  // A thin accent line along the court's edge, brightening with the music:
+  // it draws the eye to the frame rather than into it.
+  c.strokeStyle = `rgba(${r},${g},${b},${0.06 + ambienceLevel * 0.12})`;
+  c.lineWidth = 2;
+  c.strokeRect(box.left - 1, box.top - 1, box.courtWidth + 2, box.courtHeight + 2);
+  c.restore();
+}
+
+// The scoreboard floats over the top of the court in play view and reflows
+// with the window, so nothing else can be positioned under it from a constant.
+// Its measured height is published as --scoreboard-height and the olé readout
+// starts below it; see .one-touch-readout in style.css.
+let lastScoreboardHeight = -1;
+function publishScoreboardHeight() {
+  const board = $("scoreboard");
+  if (!board) return;
+  const height = document.body.classList.contains("play-view")
+    ? Math.round(board.getBoundingClientRect().height)
+    : 0;
+  if (height === lastScoreboardHeight) return;
+  lastScoreboardHeight = height;
+  document.documentElement.style.setProperty(
+    "--scoreboard-height",
+    `${height}px`,
+  );
+}
+if (typeof ResizeObserver === "function") {
+  const observer = new ResizeObserver(() => publishScoreboardHeight());
+  const board = $("scoreboard");
+  if (board) observer.observe(board);
+  const panelObserver = new ResizeObserver(() => syncRails());
+  if (gamePanel) panelObserver.observe(gamePanel);
+}
+// A streak of 0 hides the readout; every tenth pass is a milestone, which is
+// the pink state the canvas badge used to paint.
+function syncOneTouchReadout() {
+  const streak = game?.oneTouchStreak || 0,
+    readout = $("one-touch-readout");
+  if (!readout) return;
+  readout.hidden = !streak;
+  if (!streak) return;
+  const step = streak % 10,
+    progress = step === 0 ? 1 : step / 10;
+  readout.classList.toggle("is-milestone", streak >= 10);
+  $("one-touch-label").textContent = `ONE TOUCH ×${streak}`;
+  $("one-touch-fill").style.width = `${progress * 100}%`;
+}
 function syncHud() {
+  syncOneTouchReadout();
   $("score-value").textContent = String(game.score).padStart(3, "0");
   $("time-value").textContent =
     `${Math.floor(Math.ceil(game.time) / 60)}:${String(Math.max(0, Math.ceil(game.time) % 60)).padStart(2, "0")}`;
@@ -1075,6 +1283,8 @@ function syncSettingChrome() {
   document.documentElement.dataset.theme = settings.theme;
   document.body.classList.toggle("play-view", view === "arena");
   document.body.dataset.view = view;
+  publishScoreboardHeight();
+  syncRails();
   $("theme-button").setAttribute(
     "aria-pressed",
     String(settings.theme === "light"),
@@ -1892,6 +2102,7 @@ function frame(now) {
   if (view === "home") updateAttract(dt);
   if (view === "arena") {
     syncHud();
+    paintAmbience(dt);
     const target =
       phase === "playing" && !awaitingResume ? queuedSmartTarget() : null;
     renderer.render(game, {

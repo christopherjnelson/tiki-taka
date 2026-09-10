@@ -318,6 +318,243 @@ await check('the volumes are reachable and operable by gamepad and survive a rel
   await context.close();
 });
 
+// The pass sound cannot be listened to from a test, so it is measured. The
+// graph is rendered through an OfflineAudioContext with the real Sound class
+// and the real master gain, and the numbers stand in for the ear: a body whose
+// pitch falls away, a short bright transient, a length in thud territory, and
+// the same loudness as the other effects with headroom left at trim 1.0.
+await check('the kick renders as a pitch-dropping thud at the same level as the other effects', async () => {
+  const context = await browser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const errors = errorsFor(page);
+  await page.goto(`${baseURL}/`);
+  const measured = await page.evaluate(async () => {
+    const { Sound } = await import('/src/audio.js');
+    const sampleRate = 44100;
+    const render = async (volume, play) => {
+      const ctx = new OfflineAudioContext(1, sampleRate * 0.5, sampleRate);
+      const sound = new Sound(true, volume);
+      sound.context = ctx;
+      play(sound);
+      return (await ctx.startRendering()).getChannelData(0);
+    };
+    const analyse = data => {
+      let peak = 0, sum = 0;
+      for (const v of data) { peak = Math.max(peak, Math.abs(v)); sum += v * v; }
+      // A naive DFT over every other sample: 256 bins to 8kHz is more than a
+      // spectral centroid needs, and it saves pulling in an FFT.
+      let num = 0, den = 0;
+      for (let bin = 1; bin <= 256; bin++) {
+        const f = (bin * 8000) / 256;
+        let re = 0, im = 0;
+        for (let n = 0; n < data.length; n += 2) {
+          const a = (2 * Math.PI * f * n) / sampleRate;
+          re += data[n] * Math.cos(a);
+          im -= data[n] * Math.sin(a);
+        }
+        const mag = Math.hypot(re, im);
+        num += f * mag;
+        den += mag;
+      }
+      const db = v => 20 * Math.log10(v || 1e-9);
+      return { peakDb: db(peak), rmsDb: db(Math.sqrt(sum / data.length)), centroid: den ? num / den : 0 };
+    };
+    // Frequency from the spacing between upward zero crossings rather than a
+    // count per window: at 55Hz a short window holds barely one cycle, and
+    // counting would quantise the sweep away.
+    const pitchAt = (data, from, span) => {
+      const marks = [];
+      const start = Math.round(from * sampleRate), end = Math.round((from + span) * sampleRate);
+      for (let i = start + 1; i < end; i++)
+        if (data[i - 1] <= 0 && data[i] > 0)
+          marks.push(i - 1 + data[i - 1] / (data[i - 1] - data[i]));
+      if (marks.length < 2) return 0;
+      return sampleRate / ((marks.at(-1) - marks[0]) / (marks.length - 1));
+    };
+    const kick = await render(0.3, sound => sound.play('kick'));
+    const hot = await render(1, sound => sound.play('kick'));
+    const wall = await render(0.3, sound => sound.play('wall'));
+    let length = kick.length;
+    while (length > 0 && Math.abs(kick[length - 1]) < 1e-4) length--;
+    return {
+      kick: analyse(kick),
+      wall: analyse(wall),
+      hotPeakDb: analyse(hot).peakDb,
+      lengthMs: (length / sampleRate) * 1000,
+      early: pitchAt(kick, 0, 0.03),
+      late: pitchAt(kick, 0.08, 0.06),
+    };
+  });
+  assert.ok(measured.early > measured.late + 30,
+    `the kick's body must fall in pitch, got ${measured.early.toFixed(0)}Hz then ${measured.late.toFixed(0)}Hz`);
+  assert.ok(measured.late > 40 && measured.late < 80,
+    `the kick should settle near 55Hz, got ${measured.late.toFixed(0)}Hz`);
+  assert.ok(measured.lengthMs > 110 && measured.lengthMs < 170,
+    `a thud is over quickly, got ${measured.lengthMs.toFixed(0)}ms`);
+  // A struck ball is brighter than the wall-pass tone (the transient) but
+  // nowhere near a click: keep it in that band.
+  assert.ok(measured.kick.centroid > measured.wall.centroid,
+    `the kick needs its noise transient, got centroid ${measured.kick.centroid.toFixed(0)}Hz`);
+  assert.ok(measured.kick.centroid < 1400,
+    `the kick must stay a thud, not a click, got centroid ${measured.kick.centroid.toFixed(0)}Hz`);
+  assert.ok(Math.abs(measured.kick.peakDb - measured.wall.peakDb) < 3,
+    `the kick must sit at the other effects' level, got ${measured.kick.peakDb.toFixed(1)} vs ${measured.wall.peakDb.toFixed(1)} dBFS`);
+  assert.ok(measured.kick.peakDb < -18 && measured.kick.peakDb > -28,
+    `effects peak around -22 dBFS at the default trim, got ${measured.kick.peakDb.toFixed(1)}`);
+  assert.ok(measured.hotPeakDb < -1,
+    `the kick must not clip with the trim at 1.0, got ${measured.hotPeakDb.toFixed(1)} dBFS`);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+// The sampled-effect path, with no sample files in the tree: a decoded buffer
+// must play through the same effects master (so the switch and the slider
+// govern it), and a sample that cannot be loaded must leave the synthesised
+// voice in place rather than going silent or throwing.
+await check('a sampled effect plays through the effects master, and a missing one falls back', async () => {
+  const context = await browser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const errors = errorsFor(page);
+  await page.goto(`${baseURL}/`);
+  const result = await page.evaluate(async () => {
+    const { Sound } = await import('/src/audio.js');
+    const sampleRate = 44100;
+    const peakOf = data => {
+      let peak = 0;
+      for (const v of data) peak = Math.max(peak, Math.abs(v));
+      return peak;
+    };
+    const render = async (volume, prepare, play) => {
+      const ctx = new OfflineAudioContext(1, sampleRate * 0.5, sampleRate);
+      const sound = new Sound(true, volume);
+      sound.context = ctx;
+      let oscillators = 0;
+      const made = ctx.createOscillator.bind(ctx);
+      ctx.createOscillator = (...args) => { oscillators++; return made(...args); };
+      await prepare(sound, ctx);
+      play(sound);
+      const data = (await ctx.startRendering()).getChannelData(0);
+      return { peak: peakOf(data), oscillators };
+    };
+    // A real 16-bit WAV built in the page and served by a stubbed fetch: this
+    // walks the whole path the dropped-in files will walk — fetch, decode,
+    // cache, play — without committing an audio file to the tree.
+    const wav = seconds => {
+      const frames = Math.round(sampleRate * seconds);
+      const bytes = new ArrayBuffer(44 + frames * 2);
+      const view = new DataView(bytes);
+      const ascii = (offset, text) => {
+        for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+      };
+      ascii(0, 'RIFF');
+      view.setUint32(4, 36 + frames * 2, true);
+      ascii(8, 'WAVEfmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      ascii(36, 'data');
+      view.setUint32(40, frames * 2, true);
+      for (let i = 0; i < frames; i++)
+        view.setInt16(44 + i * 2, Math.round(0.5 * Math.sin((2 * Math.PI * 300 * i) / sampleRate) * 32767), true);
+      return bytes;
+    };
+    const withSample = (name, gain = 1) => async sound => {
+      const real = window.fetch;
+      window.fetch = async () => new Response(wav(0.2), { status: 200 });
+      try {
+        sound.useSamples([{ name, url: '/public/audio/effects/stand-in.wav', gain }]);
+        await sound.loadSamples();
+      } finally {
+        window.fetch = real;
+      }
+    };
+    const sampled = await render(0.3, withSample('kick'), s => s.play('kick'));
+    const trimmed = await render(0.15, withSample('kick'), s => s.play('kick'));
+    const perSample = await render(0.3, withSample('kick', 0.5), s => s.play('kick'));
+    const disabled = await render(0.3, async sound => {
+      await withSample('kick')(sound);
+      sound.enabled = false;
+    }, s => s.play('kick'));
+    // A URL that will not load: the decode fails, the entry is marked dead and
+    // the synthesised kick plays instead.
+    const missing = await render(0.3, async (sound) => {
+      sound.useSamples([{ name: 'kick', url: '/public/audio/effects/not-here.ogg' }]);
+      await sound.loadSamples();
+    }, s => s.play('kick'));
+    return {
+      sampled: sampled.peak,
+      sampledOscillators: sampled.oscillators,
+      trimmed: trimmed.peak,
+      perSample: perSample.peak,
+      disabled: disabled.peak,
+      missing: missing.peak,
+      missingOscillators: missing.oscillators,
+    };
+  });
+  assert.ok(result.sampled > 0.1,
+    `a registered sample must be heard, got peak ${result.sampled}`);
+  assert.equal(result.sampledOscillators, 0,
+    'a sample replaces the synthesised voice rather than doubling it');
+  assert.ok(Math.abs(result.trimmed - result.sampled / 2) < 0.01,
+    `the effects slider must trim samples, got ${result.trimmed} against ${result.sampled}`);
+  assert.ok(Math.abs(result.perSample - result.sampled / 2) < 0.01,
+    `a per-sample gain must trim that one sample, got ${result.perSample}`);
+  assert.equal(result.disabled, 0, 'the effects switch must silence samples too');
+  assert.ok(result.missing > 0.001 && result.missingOscillators > 0,
+    `a sample that cannot load must fall back to the synthesised effect, got peak ${result.missing}`);
+  // A 404 for the absent sample is expected; nothing else is.
+  assert.deepEqual(errors.filter(entry => !/not-here\.ogg|404/.test(entry)), []);
+  await context.close();
+});
+
+// What the court's ambience is driven by. The reading has to be a real number
+// while a track is audible and null whenever there is nothing to measure, and
+// null is what tells the ambience to fall back to its idle animation instead
+// of freezing on a stale value.
+await check('the music bus reports its energy while playing and null when there is nothing to measure', async () => {
+  const context = await relaxedBrowser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const errors = errorsFor(page);
+  await page.goto(`${baseURL}/`);
+  const result = await page.evaluate(async () => {
+    const { createMusic } = await import('/apps/desktop/src/music.js');
+    const { TRACKS } = await import('/apps/desktop/src/playlist.js');
+    const music = createMusic({
+      tracks: TRACKS.slice(0, 1),
+      resolve: track => new URL(`/public/audio/${track.file}`, location.origin).href,
+    });
+    const silent = music.energy;
+    music.setEnabled(true);
+    music.unlock();
+    // The bus fades in over 350ms and a track has quiet moments, so this
+    // waits for a settled reading rather than grabbing the first one.
+    let playing = null;
+    for (let attempt = 0; attempt < 80; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+      const reading = music.energy;
+      if (typeof reading === 'number' && reading > 0) { playing = reading; break; }
+      if (playing === null && reading !== null) playing = reading;
+    }
+    const state = music.state;
+    music.setEnabled(false);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return { silent, playing, muted: music.energy, state };
+  });
+  assert.equal(result.silent, null, 'nothing is playing yet, so there is nothing to measure');
+  assert.equal(result.state, 'playing', `the track should be running, got ${result.state}`);
+  assert.equal(typeof result.playing, 'number',
+    `a playing track must report a number, got ${result.playing}`);
+  assert.ok(result.playing > 0 && result.playing <= 1,
+    `the reading must be a 0..1 energy, got ${result.playing}`);
+  assert.equal(result.muted, null, 'a muted bus must report null so the ambience idles');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 await browser.close();
 await relaxedBrowser.close();
 if (server) server.kill();

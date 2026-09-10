@@ -575,7 +575,6 @@ export class Renderer {
         label(c, "FOCUS ACTIVE", 500, 79, 13, "#fff", "center", 800);
       });
     }
-    if (!preview) this.drawOneTouchHud(game.oneTouchStreak || 0);
     this.drawZone(game.zone, game.zoneTimer);
     const carrier = game.players[game.carrier],
       selected = Number.isInteger(target)
@@ -666,31 +665,6 @@ export class Renderer {
     this.effects = this.effects.filter((e) => e.age < e.life);
     c.globalAlpha = 1;
     c.setLineDash([]);
-  }
-  drawOneTouchHud(streak, x = 828, y = 27) {
-    if (!streak) return;
-    if (this.ctx._tikiPortrait)
-      // World (40, 310) projects to screen (310, 40), centered across portrait.
-      return this.upright(40, 310, () => this.drawOneTouchHud(streak, 40, 310));
-    const c = this.ctx,
-      step = streak % 10,
-      progress = step === 0 ? 1 : step / 10,
-      milestone = streak >= 10;
-    c.save();
-    rounded(c, x - 114, y - 14, 228, 28, 14);
-    c.fillStyle = "rgba(7,10,30,.9)";
-    c.fill();
-    c.strokeStyle = milestone ? "#ff4ba8" : this.venue.accent;
-    c.lineWidth = 1.5;
-    c.stroke();
-    label(c, `ONE TOUCH  ×${streak}`, x - 100, y, 11, "#fff", "left", 900);
-    c.fillStyle = "rgba(255,255,255,.16)";
-    rounded(c, x + 22, y - 4, 76, 8, 4);
-    c.fill();
-    c.fillStyle = milestone ? "#ff4ba8" : this.venue.accent;
-    rounded(c, x + 22, y - 4, 76 * progress, 8, 4);
-    c.fill();
-    c.restore();
   }
   drawZone(z, t) {
     if (!z) return;

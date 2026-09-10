@@ -47,6 +47,12 @@ export function createMusic({
   let level = base * clampTrim(trim, 1),
     context = null,
     gain = null,
+    // A passive tap on the music bus for the court's ambience. It is fed from
+    // the same gain the speakers hear, so muting or pulling the slider down
+    // takes the visuals down with it, and nothing is connected onward from it:
+    // an AnalyserNode is a measuring point, not a stage in the signal path.
+    analyser = null,
+    analyserData = null,
     source = null,
     buffer = null,
     loading = null,
@@ -74,6 +80,20 @@ export function createMusic({
       gain = context.createGain();
       gain.gain.value = 0;
       gain.connect(context.destination);
+      try {
+        analyser = context.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.8;
+        // Float samples, not bytes: this bus runs at about 0.13, so a whole
+        // passage of music moves a byte reading by only a handful of counts
+        // and quantises to nothing during a fade.
+        analyserData = new Float32Array(analyser.fftSize);
+        gain.connect(analyser);
+      } catch {
+        // No analyser is not a reason to lose the soundtrack; the ambience
+        // falls back to its idle animation.
+        analyser = null;
+      }
     } catch {
       context = null;
       failed = true;
@@ -273,6 +293,31 @@ export function createMusic({
       if (!unlocked || !context || context.state !== "running")
         return "waiting";
       return "loading";
+    },
+    // 0..1 loudness of what is playing right now, or null when there is
+    // nothing to measure — muted, off, still loading, or blocked by autoplay.
+    // Null is the signal to fall back to an idle animation rather than
+    // freezing on a stale value. The reading is normalised against the current
+    // level so the picture does not dim when the player turns the music down;
+    // the mute path still returns null, and a slider at zero has no source to
+    // report on either.
+    get energy() {
+      if (!analyser || !analyserData || !source || !context) return null;
+      if (context.state !== "running" || !enabled || failed) return null;
+      try {
+        analyser.getFloatTimeDomainData(analyserData);
+      } catch {
+        return null;
+      }
+      let sum = 0;
+      for (const sample of analyserData) sum += sample * sample;
+      const rms = Math.sqrt(sum / analyserData.length);
+      if (!Number.isFinite(rms)) return null;
+      // The tracks average about -14 dBFS before this bus's own -17.7 dB, so a
+      // full-blooded passage lands near 0.03 RMS at level 0.13. Scaling by the
+      // live level keeps that true at any slider position.
+      const reference = Math.max(level, 0.0001) * 0.25;
+      return Math.min(1, rms / reference);
     },
     get contextState() {
       return context?.state || "none";
