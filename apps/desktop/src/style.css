@@ -33,6 +33,17 @@
   --display: "Tiki Display", Impact, sans-serif;
   --sign: "Tiki Signage", "Arial Narrow", sans-serif;
 }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 :root[data-theme="light"] {
   color-scheme: light;
   --bg: #eee8fa;
@@ -1575,6 +1586,18 @@ body.play-view .court-toolbar {
 body.play-view .court-toolbar .play-actions,
 body.play-view .court-toolbar .target-info {
   pointer-events: auto;
+}
+/* Focus now owns the left-hand status slot. The pass target remains available
+   to assistive technology and through the on-court selection ring instead of
+   competing with the shared Focus meter. */
+body.play-view .court-toolbar .focus-info {
+  padding: 0;
+}
+body.play-view .court-toolbar .focus-info::before {
+  display: none;
+}
+body.play-view .court-toolbar .focus-info #focus-button {
+  width: 100%;
 }
 /* The target hint is the one element here with no fixed size of its own, so
    it is the one that gives way first: it shrinks and truncates rather than
@@ -3244,7 +3267,7 @@ body.play-view .arena-view .below-court {
     letter-spacing: 1.3px;
     text-transform: uppercase;
   }
-  body.play-view .court-toolbar .target-info::before {
+  body.play-view .court-toolbar .target-info:not(.focus-info)::before {
     content: "STREAK";
     color: var(--pink);
     font-size: 8px;
@@ -3259,7 +3282,7 @@ body.play-view .arena-view .below-court {
   }
   body.play-view .court-toolbar .play-actions {
     display: grid;
-    grid-template-columns: minmax(86px, 0.7fr) minmax(98px, 0.85fr) minmax(160px, 1.45fr);
+    grid-template-columns: minmax(76px, 0.7fr) minmax(82px, 0.85fr) minmax(76px, 0.7fr) minmax(92px, 0.85fr);
     flex: 1 1 70%;
     gap: 0;
   }

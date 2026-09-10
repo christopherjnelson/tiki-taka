@@ -95,6 +95,8 @@ test("presets return independent bindings and resolve held actions", () => {
   assert.deepEqual(left.moveUp, ["KeyI"]);
   assert.equal(actionForCode(left, "KeyL"), "moveRight");
   assert.equal(actionDown(left, new Set(["KeyE"]), "focusHold"), true);
+  assert.equal(actionDown(left, new Set(["KeyR"]), "boostHold"), true);
+  assert.equal(actionForCode(left, "KeyF"), "shout");
   left.moveUp.push("KeyQ");
   assert.deepEqual(presetBindings("left-hand").moveUp, ["KeyI"]);
 });
@@ -104,9 +106,9 @@ test("binding rejects conflicts, supports two slots, and clears the secondary", 
   const conflict = bindKey(bindings, "smartPass", 0, "KeyW");
   assert.equal(conflict.ok, false);
   assert.match(conflict.reason, /Move up/);
-  const changed = bindKey(bindings, "focusHold", 1, "KeyF");
+  const changed = bindKey(bindings, "focusHold", 1, "KeyG");
   assert.equal(changed.ok, true);
-  assert.deepEqual(changed.bindings.focusHold, ["KeyE", "KeyF"]);
+  assert.deepEqual(changed.bindings.focusHold, ["KeyE", "KeyG"]);
   assert.deepEqual(clearBinding(changed.bindings, "focusHold", 1).focusHold, [
     "KeyE",
   ]);

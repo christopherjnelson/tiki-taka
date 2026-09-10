@@ -26,6 +26,8 @@ export const ACTIONS = {
   wallToggle: "Toggle wall pass",
   wallHold: "Hold wall pass",
   focusHold: "Hold Focus",
+  boostHold: "Hold Boost",
+  shout: "Shout target to bonus zone",
   pause: "Pause",
 };
 
@@ -38,6 +40,8 @@ const passKeys = {
   wallToggle: ["KeyB"],
   wallHold: ["ShiftLeft", "ShiftRight"],
   focusHold: ["KeyE"],
+  boostHold: ["KeyR"],
+  shout: ["KeyF"],
   pause: ["Escape"],
 };
 
