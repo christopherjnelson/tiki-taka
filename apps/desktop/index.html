@@ -393,19 +393,13 @@
             .game-panel in style.css for where that space went instead. -->
             <div id="scoreboard" class="scoreboard" aria-label="Match statistics">
               <div class="hud-group hud-group-score">
-                <!-- The clock now rides beside the score as a peer stat, not
-                shrunk into the foot row — it matters mid-round and needs to
-                read at a glance. Personal best is the only thing left in the
-                quiet foot row underneath. -->
-                <div class="hud-group-score-main">
-                  <div class="stat score-stat">
-                    <span id="score-label" class="stat-label">FLOW SCORE</span
-                    ><strong id="score-value">000</strong>
-                  </div>
-                  <div class="stat clock-stat">
-                    <span class="stat-label">ON THE CLOCK</span
-                    ><strong id="time-value">1:15</strong>
-                  </div>
+                <!-- The clock moved down to the court toolbar, where it now
+                mirrors the Energy readout across the chip row. The score is
+                the only thing this card carries, so it and the personal
+                best underneath it both get to grow into the freed space. -->
+                <div class="stat score-stat">
+                  <span id="score-label" class="stat-label">FLOW SCORE</span
+                  ><strong id="score-value">000</strong>
                 </div>
                 <div class="hud-group-score-foot">
                   <span id="best-label" class="best-chip">PERSONAL BEST —</span>
@@ -645,6 +639,14 @@
                 >
                   Boost <kbd data-binding="boostHold">R</kbd></button
                 >
+              </div>
+              <!-- The clock takes the slot Boost's meter used to occupy,
+              mirroring the Energy readout on the opposite end of the rail —
+              same panel, right-aligned so its numerals land flush with the
+              court edge. -->
+              <div id="clock-info" class="target-info clock-info">
+                <span class="clock-label">On the clock</span>
+                <strong id="time-value" class="clock-value">1:15</strong>
               </div>
             </div>
           </section>
