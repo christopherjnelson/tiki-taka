@@ -2,7 +2,8 @@
 
 The desktop browser build reads `VITE_SUPABASE_URL` and
 `VITE_SUPABASE_PUBLISHABLE_KEY`. Set both at build time to enable the
-Supabase data adapter; leave either unset to retain local demo/guest play.
+Supabase data adapter; leave either unset to retain guest-only play, with no
+account system offered at all.
 
 Only the project's **publishable** key belongs in either environment variable.
 Never put a `service_role` or secret key in the browser, build artifact, test

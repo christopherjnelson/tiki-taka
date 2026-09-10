@@ -1,8 +1,0 @@
-{
-  "name": "@tiki-taka/server",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "description": "Optional accounts + leaderboard server (node:sqlite, node:http, node:crypto only — zero npm dependencies).",
-  "main": "src/index.js"
-}

@@ -52,7 +52,7 @@ The release version lives in root `package.json` only.
 
 ## Local data and generated output
 
-Profiles are passwordless, device-local demos. No authentication service is present. Test with disposable values; clearing browser storage removes profiles and progress.
+With no Supabase configuration, there is no account system: progress is guest-only and device-local. With Supabase configured (see `docs/supabase-browser-config.md`), it is the only authentication path. Test with disposable values; clearing browser storage removes guest progress.
 
 Build products belong in ignored `dist/`. Test reports belong in `test-results/`; local tools belong in `.tooling/`. Do not commit browser profiles, screenshots, traces, logs, or caches.
 

@@ -62,4 +62,4 @@ The game offers remappable keyboard controls, light and dark themes, Play view, 
 
 The production build caches assets after an initial online load, so it keeps working offline. Service workers require localhost or HTTPS. Decorative effects honor reduced-motion preferences, while gameplay remains visual and real time.
 
-Profiles and progress are local demo data. See [the README](../README.md#local-demo-profiles-and-saves) for persistence and privacy limits.
+With no Supabase configuration, progress is guest-only, device-local data. See [the README](../README.md#guest-saves-and-accounts) for persistence and privacy limits.
