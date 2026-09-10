@@ -900,7 +900,15 @@ body.play-view .game-footer {
    horizontal band any more: the panel is the viewport, the canvas grows to the
    largest 1000:620 rectangle that fits inside it, and the HUD and action bar
    float on top hugging the court's own edges. The canvas keeps its 1000x620
-   backing store, so courtPoint() and the engine's LIMITS are untouched. */
+   backing store, so courtPoint() and the engine's LIMITS are untouched.
+
+   Whatever the court doesn't use — the full width of a wide window, the full
+   height of a tall one — is not dead space any more. .game-panel paints a
+   venue-tinted scene (see --venue-accent/--venue-secondary) edge to edge, the
+   ambience canvas breathes animated glow on top of it, and .court-wrap itself
+   is transparent so both show straight through the letterbox right up to the
+   court's own edge. The court sits inside that scene rather than on top of a
+   slab; nothing here changes its size. */
 body.play-view .app-shell {
   max-width: none;
 }
@@ -922,14 +930,29 @@ body.play-view .game-panel {
   overflow: hidden;
   border: 0;
   box-shadow: none;
-  background: #060311;
+  background:
+    radial-gradient(
+      120% 90% at 12% 8%,
+      color-mix(in srgb, var(--venue-accent), transparent 78%),
+      transparent 60%
+    ),
+    radial-gradient(
+      120% 90% at 88% 96%,
+      color-mix(in srgb, var(--venue-secondary, var(--venue-accent)), transparent 80%),
+      transparent 60%
+    ),
+    #060311;
 }
 body.play-view .court-wrap {
   position: absolute;
   inset: 0;
   width: auto;
   container-type: size;
-  background: #060311;
+  /* Transparent on purpose: the scene behind it (the panel's gradient, then
+     the ambience canvas) has to show through everywhere the court itself
+     doesn't paint. The court canvas is fully opaque within its own bounds,
+     so this never shows through the game. */
+  background: none;
 }
 body.play-view #court {
   position: absolute;
@@ -941,13 +964,14 @@ body.play-view #court {
   max-height: none;
   aspect-ratio: 1000/620;
   transform: translate(-50%, -50%);
+  /* The court is the one opaque, sharp-edged thing in the scene; give it a
+     little separation from the atmosphere behind it. */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--venue-accent), transparent 55%),
+    0 30px 90px #010008cc;
 }
-/* The two side rails and the ambience canvas only exist while a round is on
-   screen, and the rails only when main.js has measured enough room beside the
-   court to hold them (body.play-view[data-rails="on"]). Everything here is
-   painted in the letterbox the court cannot use; none of it changes the
-   court's size. */
-.court-rail,
+/* The ambience canvas only exists while a round is on screen. It is painted
+   in the letterbox the court cannot use — see paintAmbience() in main.js —
+   and sits above the panel's gradient and below the court canvas itself. */
 .ambience {
   display: none;
 }
@@ -959,59 +983,6 @@ body.play-view .ambience {
   width: 100%;
   height: 100%;
   pointer-events: none;
-}
-body.play-view[data-rails="on"] .court-rail {
-  position: absolute;
-  z-index: 4;
-  top: 0;
-  bottom: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  justify-content: center;
-  width: var(--court-gutter, 0px);
-  padding: 0 8px;
-  pointer-events: none;
-}
-body.play-view[data-rails="on"] .court-rail-left {
-  left: 0;
-  align-items: flex-start;
-  text-align: left;
-}
-body.play-view[data-rails="on"] .court-rail-right {
-  right: 0;
-  align-items: flex-end;
-  text-align: right;
-}
-/* A readout in a rail is a stacked block rather than a row in a bar, and it
-   sits on the panel's own background, so it drops the band's shadow. */
-body.play-view[data-rails="on"] .court-rail .stat {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  padding: 9px 10px;
-  background: #0d0722a8;
-  border: 1px solid #ffffff14;
-  border-radius: 12px;
-  text-shadow: none;
-}
-body.play-view[data-rails="on"] .court-rail .stat-label {
-  color: #cdbfe8;
-  font-size: 8px;
-  letter-spacing: 1px;
-}
-body.play-view[data-rails="on"] .court-rail .stat strong {
-  font-size: clamp(16px, 1.3vw, 26px);
-  line-height: 1;
-}
-body.play-view[data-rails="on"] .court-rail-right .stat {
-  align-items: flex-end;
-}
-/* With the readouts in the rails the band carries only the pause button, so it
-   stops competing with the court for the top of the frame. */
-body.play-view[data-rails="on"] .scoreboard {
-  background: none;
 }
 /* The top bar.
    It is a real row of the shell, not an overlay: .app-shell is a flex column
@@ -1230,52 +1201,112 @@ body[data-view="arena"] .top-pause {
   }
 }
 /* Both bars are sized to the court, not the window, so they never sit over the
-   letterbox and never steal a row from the canvas. */
+   letterbox and never steal a row from the canvas. They are composed rows —
+   grouped, aligned, deliberate — the same way the Focus meter and the olé
+   readout already read as part of the game rather than bolted on: pill-like
+   clusters with their own translucent card, not bare text floating on a
+   gradient. */
 body.play-view .scoreboard {
   position: absolute;
   z-index: 4;
   top: 0;
   left: 50%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 10px 14px;
   width: min(100cqw, 161.2903cqh);
   min-height: 0;
-  padding: 6px 18px 14px;
-  background: linear-gradient(180deg, #0a0520e8, #0a052000);
+  padding: 14px 16px 0;
+  background: linear-gradient(180deg, #0a0520e0, #0a052000 78%);
   transform: translateX(-50%);
   pointer-events: none;
 }
-/* Score and clock hug the left, multiplier and possessions the right, so the
-   canvas keeps its own venue banner across the middle. */
-body.play-view .scoreboard {
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
-  align-items: start;
-  gap: 0 20px;
+/* The score cluster hugs the left edge and the match cluster (plus pause)
+   hugs the right, on purpose: the canvas keeps a clear strip across the
+   middle for the venue's own banner instead of a card sitting on top of it. */
+.hud-group-match {
+  margin-left: auto;
 }
-body.play-view .scoreboard .pause-button {
-  grid-column: 6;
-  align-self: start;
-  margin-top: 2px;
+/* One card for the score (with the personal-best chip pinned under it), one
+   card for the live-match numbers, then the pause control — three grouped
+   things instead of four ungrouped ones either side of a void. */
+.hud-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  background: #0c0620c2;
+  border: 1px solid color-mix(in srgb, var(--venue-accent), transparent 68%);
+  border-radius: 13px;
+  box-shadow: 0 10px 26px #03010f70;
+  pointer-events: auto;
+}
+.hud-group-score {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 7px 16px 8px;
+}
+/* Personal best and the clock are secondary to the score itself, so they sit
+   in a quiet row underneath it rather than competing with it for size. */
+.hud-group-score-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.hud-group-score-foot .clock-stat {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 5px;
+}
+.hud-group-score-foot .stat-label {
+  margin-bottom: 0;
+}
+body.play-view .scoreboard #time-value {
+  font-size: 14px;
+  color: var(--cyan);
+}
+.hud-group-match {
+  gap: 0;
 }
 body.play-view .scoreboard .stat {
   padding-left: 0;
   border: 0;
-  text-shadow: 0 2px 10px #05021acc;
+  text-shadow: none;
 }
-body.play-view .scoreboard .stat:nth-child(3) {
-  grid-column: 4;
-  text-align: right;
+/* More specific than the reset above it, on purpose: these are the dividers
+   between the match stats inside their shared card. */
+body.play-view .scoreboard .hud-group-match .stat {
+  padding-left: 16px;
+  border-left: 1px solid #ffffff1c;
 }
-body.play-view .scoreboard .lives-stat {
-  grid-column: 5;
-  text-align: right;
+body.play-view .scoreboard .hud-group-match .stat:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
 body.play-view .scoreboard .stat-label {
-  color: #efe7ff;
-  text-shadow: 0 1px 6px #05021a;
+  color: #cdbfe8;
 }
 body.play-view .scoreboard .stat strong {
-  font-size: clamp(20px, 2.2vw, 34px);
+  font-size: clamp(18px, 1.7vw, 28px);
 }
-body.play-view .scoreboard .pause-button {
+/* The score is the one number that matters most, so it stays the biggest
+   thing in the band — the match stats beside it are secondary. */
+body.play-view .scoreboard .hud-group-score .stat strong {
+  font-size: clamp(24px, 2.6vw, 40px);
+}
+.best-chip {
+  color: var(--pink);
+  font: 700 8px var(--sign);
+  letter-spacing: 1.5px;
+  white-space: nowrap;
+}
+body.play-view .pause-button {
+  flex: none;
+  margin-top: 4px;
   pointer-events: auto;
 }
 body.play-view .court-toolbar {
@@ -1283,10 +1314,14 @@ body.play-view .court-toolbar {
   z-index: 4;
   bottom: 0;
   left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   width: min(100cqw, 161.2903cqh);
   min-height: 0;
-  padding: 12px 16px 8px;
-  background: linear-gradient(0deg, #0a0520e8, #0a052000);
+  padding: 10px 16px 14px;
+  background: linear-gradient(0deg, #0a0520e0, #0a052000 78%);
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -1294,17 +1329,41 @@ body.play-view .court-toolbar .play-actions,
 body.play-view .court-toolbar .target-info {
   pointer-events: auto;
 }
+/* The target hint is the one element here with no fixed size of its own, so
+   it is the one that gives way first: it shrinks and truncates rather than
+   pushing the pass controls past the edge of the screen, which is what used
+   to clip the toolbar on a narrower window. */
+body.play-view .court-toolbar .target-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 14px;
+  color: #efe7ff;
+  background: #0c0620c2;
+  border: 1px solid #ffffff1c;
+  border-radius: 12px;
+  text-shadow: none;
+}
+body.play-view .court-toolbar #target-label {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+body.play-view .court-toolbar .play-actions {
+  flex: 0 0 auto;
+  min-width: 0;
+}
 body.play-view .court-toolbar .play-actions button {
-  min-height: 34px;
-  padding: 5px 9px;
+  min-height: 40px;
+  padding: 6px 10px;
   background: #120a2ce8;
 }
-body.play-view .court-toolbar .target-info {
-  color: #efe7ff;
-  text-shadow: 0 1px 8px #05021a;
-}
 body.play-view #focus-button {
-  min-width: 150px;
+  min-width: clamp(88px, 13vw, 150px);
+}
+body.play-view #pass-button,
+body.play-view #bank-button {
+  min-width: 0;
 }
 /* A gamepad never needs the on-screen buttons, so they fade back until the
    pointer comes near them. Mouse and touch still get full-size hit targets. */
@@ -1330,6 +1389,28 @@ body.play-view #focus-button {
   }
   .scoreboard {
     padding-inline: 10px;
+  }
+}
+/* Below tablet width the two HUD cards no longer both fit on one line beside
+   the pause button, so the band wraps (see flex-wrap on .scoreboard) — this
+   just tightens them up so the wrapped result still reads as one band
+   instead of two separate ones. */
+@media (max-width: 700px) {
+  body.play-view .scoreboard {
+    padding: 10px 12px 0;
+  }
+  .hud-group {
+    gap: 10px;
+    padding: 6px 10px;
+  }
+  .hud-group-score-foot {
+    gap: 10px;
+  }
+  .hud-group-match {
+    margin-left: 0;
+  }
+  body.play-view .scoreboard .hud-group-score .stat strong {
+    font-size: 26px;
   }
 }
 @media (max-width: 700px) {

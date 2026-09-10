@@ -843,25 +843,20 @@ function syncFocusButtons() {
   $("focus-button").setAttribute("aria-pressed", String(focusToggle));
   $("touch-focus").setAttribute("aria-pressed", String(focusToggle));
 }
-// THE SIDE RAILS
+// THE COURT'S OWN BOX
 //
-// The court is a 1000:620 rectangle centred in the panel, and in a wide window
-// it is height-limited, so a band of unusable width is left down each side.
-// The scoreboard's readouts move into that band when it is wide enough to hold
-// them, which stops them competing with the court for the top of the frame.
-// They are the same elements, moved: nothing is duplicated, so every id, every
-// aria-label and every assertion that reads them still finds one node.
+// The court is a 1000:620 rectangle centred in the panel. In a wide window
+// it is height-limited and a band of extra width is left either side; in a
+// tall one it is width-limited and the extra band runs above and below
+// instead. That box is also what the HUD bands (see .scoreboard and
+// .court-toolbar) and the ambience wash below both measure against, so it
+// stays a single source of truth rather than three different guesses.
 //
-// The court's own size is not touched by any of this. It is still
-// min(100cqw, 161.2903cqh) of the panel, about 87% of the width of a 1920x1080
-// viewport, and the rails live in the letterbox beside it.
-const COURT_RATIO = 1000 / 620,
-  // A rail needs room for its widest label, "POSSESSIONS", at the rail's own
-  // 8px label size plus its padding. Below that the readouts stay in the band.
-  RAIL_MIN = 92;
+// The court's own size is never touched by any of this: it is still
+// min(100cqw, 161.2903cqh) of the panel, about 87% of the width of a
+// 1920x1080 viewport.
+const COURT_RATIO = 1000 / 620;
 const gamePanel = document.querySelector(".game-panel");
-const statOf = (id) => $(id)?.closest(".stat") || null;
-let railsOn = null;
 function courtBox() {
   if (!gamePanel) return null;
   const { width, height } = gamePanel.getBoundingClientRect();
@@ -876,37 +871,6 @@ function courtBox() {
     left: (width - courtWidth) / 2,
     top: (height - courtHeight) / 2,
   };
-}
-function syncRails() {
-  const box = courtBox();
-  if (!box) return;
-  document.documentElement.style.setProperty(
-    "--court-gutter",
-    `${Math.floor(box.left)}px`,
-  );
-  // The touch layout parks its own controls in the right-hand space, so the
-  // rails stay out of its way whatever the arithmetic says.
-  const touch = document.querySelector(".touch-controls"),
-    touchLayout = Boolean(touch && touch.offsetParent);
-  const on =
-    document.body.classList.contains("play-view") &&
-    !touchLayout &&
-    box.left >= RAIL_MIN;
-  if (on === railsOn) return;
-  railsOn = on;
-  document.body.dataset.rails = on ? "on" : "off";
-  const score = statOf("score-value"),
-    time = statOf("time-value"),
-    combo = statOf("combo-value"),
-    lives = statOf("lives-value"),
-    pause = $("pause-button"),
-    board = $("scoreboard");
-  if (!score || !time || !combo || !lives || !pause || !board) return;
-  if (on) {
-    $("rail-left").append(score, time);
-    $("rail-right").append(combo, lives);
-  } else for (const stat of [score, time, combo, lives]) board.insertBefore(stat, pause);
-  publishScoreboardHeight();
 }
 
 // MUSIC-REACTIVE AMBIENCE
@@ -1020,8 +984,6 @@ if (typeof ResizeObserver === "function") {
   const observer = new ResizeObserver(() => publishScoreboardHeight());
   const board = $("scoreboard");
   if (board) observer.observe(board);
-  const panelObserver = new ResizeObserver(() => syncRails());
-  if (gamePanel) panelObserver.observe(gamePanel);
 }
 // A streak of 0 hides the readout; every tenth pass is a milestone, which is
 // the pink state the canvas badge used to paint.
@@ -1329,7 +1291,6 @@ function syncSettingChrome() {
   document.body.classList.toggle("play-view", view === "arena");
   document.body.dataset.view = view;
   publishScoreboardHeight();
-  syncRails();
   $("theme-button").setAttribute(
     "aria-pressed",
     String(settings.theme === "light"),

@@ -123,17 +123,40 @@ export class Renderer {
       "dark"
     );
   }
-  backgroundFor(v, t) {
-    const key = `${v.id}:${t}`;
-    if (!this.backgrounds.has(key)) {
-      const el = document.createElement("canvas");
-      el.width = WIDTH;
-      el.height = HEIGHT;
-      const context = el.getContext("2d");
-      this.paintArena(context, v, THEMES[t] || THEMES.dark);
-      this.backgrounds.set(key, el);
-    }
-    return this.backgrounds.get(key);
+  // The pitch, lines and stadium art used to be painted once into a 1000x620
+  // bitmap and stretched onto the live canvas by drawImage every frame. That
+  // stretch is a non-integer scale in any real window (1.67x at 1920x1080),
+  // so every line and edge in it was soft no matter how crisp the live canvas
+  // itself was. Baking it at the canvas's own backing-store resolution
+  // instead — same design-space drawing code, just run through a matching
+  // scale transform onto a bigger bitmap — makes it native-sharp. The cache
+  // is one entry per venue/theme; a resize just repaints that entry in place
+  // rather than growing the map with every intermediate size. The transform
+  // mirrors resize() exactly, rotation included, so a portrait canvas gets a
+  // background baked already rotated — it is blitted back with no transform
+  // at all, so the rotation has to already be in the pixels.
+  backgroundFor(v, t, w, h, portrait) {
+    const key = `${v.id}:${t}:${portrait ? "p" : "l"}`;
+    const cached = this.backgrounds.get(key);
+    if (cached && cached.w === w && cached.h === h) return cached.canvas;
+    const el = cached ? cached.canvas : document.createElement("canvas");
+    el.width = w;
+    el.height = h;
+    const context = el.getContext("2d");
+    if (portrait) context.setTransform(0, h / WIDTH, -w / HEIGHT, 0, w, 0);
+    else context.setTransform(w / WIDTH, 0, 0, h / HEIGHT, 0, 0);
+    this.paintArena(context, v, THEMES[t] || THEMES.dark);
+    this.backgrounds.set(key, { canvas: el, w, h });
+    return el;
+  }
+  // Rounds a design-space stroke width so it lands on a whole number of
+  // device pixels once the current transform scales it, instead of the
+  // fractional width (e.g. 2px -> 3.34px at 1.67x) that anti-aliases into a
+  // soft edge. Uses whatever context is passed in, so it works the same for
+  // the cached background pass and the live per-frame draw.
+  crisp(c, px) {
+    const scale = c.getTransform().a || 1;
+    return Math.max(1, Math.round(px * scale)) / scale;
   }
   paintArena(c, v, p) {
     const theme = p === THEMES.light ? "light" : "dark",
@@ -176,7 +199,7 @@ export class Renderer {
     c.restore();
     c.globalAlpha = 0.74;
     c.strokeStyle = p.line;
-    c.lineWidth = 2;
+    c.lineWidth = this.crisp(c, 2);
     c.beginPath();
     c.moveTo(500, 50);
     c.lineTo(500, 570);
@@ -189,15 +212,15 @@ export class Renderer {
     c.restore();
     c.globalAlpha = 1;
     c.shadowColor = "rgba(0,0,0,.65)";
-    c.shadowBlur = 18;
+    c.shadowBlur = 10;
     rounded(c, 50, 50, 900, 520, 16);
     c.strokeStyle = p.line;
-    c.lineWidth = 3;
+    c.lineWidth = this.crisp(c, 3);
     c.stroke();
     c.shadowBlur = 0;
     c.globalAlpha = 0.72;
     c.strokeStyle = v.accent;
-    c.lineWidth = 2;
+    c.lineWidth = this.crisp(c, 2);
     rounded(c, 43, 43, 914, 534, 21);
     c.stroke();
     c.globalAlpha = 1;
@@ -550,7 +573,25 @@ export class Renderer {
     this.venue = getVenue(game.config);
     const tn = this.themeName(theme);
     c.globalAlpha = 1;
-    c.drawImage(this.backgroundFor(this.venue, tn), 0, 0);
+    // The background bitmap is now baked at this canvas's own backing-store
+    // resolution (see backgroundFor), so it must be blitted 1:1 rather than
+    // through the design-space transform, or it would be stretched a second
+    // time. Save/restore keeps everything drawn after this back on the
+    // normal WIDTH/HEIGHT coordinate system.
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.drawImage(
+      this.backgroundFor(
+        this.venue,
+        tn,
+        this.canvas.width,
+        this.canvas.height,
+        this.orientation === "portrait",
+      ),
+      0,
+      0,
+    );
+    c.restore();
     if (!this.reducedMotion) {
       c.fillStyle = this.venue.accent;
       c.globalAlpha = 0.2;
@@ -754,15 +795,15 @@ export class Renderer {
     if (selected) {
       circle(c, p.x, p.y, 35);
       c.strokeStyle = "#fff";
-      c.lineWidth = 2;
+      c.lineWidth = this.crisp(c, 2);
       c.stroke();
     }
     if (carrier) {
       circle(c, p.x, p.y, 33);
       c.strokeStyle = "#fff";
-      c.lineWidth = 3;
+      c.lineWidth = this.crisp(c, 3);
       c.shadowColor = this.venue.accent;
-      c.shadowBlur = 13;
+      c.shadowBlur = 8;
       c.stroke();
       c.shadowBlur = 0;
       if (hold > 2 && !preview) {
@@ -786,7 +827,7 @@ export class Renderer {
     c.fillStyle = g;
     c.fill();
     c.strokeStyle = "#d7fffb";
-    c.lineWidth = 2;
+    c.lineWidth = this.crisp(c, 2);
     c.stroke();
     label(c, String(p.id + 1), p.x, p.y + 1, 22, "#062332", "center", 900);
     if (carrier) {
@@ -815,11 +856,11 @@ export class Renderer {
     c.fillStyle = g;
     c.fill();
     c.strokeStyle = "#ffc0cf";
-    c.lineWidth = 2;
+    c.lineWidth = this.crisp(c, 2);
     c.stroke();
     c.restore();
     c.strokeStyle = "#fff0f4";
-    c.lineWidth = 3.2;
+    c.lineWidth = this.crisp(c, 3.2);
     c.lineCap = "round";
     c.beginPath();
     c.moveTo(p.x - 7, p.y - 7);
@@ -834,7 +875,7 @@ export class Renderer {
     c.translate(x, y);
     c.rotate(r);
     c.shadowColor = "#fff";
-    c.shadowBlur = 11;
+    c.shadowBlur = 7;
     circle(c, 0, 0, 8);
     c.fillStyle = "#fff";
     c.fill();
