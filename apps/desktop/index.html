@@ -629,13 +629,29 @@
                   Wall pass <kbd data-binding="wallToggle">B</kbd></button
                 ><button id="shout-button" title="Shout target to bonus zone (F)" disabled>
                   Shout <kbd data-binding="shout">F</kbd></button
-                ><button
+                >
+              </div>
+              <div class="target-info boost-info">
+                <button
                   id="boost-button"
                   aria-pressed="false"
                   title="Hold Boost (R). Boost uses Focus."
                   disabled
                 >
-                  Boost <kbd data-binding="boostHold">R</kbd>
+                  Boost
+                  <span id="boost-value" class="focus-value">0.0 / 5s</span>
+                  <kbd data-binding="boostHold">R</kbd
+                  ><span
+                    id="boost-meter"
+                    class="focus-track"
+                    role="meter"
+                    aria-label="Boost reserve"
+                    aria-valuemin="0"
+                    aria-valuemax="5"
+                    aria-valuenow="0"
+                    aria-valuetext="0.0 of 5 seconds"
+                    ><span id="boost-fill"></span
+                  ></span>
                 </button>
               </div>
             </div>
