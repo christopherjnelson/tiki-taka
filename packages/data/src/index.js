@@ -270,3 +270,178 @@ export const LOCAL_DATA_KEYS = {
   guest: GUEST_KEY,
   user: (id) => `${PREFIX}.user.${id}`,
 };
+
+// Same shape as createLocalDataAdapter (register/login/logout/getSession/
+// getProfile/loadUserData/saveUserData/recordRound), backed by the optional
+// accounts server (see server/README.md) instead of localStorage — with one
+// difference the local adapter doesn't need: this one only has real accounts
+// to talk to the server about. A player who never registers/logs in still
+// needs somewhere to keep guest progress, so this adapter keeps a private
+// createLocalDataAdapter around (never registered/logged in on, so it always
+// stays on the guest scope) and uses it whenever there is no server session.
+// That is also exactly what keeps the game working if the server is
+// misconfigured or briefly unreachable: any network failure surfaces as a
+// LocalDataError the same way a local storage failure would, and callers
+// that catch it (see the runtime adapter selection helper below) fall back
+// to a plain createLocalDataAdapter for the rest of the session.
+export function createRemoteDataAdapter({
+  apiBase,
+  fetch: fetchImpl = globalThis.fetch,
+  storage,
+  crypto = globalThis.crypto,
+} = {}) {
+  if (!apiBase) throw new LocalDataError("STORAGE_REQUIRED", "API base URL must be configured.");
+  if (!fetchImpl) throw new LocalDataError("STORAGE_REQUIRED", "fetch is not available.");
+  const base = apiBase.replace(/\/$/, "");
+  const guest = createLocalDataAdapter({ storage, crypto });
+
+  let profile = null;
+  let checked = false;
+
+  async function call(path, { method = "GET", body } = {}) {
+    let response;
+    try {
+      response = await fetchImpl(`${base}${path}`, {
+        method,
+        credentials: "include",
+        headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+    } catch {
+      throw new LocalDataError("STORAGE_ERROR", "The accounts server could not be reached.");
+    }
+    let json = null;
+    let text = "";
+    try {
+      text = await response.text();
+    } catch {
+      // fall through with an empty body
+    }
+    if (text) {
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = null;
+      }
+    }
+    if (!response.ok) {
+      const code = json?.error?.code || "STORAGE_ERROR";
+      const message = json?.error?.message || "The accounts server returned an error.";
+      throw new LocalDataError(code, message);
+    }
+    return json;
+  }
+
+  const forgetSession = () => {
+    profile = null;
+    checked = true;
+  };
+
+  // Runs a request that requires a signed-in session, falling back to the
+  // guest (local) scope both when we already know no one is signed in and
+  // when the server unexpectedly says our session is gone.
+  async function withSession(remoteCall, guestCall) {
+    if (!checked) {
+      profile = (await call("/api/session"))?.profile || null;
+      checked = true;
+    }
+    if (!profile) return guestCall();
+    try {
+      return await remoteCall();
+    } catch (error) {
+      if (error.code === "UNAUTHORIZED") {
+        forgetSession();
+        return guestCall();
+      }
+      throw error;
+    }
+  }
+
+  return {
+    kind: "server",
+    async register({ email, username, password } = {}) {
+      const result = await call("/api/register", { method: "POST", body: { email, username, password } });
+      profile = result;
+      checked = true;
+      return result;
+    },
+    async login({ identifier, password } = {}) {
+      const result = await call("/api/login", { method: "POST", body: { identifier, password } });
+      profile = result;
+      checked = true;
+      return result;
+    },
+    async logout() {
+      try {
+        await call("/api/logout", { method: "POST" });
+      } finally {
+        forgetSession();
+      }
+    },
+    async getSession() {
+      const result = await call("/api/session");
+      profile = result?.profile || null;
+      checked = true;
+      return result;
+    },
+    async getProfile() {
+      const result = await call("/api/profile");
+      profile = result;
+      checked = true;
+      return result;
+    },
+    async loadUserData() {
+      return withSession(() => call("/api/user-data"), () => guest.loadUserData());
+    },
+    async saveUserData(update = {}) {
+      return withSession(
+        () => call("/api/user-data", { method: "PUT", body: update }),
+        () => guest.saveUserData(update),
+      );
+    },
+    async recordRound(round = {}) {
+      const body = {
+        mode: round.mode ?? "career",
+        court: round.court ?? null,
+        score: round.score ?? 0,
+        passes: round.passes ?? 0,
+        bestOneTouch: round.bestOneTouch ?? 0,
+      };
+      return withSession(
+        () => call("/api/rounds", { method: "POST", body }),
+        () => guest.recordRound(round),
+      );
+    },
+    // Not part of the local-adapter contract: only meaningful once there is
+    // a server to ask. The leaderboard UI feature-detects this method.
+    async getLeaderboard({ mode = "career", court, limit } = {}) {
+      const params = new URLSearchParams({ mode });
+      if (court !== undefined && court !== null) params.set("court", String(court));
+      if (limit) params.set("limit", String(limit));
+      return call(`/api/leaderboard?${params.toString()}`);
+    },
+  };
+}
+
+// Runtime adapter selection: a player with no backend configured, or whose
+// configured backend is unreachable, must see no difference from the plain
+// local-storage game. Call this once at boot instead of constructing an
+// adapter directly. `apiBase` is expected to come from the app's own runtime
+// configuration (e.g. a build-time constant or a same-origin `/api`); when
+// it is falsy, or the server doesn't answer, this resolves to a local
+// adapter and the caller never needs to know the difference.
+export async function selectDataAdapter({
+  apiBase,
+  storage,
+  crypto = globalThis.crypto,
+  fetch: fetchImpl = globalThis.fetch,
+} = {}) {
+  if (!apiBase) return createLocalDataAdapter({ storage, crypto });
+  const remote = createRemoteDataAdapter({ apiBase, storage, crypto, fetch: fetchImpl });
+  try {
+    await remote.getSession();
+    return remote;
+  } catch {
+    return createLocalDataAdapter({ storage, crypto });
+  }
+}

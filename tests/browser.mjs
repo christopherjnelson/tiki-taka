@@ -83,8 +83,8 @@ async function runRound(page, { steps = 60, stepMs = 500, onStep } = {}) {
   }
 }
 
-async function waitForScore(page, previous = 0) {
-  await page.waitForFunction(value => Number(document.querySelector('#score-value')?.textContent) > value, previous);
+async function waitForScore(page, previous = 0, timeout = 30000) {
+  await page.waitForFunction(value => Number(document.querySelector('#score-value')?.textContent) > value, previous, { timeout });
   return Number(await page.locator('#score-value').textContent());
 }
 
@@ -92,11 +92,11 @@ async function focusSeconds(page) {
   return page.evaluate(() => window.__observedGame.game.focus);
 }
 
-async function waitForPassToSettle(page, previousPasses = 0) {
+async function waitForPassToSettle(page, previousPasses = 0, timeout = 30000) {
   await page.waitForFunction(count => {
     const game = window.__observedGame?.game;
     return game && game.passes > count && !game.ball && game.lock === 0 && game.passCooldown === 0;
-  }, previousPasses);
+  }, previousPasses, { timeout });
 }
 
 // Button activation is edge-triggered (`tap()` compares against the previous
@@ -108,11 +108,57 @@ async function waitForPassToSettle(page, previousPasses = 0) {
 // the short press, because holding a direction past the 0.2s repeat gate moves
 // focus twice.
 const isDpad = button => button >= 12 && button <= 15;
+// The court repaints on a rAF loop whose rate collapses on a loaded runner, so
+// waiting a fixed number of milliseconds can capture a stale frame - which is
+// how two captures that must differ came back identical in CI. window.__targets
+// grows once per rendered frame, so wait on real render progress, not a clock.
+async function framesRendered(page, count, timeout = 20000) {
+  const from = await page.evaluate(() => window.__targets.length);
+  await page.waitForFunction(
+    ([start, n]) => window.__targets.length >= start + n,
+    [from, count],
+    { timeout },
+  );
+}
+
 async function pulsePad(page, button, hold = isDpad(button) ? 80 : 250) {
   await page.evaluate(index => window.__setTestPad({ button: index, pressed: true }), button);
   await page.waitForTimeout(hold);
   await page.evaluate(index => window.__setTestPad({ button: index, pressed: false }), button);
   await page.waitForTimeout(hold);
+}
+
+// A single pulsePad() can be the one that lands entirely between two polls
+// (see above) and never register at all. `ready` is a bounded wait for the
+// effect the press should cause; presses repeat, the way a real player would
+// press again, until that effect is observed or attempts run out. Mirrors
+// padUntil() in tests/audio.browser.mjs.
+async function padUntil(page, button, ready, attempts = 6) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (await ready()) return true;
+    await pulsePad(page, button);
+  }
+  return await ready();
+}
+
+// A pass in flight is not safe to retry into: doPass() queues a second pass
+// on top of a first that is still travelling (game.ball ? queuePass : pass in
+// apps/desktop/src/main.js), so pressing A again after a real accepted press
+// would corrupt the very outcome being waited for. Confirm the press actually
+// reached doPass - via observeGame's hook, which records every call
+// synchronously in the same frame the input is read, so this check is never
+// itself waiting out travel time - and only retry the press while that count
+// has not moved. Once it has, the frame loop's dt clamp (50ms/frame, see
+// apps/desktop/src/main.js) means a CPU-starved runner may still take a while
+// to play the pass out, so give it a single generous, non-repeating wait.
+async function passesRecorded(page) {
+  return page.evaluate(() => window.__observedGame.passes.length);
+}
+async function pressUntilAccepted(page, button, attempts = 6) {
+  const before = await passesRecorded(page);
+  const registered = await padUntil(page, button,
+    async () => (await passesRecorded(page)) > before, attempts);
+  assert.equal(registered, true, `${button === 0 ? 'A' : `button ${button}`} should register with the game`);
 }
 
 async function observeGame(page) {
@@ -373,17 +419,22 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   }
   assert.equal(started, true, 'A should activate focused start');
   await observeGame(page);
-  await pulsePad(page, 0);
-  await waitForScore(page);
-  await waitForPassToSettle(page);
+  // A alone must complete a pass and move the score. One press can be the one
+  // that lands entirely between two polls (see pulsePad above), so confirm it
+  // registered - retrying only until it does, never after - then give the
+  // resulting pass its own generous, un-retried travel time.
+  await pressUntilAccepted(page, 0);
+  await waitForScore(page, 0, 20000);
+  await waitForPassToSettle(page, 0, 20000);
   assert.equal(await focusSeconds(page), 0);
   const gamepadPasses = await page.evaluate(() => window.__observedGame.game.passes);
   await page.evaluate(() => window.__setTestPad({ button: 6, pressed: true }));
-  await pulsePad(page, 2);
-  assert.equal(await page.locator('#bank-button').getAttribute('aria-pressed'), 'true', 'X should arm the wall pass');
+  const armed = await padUntil(page, 2,
+    () => page.locator('#bank-button').getAttribute('aria-pressed').then(v => v === 'true'));
+  assert.equal(armed, true, 'X should arm the wall pass');
   assert.equal(await page.evaluate(() => window.__observedGame.game.passes), gamepadPasses, 'X alone should not complete a pass');
-  await pulsePad(page, 0);
-  await waitForPassToSettle(page, gamepadPasses);
+  await pressUntilAccepted(page, 0);
+  await waitForPassToSettle(page, gamepadPasses, 20000);
   assert.equal(await page.locator('#bank-button').getAttribute('aria-pressed'), 'false', 'playing the armed wall pass should disarm it');
   assert.equal(await focusSeconds(page), 0.5, 'gamepad wall pass should earn focus');
   await page.waitForTimeout(150);
@@ -411,8 +462,9 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 0, 0] }));
   assert.ok(playingAims.some(aim => aim && (aim.x || aim.y)),
     `the stick should aim the court while playing, got ${JSON.stringify(playingAims.slice(0, 5))}`);
-  await pulsePad(page, 9);
-  await page.locator('#pause-menu').waitFor({ state: 'visible' });
+  const paused = await padUntil(page, 9,
+    () => page.locator('#pause-menu').waitFor({ state: 'visible', timeout: 4000 }).then(() => true, () => false));
+  assert.equal(paused, true, 'Start should open the pause menu');
   await expectText(page.locator('#pause-title'), /paused/i);
   // A paused round must ignore the stick: no aim reaches the renderer, so the
   // court cannot keep repainting target lanes behind the pause menu.
@@ -453,8 +505,9 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   await pulsePad(page, 12);
   assert.notEqual(await page.evaluate(() => document.activeElement?.id), upFrom, 'up on the d-pad should move too');
   assert.equal(await page.evaluate(() => Boolean(document.querySelector('#pause-menu')?.contains(document.activeElement))), true);
-  await pulsePad(page, 9);
-  assert.equal(await page.locator('#pause-menu').isHidden(), true);
+  const resumed = await padUntil(page, 9,
+    () => page.locator('#pause-menu').waitFor({ state: 'hidden', timeout: 4000 }).then(() => true, () => false));
+  assert.equal(resumed, true, 'Start should close the pause menu');
   await page.evaluate(() => window.__setTestPad({ connected: false }));
   await page.waitForFunction(() => document.querySelector('#toast')?.textContent.includes('Controller disconnected'));
   await expectText(page.locator('#toast'), /Controller disconnected/);
@@ -763,7 +816,15 @@ await check('the right stick picks the smart-pass target and marks it on the cou
   // The highlight is painted onto the canvas, so a frame drawn with a target
   // must differ from one drawn without: pausing clears the selection.
   await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 1, 0] }));
-  await page.waitForTimeout(200);
+  // Wait for the app to actually select a target, then for frames painted with
+  // it, before sampling. The aim updates in pollGamepad but the highlight only
+  // exists once renderer.render has drawn a frame carrying that target.
+  await page.waitForFunction(
+    () => Number.isInteger(window.__targets.at(-1)),
+    null,
+    { timeout: 20000 },
+  );
+  await framesRendered(page, 3);
   const withTarget = await page.locator('#court').evaluate(c => c.toDataURL());
   await page.keyboard.press('Escape');
   await page.locator('#pause-menu').waitFor({ state: 'visible' });
@@ -772,7 +833,7 @@ await check('the right stick picks the smart-pass target and marks it on the cou
     'a paused round selects nobody');
   assert.equal(await page.evaluate(() => window.__targets.at(-1)), null);
   await page.locator('#pause-menu').evaluate(el => (el.style.display = 'none'));
-  await page.waitForTimeout(120);
+  await framesRendered(page, 3);
   const withoutTarget = await page.locator('#court').evaluate(c => c.toDataURL());
   await page.locator('#pause-menu').evaluate(el => (el.style.display = ''));
   assert.notEqual(withTarget, withoutTarget,
