@@ -15,7 +15,7 @@
 :root {
   font-family: Arial, sans-serif;
   color-scheme: dark;
-  --bg: #0e0921;
+  --bg: #0a0718;
   --surface: #19122f;
   --panel: #241942;
   --ink: #fff7ff;
@@ -87,9 +87,21 @@ body {
   min-width: 320px;
   min-height: 100svh;
   color: var(--ink);
+  /* Warm top-right bloom (unchanged) plus a dark vignette pulled in from
+     the edges, so the console panels read as lit objects sitting on a
+     near-black ground rather than floating on a flat fill. The vignette is
+     intentionally soft/large — this is page-ground dressing, not a
+     spotlight — and is skipped in the light theme below, where a bright
+     ground has nothing to vignette toward. */
+  background:
+    radial-gradient(circle at 85% 0, #ff3aa724, transparent 30rem),
+    radial-gradient(ellipse at 50% 40%, transparent 45%, #05030f 115%),
+    var(--bg);
+  transition: 0.2s;
+}
+:root[data-theme="light"] body {
   background:
     radial-gradient(circle at 85% 0, #ff3aa724, transparent 30rem), var(--bg);
-  transition: 0.2s;
 }
 button,
 select {
@@ -189,7 +201,7 @@ input:focus-visible {
   gap: 9px;
   width: 100%;
   min-height: 54px;
-  padding: 8px 8px 8px 11px;
+  padding: 8px 10px 8px 11px;
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
@@ -209,6 +221,98 @@ input:focus-visible {
   border-color: var(--a);
   background: color-mix(in srgb, var(--panel), var(--a) 16%);
   box-shadow: 0 0 15px color-mix(in srgb, var(--a), transparent 75%);
+}
+/* Thumbnail stand-in: a per-venue gradient plus a thin horizon line, not
+   art. --thumb-a/--thumb-b are the real venue accent/secondary hex pulled
+   from packages/engine/src/venues.js (CSS can't import JS, so they're
+   copied here) — six distinct colours in the same Lisbon → Amsterdam order
+   COURTS uses, rather than the generic cyan/pink/gold cycle --a already
+   runs for the left rail. */
+.court-list button {
+  --thumb-a: var(--cyan);
+  --thumb-b: var(--pink);
+}
+.court-list button:nth-child(1) {
+  --thumb-a: #21f3df;
+  --thumb-b: #ff587f;
+}
+.court-list button:nth-child(2) {
+  --thumb-a: #34e5ed;
+  --thumb-b: #ff4f73;
+}
+.court-list button:nth-child(3) {
+  --thumb-a: #2debd2;
+  --thumb-b: #ff5d68;
+}
+.court-list button:nth-child(4) {
+  --thumb-a: #38f5e5;
+  --thumb-b: #ff3c9c;
+}
+.court-list button:nth-child(5) {
+  --thumb-a: #6dff8a;
+  --thumb-b: #ff4e8b;
+}
+.court-list button:nth-child(6) {
+  --thumb-a: #40efff;
+  --thumb-b: #ff4ba8;
+}
+/* Dark base → accent (horizon/sky) → secondary (warm lower band): three
+   stops instead of a flat two-colour diagonal, so the thumbnail reads as a
+   small sunset/skyline rather than a smudge. The horizon line (first
+   layer) still sits near the bottom, now over a gradient with real
+   structure to cross. */
+.court-list button::before {
+  content: "";
+  flex: none;
+  width: 46px;
+  height: 38px;
+  background:
+    linear-gradient(
+        0deg,
+        transparent calc(50% - 1px),
+        #100b2380 calc(50% - 1px) calc(50% + 1px),
+        transparent calc(50% + 1px)
+      )
+      100% 100% / 100% 100% no-repeat,
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--thumb-a), #05030f 60%) 0%,
+      var(--thumb-a) 45%,
+      var(--thumb-b) 100%
+    );
+  border: 1px solid var(--line);
+}
+/* Chevron pushed to the row's right edge, after .court-stars — the two sit
+   in the same trailing group (the flex gap already spaces them) rather than
+   fighting over margin-left: auto. */
+.court-list button::after {
+  content: "›";
+  flex: none;
+  margin-left: 3px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+}
+/* Locked rows (disabled) used to fall all the way to the shared
+   button:disabled opacity: 0.4, which read as broken rather than
+   deliberately locked. Lifted back up so the row stays legible; dimming
+   is now text-only (colour, not the shared opacity/grayscale) so the
+   thumbnail keeps its real colour — a grayscale filter on the venue art
+   was what made every locked row look like the same muddy smudge. */
+.court-list button:disabled {
+  opacity: 1;
+  color: var(--muted);
+}
+.court-list button:disabled::before {
+  opacity: 0.55;
+}
+/* .court-stars already carries "↗" for a locked row — real state, from
+   main.js, and the accessible name comes from the button's own aria-label
+   regardless, so hiding this glyph is purely visual. Suppressing the
+   trailing chevron here is what actually fixes the doubled-arrow read;
+   without it every locked row showed "↗ ›" side by side. */
+.court-list button:disabled::after {
+  content: none;
 }
 .court-number {
   display: grid;
@@ -259,6 +363,10 @@ input:focus-visible {
   margin: 7px 0 0;
   color: var(--muted);
   font-size: 9px;
+  /* Mirrors the mockup's "0 / 300 XP" right-aligned under the bar. The copy
+     itself ("0 XP · Every pass is progress") is set from src/main.js, which
+     this pass does not touch, so only the alignment changes here. */
+  text-align: right;
 }
 .utility-buttons {
   display: flex;
@@ -501,6 +609,145 @@ dialog h2 {
   color: #d0c4dd;
   font-size: 11px;
   line-height: 1.7;
+}
+.overlay-actions[hidden],
+.result-stats[hidden],
+.result-cheer[hidden],
+.result-burst[hidden] {
+  display: none;
+}
+.overlay-actions {
+  width: 100%;
+}
+.game-overlay[data-result] {
+  z-index: 5;
+  background: #040316c7;
+}
+.game-overlay[data-result] .invitation {
+  position: relative;
+  overflow: hidden;
+  width: min(620px, 48vw);
+  min-height: min(430px, 48vh);
+  padding: clamp(30px, 4vh, 48px) clamp(34px, 4vw, 58px) 30px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--venue-accent), transparent 90%), transparent 42%),
+    #090721f5;
+  border-color: var(--venue-accent);
+  clip-path: polygon(0 0, calc(100% - 30px) 0, 100% 30px, 100% 100%, 30px 100%, 0 calc(100% - 30px));
+  box-shadow: 0 24px 70px #02010dcc;
+}
+.game-overlay[data-result="defeat"] .invitation {
+  border-color: var(--pink);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--pink), transparent 91%), transparent 42%),
+    #0c071ff5;
+}
+.game-overlay[data-result] .eyebrow {
+  color: var(--venue-accent);
+  letter-spacing: 3px;
+}
+.game-overlay[data-result="defeat"] .eyebrow {
+  color: var(--pink);
+}
+.game-overlay[data-result] #overlay-title {
+  margin: 9px 0 6px;
+  font-size: clamp(44px, 5vw, 72px);
+}
+.game-overlay[data-result] #overlay-copy {
+  margin: 7px auto 22px;
+  max-width: 46ch;
+  font-size: 12px;
+}
+.result-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  width: 100%;
+  margin: 0 0 16px;
+  border-block: 1px solid #ffffff24;
+}
+.result-stats > div {
+  min-width: 0;
+  padding: 13px 8px 12px;
+  border-left: 1px solid #ffffff24;
+}
+.result-stats > div:first-child {
+  border-left: 0;
+}
+.result-stats dt {
+  color: #aebbd1;
+  font: 700 8px var(--sign);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.result-stats dd {
+  margin: 6px 0 0;
+  color: #fff;
+  font: italic 800 clamp(24px, 2.6vw, 38px) / 1 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+.result-stats > div:first-child dd,
+.result-stats > div:last-child dd {
+  color: var(--venue-accent);
+}
+.result-cheer {
+  margin: 0 0 17px;
+  color: var(--pink);
+  font: 700 10px var(--sign);
+  letter-spacing: 2.5px;
+}
+.result-burst {
+  position: absolute;
+  inset: 16px 20px auto;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.result-burst span {
+  width: 7px;
+  height: 7px;
+  background: var(--venue-accent);
+  transform: rotate(45deg);
+}
+.result-burst span:nth-child(2) {
+  background: var(--pink);
+}
+.game-overlay[data-actions="waiting"] .invitation-note {
+  visibility: hidden;
+}
+.game-overlay[data-result] .invitation-note {
+  margin: 12px 0 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .game-overlay[data-result] .invitation {
+    animation: result-card-in 0.36s ease-out both;
+  }
+  .game-overlay[data-actions="ready"] .overlay-actions {
+    animation: result-actions-in 0.24s ease-out both;
+  }
+  .game-overlay[data-result="victory"] .result-burst span {
+    animation: result-cheer 0.7s ease-in-out 2 alternate;
+  }
+}
+@keyframes result-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+@keyframes result-actions-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes result-cheer {
+  to {
+    box-shadow: 0 0 18px 5px var(--venue-accent);
+    transform: rotate(135deg) scale(1.35);
+  }
 }
 .primary-button {
   display: flex;
@@ -1847,16 +2094,57 @@ body.play-view #bank-button {
   gap: 10px;
 }
 .home-modes button {
-  min-height: 76px;
-  padding: 11px 13px;
+  /* Tall enough to hold a 34px icon plus two lines of copy — this also
+     deliberately eats into row 1's share of the column, which is what
+     closes up the dead space still sitting above/below the demo canvas. */
+  min-height: 104px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
   color: var(--ink);
-  background: var(--surface);
+  /* Same console-panel fill/highlight as the row-1 panels (see
+     .console-panel below), reproduced by hand rather than shared through
+     that class: these buttons are focusable, and .console-panel's chamfer
+     depends on clip-path, which would clip the focus ring and the
+     .pad-focus glow right along with the corner. */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface), #fff 5%) 0%,
+    var(--surface) 60%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink), transparent 88%);
   border: 1px solid var(--line);
   border-top: 4px solid var(--cyan);
   text-align: left;
 }
 .home-modes button:nth-child(even) {
   border-top-color: var(--pink);
+}
+/* Line-art icon, coloured by the same accent as the card's top border —
+   currentColor so one rule covers both the shape's stroke and the
+   cyan/pink alternation. */
+.mode-icon {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  color: var(--cyan);
+}
+.home-modes button:nth-child(even) .mode-icon {
+  color: var(--pink);
+}
+.mode-copy {
+  min-width: 0;
+}
+/* The chevron the row's own right edge gets, generated the same way
+   .menu-item's is — free on every card, no markup. */
+.home-modes button::after {
+  content: "›";
+  margin-left: auto;
+  flex: none;
+  color: var(--muted);
+  font-size: 1.4em;
+  line-height: 1;
 }
 .home-modes strong,
 .home-modes span {
@@ -1873,13 +2161,16 @@ body.play-view #bank-button {
   line-height: 1.4;
 }
 /* In the menu column this is one narrow panel, so the level block sits above
-   the six counters rather than beside them. */
+   the six counters rather than beside them. In the wide layout this card is
+   pinned to the bottom of a now full-height .home-intro (see
+   .home-intro .home-progress above), so it gets roomier padding here to
+   read as a real card rather than a stub floating in the gained space. */
 .home-progress {
   width: 100%;
   margin-top: 16px;
   display: grid;
   gap: 12px;
-  padding: 11px 14px;
+  padding: 16px 18px;
   background: var(--surface);
   border: 1px solid var(--line);
 }
@@ -1889,11 +2180,39 @@ body.play-view #bank-button {
   font: 700 17px var(--sign);
   text-transform: uppercase;
 }
+/* YOUR LEVEL and the world-tour kicker share a line, eyebrow-left/kicker-
+   right, the way the mockup pairs them. */
+.home-progress-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+}
+.home-progress-kicker {
+  color: var(--muted);
+  font: 700 8px var(--sign);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
 .home-progress dl {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px 6px;
+  gap: 10px 6px;
   margin: 0;
+}
+/* Closing line the mockup sets under the stat grid — quiet, centred,
+   decorative (see the aria-hidden on the element in index.html). */
+.home-progress-quote {
+  margin: 2px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--cyan);
+  font: italic 700 11px var(--sign);
+  letter-spacing: 1px;
+  text-align: center;
+  text-transform: uppercase;
 }
 .account-note,
 .leaderboard-note {
@@ -2073,10 +2392,12 @@ body.play-view .arena-view .below-court {
 /* ── Home ───────────────────────────────────────────────────────────────────
    One screen. The demo, the menu, the courts, the modes and your progress used
    to be a title card and a separate courts page; splitting them meant a step
-   between wanting to play and picking where. Three columns and a strip:
+   between wanting to play and picking where. Three panels, a strip and a
+   sign-off, read as one console rather than loose columns on a void:
 
      intro | stage (demo over progress) | courts
      ------------------ modes ------------------
+     ------------------ footer ------------------
 
    Nothing here is allowed to make the page scroll. The shell is already capped
    at the viewport height, and everything inside is sized from the row it was
@@ -2089,10 +2410,12 @@ body.play-view .arena-view .below-court {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   align-content: center;
-  gap: 14px 20px;
+  /* Tight, near-full-bleed composition: 12px on every edge and between
+     panels, not the airier 20px this used to carry. */
+  gap: 12px;
   width: min(100%, 1720px);
   margin-inline: auto;
-  padding: 16px 20px;
+  padding: 12px;
   overflow-y: auto;
 }
 .home-view[hidden] {
@@ -2105,43 +2428,124 @@ body.play-view .arena-view .below-court {
 }
 /* The attract demo and the court picker are extras on a small window: below
    this the three columns cannot each hold their contents honestly, so home
-   falls back to the menu alone rather than scrolling or crushing them. */
+   falls back to the menu alone rather than scrolling or crushing them. The
+   footer is dropped with them — it is pure sign-off, and there is no room to
+   spare for decoration once the layout is down to one column. */
 .home-stage,
 .home-courts,
-.home-modes {
+.home-modes,
+.home-footer,
+.home-sunset {
   display: none;
+}
+/* ── Console panel chrome ─────────────────────────────────────────────────
+   Shared frame for the three row-1 panels: a filled, chamfered card with a
+   1px lifted-colour edge and a faint top highlight, standing in for the flat
+   panes the columns used to be.
+
+   clip-path crops everything painted on the element it's applied to,
+   borders included — so a plain `border` on a clipped box loses its stroke
+   exactly along the diagonal cut, because there's no rectangular edge left
+   for it to run along there. The fix used here is two stacked layers:
+   the panel itself is filled with the border colour and clipped to the full
+   chamfered outline (that's the "frame"); a ::before inset 1px carries the
+   real panel gradient and is clipped to the same chamfer, 1px smaller. The
+   outer layer then peeks out uniformly all the way round — including along
+   the chamfer — and reads as a 1px border that survives the notch.
+
+   Deliberately never put on a focusable element: it would clip the
+   :focus-visible outline and the .pad-focus glow along with the corner. The
+   mode-card buttons want the same fill/highlight but skip this class
+   entirely for that reason — see .home-modes button above. */
+.console-panel {
+  --notch: 20px;
+  position: relative;
+  isolation: isolate;
+  background: var(--line);
+  /* Breathing room between the frame and whatever the panel holds — the
+     panels had no padding of their own before, because they had no visible
+     edge to keep clear of. */
+  padding: 18px 20px;
+}
+.console-panel-notch-tr {
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--notch)) 0,
+    100% var(--notch),
+    100% 100%,
+    0 100%
+  );
+}
+.console-panel::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface), #fff 5%) 0%,
+    var(--surface) 55%
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink), transparent 88%);
+}
+.console-panel-notch-tr::before {
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--notch) + 1px) 0,
+    100% calc(var(--notch) - 1px),
+    100% 100%,
+    0 100%
+  );
 }
 @media (min-width: 980px) and (min-height: 620px) {
   .home-view {
+    /* Roughly the mockup's 26% / 47% / 27% split — the centre column is
+       left as 1fr rather than pinned to a % so it's the one that gives up
+       or gains space first as the window resizes. */
     grid-template-columns:
-      minmax(260px, 24%)
+      minmax(260px, 26%)
       minmax(0, 1fr)
-      minmax(250px, 24%);
-    grid-template-rows: minmax(0, 1fr) auto;
+      minmax(250px, 27%);
+    grid-template-rows: minmax(0, 1fr) auto auto;
     align-content: stretch;
     text-align: left;
   }
+  /* Stretches to the row's full height (the grid default — no more
+     align-self: center shrink-wrapping it to its content) so it matches
+     .home-stage and .home-courts to the pixel. A column flex rather than a
+     fixed row template: the brand block, the menu and the hint lines stay
+     grouped and top-aligned in their natural sizes, .home-sunset (below) is
+     the one flexible child that soaks up whatever height the panel gained,
+     and the progress card keeps its natural size pinned under it at the
+     bottom edge. */
   .home-intro {
     min-height: 0;
-    display: grid;
-    align-content: center;
-    grid-template-rows: auto;
+    /* Overrides the narrow-layout .home-intro's align-self: center — that
+       shrink-wrapped it to its content and centred it in the row, which is
+       exactly the bug this pass fixes. Grid items stretch by default, so
+       this only has to say so explicitly because the base rule said
+       otherwise. */
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
     text-align: left;
     overflow: hidden;
   }
-  /* Demo and caption only, centred in the column. The progress panel moved to
-     the menu column, which has the vertical slack; this column's height is
-     spent on the canvas. */
+  /* Header band / court / hint bar, stacked top to bottom so the panel has
+     no dead space above or below the canvas the way it used to. The band
+     heights are fixed custom properties, not auto rows, because the canvas
+     calc below has to subtract them exactly — an auto row's height isn't
+     known until layout, but a container query needs a number up front. */
   .home-stage {
+    --band-top: 46px;
+    --band-bottom: 34px;
     min-width: 0;
     min-height: 0;
     display: grid;
-    grid-template-rows: auto auto;
-    align-content: center;
-    justify-items: center;
-    gap: 8px;
+    grid-template-rows: var(--band-top) minmax(0, 1fr) var(--band-bottom);
+    gap: 10px;
     /* A size container, so the canvas can be asked for "the biggest 1000:620
-       box that fits in this column" — see .title-demo canvas below. */
+       box that fits in the middle row" — see .title-demo canvas below. */
     container-type: size;
   }
   .home-courts {
@@ -2161,6 +2565,25 @@ body.play-view .arena-view .below-court {
     grid-column: 1 / -1;
     display: grid;
   }
+  .home-footer {
+    grid-column: 1 / -1;
+    display: flex;
+  }
+  /* The one flexible child in .home-intro's column — see the comment above
+     .home-intro. flex-shrink is the default 1 with min-height: 0, so this
+     is also, deliberately, the first thing to lose height if the panel
+     gets short; the menu and the progress card around it don't have
+     flex-grow/shrink at all, so they never move. */
+  .home-sunset {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    overflow: hidden;
+  }
   .title-demo {
     display: grid;
     place-items: center;
@@ -2169,22 +2592,220 @@ body.play-view .arena-view .below-court {
   }
   /* The renderer stretches its 1000x620 world to whatever box it is given, so
      the ratio has to be exact or the court skews. Width is therefore taken
-     from .home-stage's own box: the whole column, less the 26px the caption
-     line under the canvas needs, converted back through 1000/620. */
+     from .home-stage's own box: the whole column, less the header and
+     footer bands and the two 10px row gaps between all three rows, converted
+     back through 1000/620. (100cqh is the *container's* full content-box
+     height — all three rows plus gaps — not just the canvas row, which is
+     why the bands have to be subtracted here rather than assumed away.) */
   .title-demo canvas {
     display: block;
-    width: min(100cqw, calc((100cqh - 26px) * 1.6129));
+    width: min(
+      100cqw,
+      calc((100cqh - var(--band-top) - var(--band-bottom) - 20px) * 1.6129)
+    );
     height: auto;
     aspect-ratio: 1000 / 620;
     background: var(--panel);
     border: 1px solid var(--line);
   }
-  .title-demo-label {
-    margin: 0;
-    color: var(--muted);
-    font: 700 9px var(--sign);
-    letter-spacing: 3px;
+  /* ── Court panel bands ─────────────────────────────────────────────────
+     Header band: LIVE DEMO / BOTS IN POSSESSION pinned left, the venue name
+     centred and largest, TIKI-TAKA WORLD TOUR pinned right — three flex
+     children sharing the fixed --band-top height, so all three have to stay
+     within a tight line-height budget. */
+  .stage-band {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 4px;
   }
+  /* Dark panel fill rather than a bright pink/gold wash: the wash read fine
+     on the dark theme but put near-white text on a pale gradient in light
+     theme, which was close to unreadable. --panel/--ink/--muted already
+     carry the right contrast in both themes, so the band uses those
+     instead of colour baked in for one theme only. */
+  .stage-band-top {
+    justify-content: space-between;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--panel), #000 12%),
+      var(--panel)
+    );
+  }
+  .stage-band-side {
+    flex: none;
+    margin: 0;
+    max-width: 30%;
+    color: var(--muted);
+    font: 700 8px/1.4 var(--sign);
+    letter-spacing: 1px;
+    text-align: left;
+  }
+  .stage-band-side-right {
+    text-align: right;
+  }
+  .stage-band-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: center;
+  }
+  .stage-venue {
+    margin: 0;
+    overflow: hidden;
+    color: var(--ink);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: italic 800 clamp(13px, 1.6cqw, 20px) var(--display);
+  }
+  .stage-vibe {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font: 700 8px var(--sign);
+    letter-spacing: 2px;
+  }
+  /* Hint bar: the smart-pass hint in a chamfered dark slab on the left, the
+     team/defender legend on the right — drawn with two small CSS shapes,
+     no images. */
+  .stage-band-bottom {
+    justify-content: space-between;
+  }
+  .stage-hint {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0 12px;
+    overflow: hidden;
+    color: var(--muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font: 700 8px var(--sign);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    /* A single top-right notch, not a symmetric parallelogram: a percentage
+       cut on the left edge scales with the box's width, and at this box's
+       ~34px height a wide hint bar was chewing into the first letter of the
+       text at its vertical centre. A fixed-px cut confined to one corner
+       leaves the left edge — and the padding text sits in — untouched. */
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 100%, 0 100%);
+  }
+  .stage-legend {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--muted);
+    font: 700 8px var(--sign);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .stage-legend li {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .stage-legend-mark {
+    width: 9px;
+    height: 9px;
+  }
+  .stage-legend-team {
+    border-radius: 50%;
+    background: var(--cyan);
+  }
+  .stage-legend-defenders {
+    background: var(--pink);
+    transform: rotate(45deg);
+  }
+}
+/* ── Home footer ─────────────────────────────────────────────────────────
+   Closes the composition the way the mockup does: a low, quiet signage bar
+   under the mode strip. Decorative only (see the aria-hidden on the
+   element in index.html) — it repeats the tagline and tells nobody
+   anything a screen reader user needs, so it carries no role or landmark. */
+.home-footer {
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 2px 4px 0;
+  color: var(--muted);
+  font: 700 9px var(--sign);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.home-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  min-width: 0;
+}
+.home-footer-right {
+  margin: 0;
+  white-space: nowrap;
+}
+/* A short vertical rule standing in for the "|" between the two halves of
+   the left-hand signage, drawn rather than typed so its height tracks the
+   text instead of a monospace guess. */
+.home-footer-rule {
+  width: 1px;
+  height: 10px;
+  background: var(--line);
+}
+/* ── Home sunset emblem ──────────────────────────────────────────────────
+   A restrained stand-in for the mockup's full sunset/palms/skyline
+   illustration (the user's steer was "maybe not as much artwork"): a disc,
+   a few scanlines across its lower half, a horizon rule through its
+   middle, and a script-style tagline underneath. All CSS, no image. */
+.home-sunset-emblem {
+  position: relative;
+  flex: none;
+  width: 88px;
+  height: 64px;
+}
+.home-sunset-disc {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 64px;
+  height: 64px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  overflow: hidden;
+  /* Scanlines are a second background layer sized to half the disc's
+     height and anchored to its bottom edge, so the stripes only ever fall
+     across the lower half — the "horizon" reads as light striking the
+     curve rather than banding the whole disc. */
+  background:
+    repeating-linear-gradient(
+        0deg,
+        transparent 0 3px,
+        #100b2359 3px 5px
+      )
+      bottom / 100% 50% no-repeat,
+    linear-gradient(180deg, var(--gold), var(--pink) 75%);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--pink), transparent 65%);
+}
+.home-sunset-horizon {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--line);
+}
+.home-sunset-tagline {
+  margin: 0;
+  color: var(--muted);
+  font: 700 10px var(--sign);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  text-align: center;
 }
 /* The wordmark is in the top bar on every screen now, so home's copy of it no
    longer has to carry the branding on its own — and it has a 24% column to sit
@@ -2214,17 +2835,19 @@ body.play-view .arena-view .below-court {
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
-  min-height: 56px;
-  padding: 10px 20px;
+  /* Taller than a normal list row — PLAY is the loudest thing on the
+     screen in the mockup, and Settings shares its silhouette. */
+  min-height: 64px;
+  padding: 12px 22px;
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line);
   border-left: 4px solid var(--line);
   text-align: left;
   text-transform: uppercase;
-  font: 700 18px var(--sign);
+  font: 700 19px var(--sign);
   clip-path: polygon(0 0, 97% 0, 100% 30%, 100% 100%, 0 100%);
   transition:
     background 0.14s,
@@ -2233,11 +2856,28 @@ body.play-view .arena-view .below-court {
 }
 .menu-item .menu-key {
   color: var(--cyan);
-  opacity: 0;
-  transition: opacity 0.14s;
+  font-size: 1.05em;
 }
+/* A chevron pushed to the slab's right edge, generated rather than
+   markup — every .menu-item gets one for free, including any added later. */
+.menu-item::after {
+  content: "›";
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 1.4em;
+  line-height: 1;
+}
+/* PLAY is filled cyan by default, not just on hover/focus — the loudest
+   object on the panel, per the mockup, with Settings staying a dark slab
+   with a hairline border next to it. */
 .menu-item.primary {
-  border-left-color: var(--cyan);
+  color: #100923;
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+.menu-item.primary .menu-key,
+.menu-item.primary::after {
+  color: #100923;
 }
 .menu-item:hover,
 .menu-item:focus-visible,
@@ -2250,24 +2890,27 @@ body.play-view .arena-view .below-court {
 }
 .menu-item:hover .menu-key,
 .menu-item:focus-visible .menu-key,
-.menu-item.pad-focus .menu-key {
+.menu-item.pad-focus .menu-key,
+.menu-item:hover::after,
+.menu-item:focus-visible::after,
+.menu-item.pad-focus::after {
   color: #100923;
-  opacity: 1;
 }
 .title-note {
   margin: 13px 0 0;
   color: var(--cyan);
-  font: 700 10px var(--sign);
+  font: 700 9px var(--sign);
   letter-spacing: 2px;
 }
 .title-hint {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9px;
+  opacity: 0.8;
 }
 .courts-bar {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 12px;
 }
 .courts-bar h2 {
@@ -2278,16 +2921,35 @@ body.play-view .arena-view .below-court {
   font: italic 800 clamp(20px, 1.9vw, 32px) / 0.9 var(--display);
   letter-spacing: -1px;
 }
+.courts-count-block {
+  flex: none;
+  margin: 3px 0 0;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  text-align: right;
+}
 .courts-count {
   color: var(--pink);
   font: 700 9px var(--sign);
   letter-spacing: 1px;
 }
+.courts-count-sub {
+  color: var(--muted);
+  font: 700 8px var(--sign);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
 /* One column of six on home: the courts sit beside the demo rather than under
-   it, so they read as a list you scan down and never need a second page. */
+   it, so they read as a list you scan down and never need a second page.
+   align-content is deliberately NOT set here — .home-courts is display:none
+   outside the wide layout, so this rule is only ever live alongside the
+   @media (min-width: 980px) block below, and its align-content: stretch is
+   what makes the six rows share the panel's full height instead of stopping
+   short and leaving a gap above the panel's bottom edge. Setting it here too
+   used to fight that (same specificity, later in the file always wins). */
 .home-courts .court-list {
   grid-template-columns: minmax(0, 1fr);
-  align-content: start;
   min-height: 0;
 }
 .court-list button.pad-focus,

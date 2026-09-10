@@ -326,6 +326,10 @@ export class Sound {
       return;
     }
     if (this.playSample(type, start)) return;
+    // A clear gets a short crowd swell under its fanfare. Registering a
+    // "victory" sample replaces this whole fallback when recorded crowd audio
+    // is available; defeats keep a quieter, descending full-time cue.
+    if (type === "victory") this.crowdOle({ milestone: true });
     if (type === "kick") {
       this.kick(start);
       return;
@@ -333,6 +337,10 @@ export class Sound {
     const notes =
       type === "score"
         ? [440, 660]
+        : type === "victory"
+          ? [392, 523, 659, 784]
+          : type === "defeat"
+            ? [220, 175]
         : type === "focus"
           ? [520]
           : type === "turnover"
@@ -349,7 +357,11 @@ export class Sound {
         notes[i],
         start + i * 0.07,
         0.14,
-        type === "turnover" ? 0.4 : type === "focus" ? 0.15 : 0.25,
+        type === "turnover" || type === "defeat"
+          ? 0.4
+          : type === "focus"
+            ? 0.15
+            : 0.25,
       );
   }
 }
