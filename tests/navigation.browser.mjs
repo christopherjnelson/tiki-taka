@@ -9,6 +9,7 @@ const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
 );
 const baseURL = process.env.BASE_URL || `http://localhost:${await freePort()}`;
+const includeMobileLayouts = process.env.MOBILE_LAYOUTS === "1";
 const outputDir = new URL("../test-results/", import.meta.url);
 await mkdir(outputDir, { recursive: true });
 let server;
@@ -365,9 +366,7 @@ await check(
   "the pause menu traps gameplay intent, closes by Escape, and restores focus",
   async () => {
     const context = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      isMobile: true,
-      hasTouch: true,
+      viewport: { width: 1280, height: 800 },
       serviceWorkers: "block",
     });
     await context.addInitScript(() =>
@@ -448,7 +447,7 @@ await check(
       "custom pause key cannot activate hidden Arena controls from Courts",
     );
     await page.screenshot({
-      path: new URL("mobile-menu.png", outputDir).pathname,
+      path: new URL("pause-menu.png", outputDir).pathname,
       fullPage: true,
     });
     assert.deepEqual(errors, []);
@@ -464,9 +463,13 @@ await check(
       [1366, 768],
       [1440, 900],
       [1920, 1080],
-      [320, 740],
-      [390, 844],
-      [844, 390],
+      ...(includeMobileLayouts
+        ? [
+            [320, 740],
+            [390, 844],
+            [844, 390],
+          ]
+        : []),
     ];
     for (const [width, height] of viewports) {
       const context = await browser.newContext({
@@ -544,7 +547,7 @@ await check(
   },
 );
 
-await check(
+if (includeMobileLayouts) await check(
   "home and its menus remain usable at portrait and compact landscape sizes",
   async () => {
     for (const [width, height, suffix] of [

@@ -9,6 +9,7 @@ const playwright = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
 );
 const browserType = playwright[process.env.BROWSER || "chromium"];
+const includeMobileLayouts = process.env.MOBILE_LAYOUTS === "1";
 const baseURL = process.env.BASE_URL || `http://localhost:${await freePort()}`;
 const outputDir = new URL("../test-results/", import.meta.url);
 await mkdir(outputDir, { recursive: true });
@@ -146,13 +147,24 @@ async function bind(page, action, slot, key) {
   await page.keyboard.press(key);
 }
 async function pulsePad(page, button) {
-  await page.evaluate((index) => window.__setInterfacePad(index, true), button);
-  await page.waitForTimeout(80);
-  await page.evaluate(
-    (index) => window.__setInterfacePad(index, false),
-    button,
-  );
-  await page.waitForTimeout(80);
+  // Input is polled from the frame loop. A wall-clock pulse can start and end
+  // entirely between polls on a loaded runner, leaving its edge unseen. Wait
+  // until the mock gamepad has been sampled in each state instead: this keeps
+  // a d-pad press to one navigation step while proving both edges reached the
+  // application's poll.
+  for (const pressed of [true, false]) {
+    const polls = await page.evaluate(
+      ([index, value]) => window.__setInterfacePad(index, value),
+      [button, pressed],
+    );
+    await page.waitForFunction(
+      ([after, index, value]) => {
+        const pad = window.__interfacePad;
+        return pad.polls > after && pad.buttons[index] === value;
+      },
+      [polls, button, pressed],
+    );
+  }
 }
 
 await check(
@@ -170,21 +182,28 @@ await check(
           JSON.stringify({ playView: true }),
         );
       const pressed = Array(16).fill(false);
+      window.__interfacePad = { polls: 0, buttons: pressed.slice() };
       Object.defineProperty(navigator, "getGamepads", {
         configurable: true,
-        value: () => [
-          {
-            connected: true,
-            axes: [0, 0, 0, 0],
-            buttons: pressed.map((value) => ({
-              pressed: value,
-              value: Number(value),
-            })),
-          },
-        ],
+        value: () => {
+          const buttons = pressed.slice();
+          window.__interfacePad.polls++;
+          window.__interfacePad.buttons = buttons;
+          return [
+            {
+              connected: true,
+              axes: [0, 0, 0, 0],
+              buttons: buttons.map((value) => ({
+                pressed: value,
+                value: Number(value),
+              })),
+            },
+          ];
+        },
       });
       window.__setInterfacePad = (index, value) => {
         pressed[index] = value;
+        return window.__interfacePad.polls;
       };
     });
     const page = await context.newPage(),
@@ -460,9 +479,13 @@ await check(
     );
     for (const viewport of [
       { width: 1440, height: 900 },
-      { width: 844, height: 390 },
-      { width: 390, height: 844 },
-      { width: 320, height: 740 },
+      ...(includeMobileLayouts
+        ? [
+            { width: 844, height: 390 },
+            { width: 390, height: 844 },
+            { width: 320, height: 740 },
+          ]
+        : []),
     ]) {
       await page.setViewportSize(viewport);
       await page.evaluate(
@@ -626,7 +649,7 @@ await check(
   },
 );
 
-await check(
+if (includeMobileLayouts) await check(
   "coarse touch controls remain usable across portrait and landscape themes",
   async () => {
     for (const viewport of [
@@ -768,6 +791,10 @@ await check(
           score: box("#score-value"),
           best: box("#best-label"),
           time: box("#time-value"),
+          venueBanner: box(".arena-venue-banner"),
+          leftArenaRail: box(".arena-rail-left"),
+          rightArenaRail: box(".arena-rail-right"),
+          toolbar: box(".court-toolbar"),
           rail: document.querySelector(".court-rail, #rail-left, #rail-right"),
           courtShare: box("#court").width / window.innerWidth,
           scrollWidth: document.documentElement.scrollWidth,
@@ -828,6 +855,29 @@ await check(
         layout.scoreGroup.left < layout.matchGroup.left,
         `the score card must sit left of the match-stats card at ${label}`,
       );
+      assert.ok(
+        layout.venueBanner &&
+          layout.venueBanner.left >= layout.scoreGroup.right - 1 &&
+          layout.venueBanner.right <= layout.matchGroup.left + 1,
+        `the venue banner must bridge the HUD pods without overlapping them at ${label}: ${JSON.stringify(layout)}`,
+      );
+      assert.ok(
+        layout.toolbar &&
+          layout.toolbar.left >= layout.court.left - 15 &&
+          layout.toolbar.right <= layout.court.right + 15 &&
+          layout.toolbar.bottom <= layout.panel.bottom + 1,
+        `the control rail must stay attached to the court frame at ${label}: ${JSON.stringify(layout)}`,
+      );
+      if (viewport.width >= 1200) {
+        assert.ok(
+          layout.leftArenaRail?.right <= layout.court.left + 1 &&
+            layout.rightArenaRail?.left >= layout.court.right - 1,
+          `the decorative rails must stay in the letterbox at ${label}: ${JSON.stringify(layout)}`,
+        );
+      } else {
+        assert.equal(layout.leftArenaRail?.width, 0, `left rail hidden at ${label}`);
+        assert.equal(layout.rightArenaRail?.width, 0, `right rail hidden at ${label}`);
+      }
       assert.deepEqual(errors, []);
       await context.close();
     }

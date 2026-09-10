@@ -540,6 +540,9 @@ function prepare() {
     venue.secondary,
   );
   if ($("venue-vibe")) $("venue-vibe").textContent = venue.vibe;
+  if ($("arena-venue-label"))
+    $("arena-venue-label").textContent =
+      `${venue.name} / ${venue.vibe}`.toUpperCase();
   phase = "ready";
   finished = false;
   roundCleared = false;
@@ -857,13 +860,27 @@ function syncFocusButtons() {
 // 1920x1080 viewport.
 const COURT_RATIO = 1000 / 620;
 const gamePanel = document.querySelector(".game-panel");
+let cachedCourtBox = null,
+  courtBoxDirty = true;
+function invalidateCourtBox() {
+  courtBoxDirty = true;
+}
+if (gamePanel && typeof ResizeObserver === "function") {
+  new ResizeObserver(invalidateCourtBox).observe(gamePanel);
+} else {
+  window.addEventListener("resize", invalidateCourtBox, { passive: true });
+}
 function courtBox() {
   if (!gamePanel) return null;
+  if (!courtBoxDirty) return cachedCourtBox;
   const { width, height } = gamePanel.getBoundingClientRect();
-  if (!width || !height) return null;
+  if (!width || !height) {
+    cachedCourtBox = null;
+    return null;
+  }
   const courtWidth = Math.min(width, height * COURT_RATIO),
     courtHeight = courtWidth / COURT_RATIO;
-  return {
+  cachedCourtBox = {
     width,
     height,
     courtWidth,
@@ -871,6 +888,8 @@ function courtBox() {
     left: (width - courtWidth) / 2,
     top: (height - courtHeight) / 2,
   };
+  courtBoxDirty = false;
+  return cachedCourtBox;
 }
 
 // MUSIC-REACTIVE AMBIENCE
@@ -887,7 +906,22 @@ function courtBox() {
 // holds a steady level, which is what renderer.reducedMotion already means
 // everywhere else.
 let ambienceClock = 0,
-  ambienceLevel = 0.15;
+  ambienceLevel = 0.15,
+  ambienceElapsed = Infinity,
+  ambienceAccent = "",
+  ambienceColor = [39, 234, 216];
+const ambienceCanvas = $("ambience"),
+  ambienceContext = ambienceCanvas?.getContext("2d");
+let ambienceVisible = Boolean(ambienceCanvas);
+if (ambienceCanvas && typeof ResizeObserver === "function") {
+  new ResizeObserver(([entry]) => {
+    const { width, height } = entry.contentRect;
+    ambienceVisible = width > 0 && height > 0;
+    // A newly visible canvas must not wait for the previous cadence before
+    // painting its first frame.
+    if (ambienceVisible) ambienceElapsed = Infinity;
+  }).observe(ambienceCanvas);
+}
 const ambienceRgb = (accent) => {
   const hex = String(accent || "").trim().replace("#", "");
   const full = hex.length === 3 ? [...hex].map((c) => c + c).join("") : hex;
@@ -896,34 +930,58 @@ const ambienceRgb = (accent) => {
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 };
 function paintAmbience(dt) {
-  const canvas = $("ambience");
-  if (!canvas || !document.body.classList.contains("play-view")) return;
+  const canvas = ambienceCanvas;
+  if (
+    !canvas ||
+    !ambienceContext ||
+    !ambienceVisible ||
+    !document.body.classList.contains("play-view")
+  )
+    return;
   const box = courtBox();
   if (!box) return;
   const width = Math.round(box.width),
     height = Math.round(box.height),
     dpr = Math.min(2, window.devicePixelRatio || 1);
-  if (canvas.width !== Math.round(width * dpr)) canvas.width = Math.round(width * dpr);
-  if (canvas.height !== Math.round(height * dpr)) canvas.height = Math.round(height * dpr);
-  const c = canvas.getContext("2d");
-  if (!c) return;
+  const backingWidth = Math.round(width * dpr),
+    backingHeight = Math.round(height * dpr),
+    resized = canvas.width !== backingWidth || canvas.height !== backingHeight;
+  if (resized) {
+    canvas.width = backingWidth;
+    canvas.height = backingHeight;
+  }
+  // The decorative wash used to rebuild four gradients and a clipping path
+  // at display refresh rate. It is not gameplay feedback, so 30fps while
+  // music is active and 12fps while idling retain the intended motion while
+  // leaving the main court renderer the bulk of the frame budget.
+  const reduced = renderer.reducedMotion,
+    measured = music.energy,
+    cadence = reduced ? 0.25 : measured === null ? 1 / 12 : 1 / 30;
+  ambienceElapsed += dt;
+  if (!resized && ambienceElapsed < cadence) return;
+  const elapsed = Math.min(0.25, ambienceElapsed);
+  ambienceElapsed = 0;
+  const c = ambienceContext;
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, width, height);
   // A court that fills the panel leaves nothing to paint in.
   if (box.left < 2 && box.top < 2) return;
-  const reduced = renderer.reducedMotion;
-  if (!reduced) ambienceClock += dt;
-  const measured = music.energy;
+  if (!reduced) ambienceClock += elapsed;
   const idle = reduced ? 0.16 : 0.16 + 0.05 * Math.sin(ambienceClock * 0.55);
   const target = measured === null ? idle : 0.12 + Math.min(1, measured) * 0.88;
   // Slow towards the idle level, quicker towards the music: a track starting
   // should feel like the room waking up, not a jump cut.
   ambienceLevel +=
     (target - ambienceLevel) *
-    Math.min(1, dt * (measured === null ? 1.5 : 6));
+    Math.min(1, elapsed * (measured === null ? 1.5 : 6));
   // The venue's accent, straight off the renderer rather than through a
   // getComputedStyle() read on every frame.
-  const [r, g, b] = ambienceRgb(renderer.venue?.accent);
+  const accent = renderer.venue?.accent || "";
+  if (accent !== ambienceAccent) {
+    ambienceAccent = accent;
+    ambienceColor = ambienceRgb(accent);
+  }
+  const [r, g, b] = ambienceColor;
   c.save();
   c.beginPath();
   c.rect(0, 0, width, height);

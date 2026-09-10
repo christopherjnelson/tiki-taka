@@ -2389,6 +2389,341 @@ body.play-view .arena-view .below-court {
 .court-wrap.is-held .game-announcement {
   display: none;
 }
+
+/* ── Desktop broadcast chassis ────────────────────────────────────────────
+   The arena is deliberately built from opaque, thin-stroked pieces. The
+   court remains the dominant rectangle, but the desktop shell gives the
+   score, venue, instructions and controls a single architectural frame rather
+   than leaving translucent cards adrift above the play surface. This is kept
+   after the responsive rules so it wins only for the active desktop target. */
+.arena-venue-banner,
+.arena-rail {
+  display: none;
+}
+@media (min-width: 901px) {
+  body.play-view {
+    --desktop-control-rail: clamp(70px, 8.4cqh, 88px);
+    /* Keep the renderer's established largest-fitting court calculation.
+       The rails are paint in the leftover space, never a layout column. */
+    --arena-court-width: min(100cqw, 161.2903cqh);
+  }
+
+  body.play-view .game-panel {
+    background:
+      linear-gradient(90deg, #050a1c 0 6%, transparent 24% 76%, #050a1c 94% 100%),
+      radial-gradient(circle at 50% 0, color-mix(in srgb, var(--venue-accent), transparent 86%), transparent 34%),
+      #050817;
+  }
+
+  body.play-view #court {
+    top: 50%;
+    width: var(--arena-court-width);
+    box-shadow: 0 0 0 2px #071a2c, 0 0 0 3px var(--venue-accent);
+  }
+
+  body.play-view .court-wrap::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: calc(50% - ((var(--arena-court-width) / 1.612903) / 2) - 7px);
+    left: 50%;
+    width: calc(var(--arena-court-width) + 14px);
+    height: calc((var(--arena-court-width) / 1.612903) + 14px);
+    border: 1px solid color-mix(in srgb, var(--venue-accent), #ffffff 24%);
+    pointer-events: none;
+    transform: translateX(-50%);
+  }
+
+  /* Top is one continuous sequence: score pod, venue identifier, match pod.
+     The middle has a different silhouette but shares the same baseline,
+     stroke and opaque navy material as its neighbours. */
+  body.play-view .scoreboard {
+    top: 14px;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: 0;
+    width: var(--arena-court-width);
+    padding: 0;
+    background: none;
+  }
+  body.play-view .hud-group {
+    min-height: 66px;
+    padding: 8px 17px;
+    border: 1px solid var(--venue-accent);
+    border-radius: 0;
+    background: #080d25;
+    box-shadow: none;
+    clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 50%, calc(100% - 15px) 100%, 0 100%, 10px 50%);
+  }
+  body.play-view .hud-group-score {
+    width: clamp(210px, 21cqw, 315px);
+    gap: 3px;
+    padding-left: 20px;
+    background:
+      linear-gradient(90deg, color-mix(in srgb, var(--venue-accent), transparent 87%), transparent 60%),
+      #080d25;
+  }
+  body.play-view .hud-group-match {
+    width: clamp(244px, 23cqw, 345px);
+    margin-left: auto;
+    padding-left: 24px;
+    border-color: var(--pink);
+    background:
+      linear-gradient(270deg, color-mix(in srgb, var(--pink), transparent 88%), transparent 60%),
+      #080d25;
+  }
+  body.play-view .scoreboard .hud-group-score .stat strong {
+    color: var(--venue-accent);
+    font-size: clamp(31px, 3.1vw, 48px);
+    line-height: 0.82;
+    text-shadow: none;
+  }
+  body.play-view .scoreboard .stat-label {
+    margin-bottom: 4px;
+    color: #b9cae7;
+  }
+  body.play-view .scoreboard .hud-group-match .stat {
+    min-width: 0;
+    padding-left: clamp(10px, 1.2cqw, 20px);
+    border-left-color: #314568;
+  }
+  body.play-view .scoreboard .hud-group-match .stat strong {
+    color: #fff7ff;
+    font-size: clamp(23px, 2.4vw, 38px);
+    line-height: 0.85;
+  }
+  body.play-view .scoreboard .lives-stat strong {
+    color: var(--pink);
+    font-size: clamp(16px, 1.8vw, 27px);
+  }
+  body.play-view .hud-group-score-foot {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  body.play-view .scoreboard #time-value {
+    color: #fff;
+    font-size: 13px;
+  }
+  body.play-view .best-chip {
+    color: var(--pink);
+  }
+  body.play-view .pause-button {
+    align-self: stretch;
+    width: 54px;
+    height: auto;
+    margin: 0 0 0 -1px;
+    color: var(--pink);
+    background: #080d25;
+    border: 1px solid var(--pink);
+    border-radius: 0;
+    box-shadow: none;
+    clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);
+  }
+
+  body.play-view .arena-venue-banner {
+    position: absolute;
+    z-index: 4;
+    top: 14px;
+    left: 50%;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    width: clamp(252px, 31cqw, 490px);
+    height: 66px;
+    padding: 7px 28px;
+    color: #d7e4f8;
+    background: #0a1028;
+    border-top: 1px solid var(--pink);
+    border-bottom: 1px solid var(--venue-accent);
+    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%);
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+  .arena-venue-banner strong {
+    color: var(--venue-accent);
+    font: italic 800 clamp(17px, 1.6vw, 26px) / 0.9 var(--display);
+    letter-spacing: 0.5px;
+  }
+  .arena-venue-banner span {
+    margin-top: 5px;
+    color: #d7e4f8;
+    font: 700 clamp(7px, 0.55vw, 9px) var(--sign);
+    letter-spacing: clamp(2px, 0.35vw, 5px);
+  }
+
+  /* The lower rail is a deliberate court-edge frame rather than a floating
+     control card. It remains fully opaque at rest. */
+  body.play-view .court-toolbar {
+    z-index: 4;
+    bottom: 0;
+    align-items: stretch;
+    gap: 0;
+    width: min(100cqw, calc(var(--arena-court-width) + 28px));
+    min-height: var(--desktop-control-rail);
+    padding: 8px 0 10px;
+    background: #060b20;
+    border-top: 1px solid var(--venue-accent);
+    border-bottom: 1px solid #233e6a;
+    pointer-events: auto;
+  }
+  body.play-view .court-toolbar .target-info {
+    flex: 1 1 30%;
+    align-items: center;
+    min-width: 190px;
+    margin: 0;
+    padding: 7px 18px;
+    color: #d8e4f7;
+    background: transparent;
+    border: 0;
+    border-right: 1px solid #24395a;
+    border-radius: 0;
+    font: 700 10px var(--sign);
+    letter-spacing: 1.3px;
+    text-transform: uppercase;
+  }
+  body.play-view .court-toolbar .target-info::before {
+    content: "STREAK";
+    color: var(--pink);
+    font-size: 8px;
+    letter-spacing: 2px;
+  }
+  body.play-view .court-toolbar .target-dot {
+    width: 10px;
+    height: 10px;
+    background: var(--pink);
+    box-shadow: none;
+    transform: rotate(45deg);
+  }
+  body.play-view .court-toolbar .play-actions {
+    display: grid;
+    grid-template-columns: minmax(86px, 0.7fr) minmax(98px, 0.85fr) minmax(160px, 1.45fr);
+    flex: 1 1 70%;
+    gap: 0;
+  }
+  body.play-view .court-toolbar .play-actions button {
+    min-height: 0;
+    justify-content: center;
+    padding: 7px 10px;
+    color: #dce9f8;
+    background: #080f28;
+    border: 0;
+    border-left: 1px solid #24395a;
+    font-size: 10px;
+  }
+  body.play-view .court-toolbar .play-actions button:hover:not(:disabled),
+  body.play-view .court-toolbar .play-actions button:focus-visible {
+    color: #061022;
+    background: var(--venue-accent);
+  }
+  body.play-view .court-toolbar .play-actions button[aria-pressed="true"],
+  body.play-view .court-toolbar .play-actions button.active {
+    color: #070b1c;
+    background: var(--pink);
+  }
+  body.play-view #focus-button {
+    min-width: 0;
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: 1fr 6px;
+    column-gap: 8px;
+    color: #fff;
+    background: #11112d;
+  }
+  body.play-view #focus-button .focus-value {
+    color: var(--venue-accent);
+    font-size: clamp(16px, 1.5vw, 22px);
+  }
+  body.play-view #focus-button .focus-track {
+    height: 6px;
+  }
+  body.play-view .court-toolbar kbd {
+    color: #9db4d4;
+    border-color: #456182;
+  }
+  /* The previous idle fade made the primary controls look disabled. */
+  body.play-view .court-toolbar,
+  body.play-view .court-toolbar:hover,
+  body.play-view .court-toolbar:focus-within {
+    opacity: 1;
+  }
+  body.play-view .toast {
+    bottom: calc(var(--desktop-control-rail) + 14px);
+  }
+
+  /* Keep the live one-touch indicator within the play rectangle, below the
+     architectural score line and above the action rail. */
+  body.play-view .one-touch-readout {
+    top: 92px;
+    width: var(--arena-court-width);
+    padding: 0 18px;
+  }
+  .one-touch-pill {
+    border-radius: 0;
+    background: #071027;
+    box-shadow: none;
+  }
+}
+
+/* Rails are a reward for genuinely spare horizontal room. They use the
+   letterbox formula rather than a grid column, so they can never reduce the
+   canvas width. */
+@media (min-width: 1200px) {
+  body.play-view .arena-rail {
+    display: block;
+    position: absolute;
+    z-index: 2;
+    top: 96px;
+    bottom: calc(var(--desktop-control-rail) + 14px);
+    width: clamp(78px, calc((100cqw - var(--arena-court-width)) / 2 - 18px), 166px);
+    min-height: 260px;
+    padding: clamp(12px, 1.3cqw, 20px) clamp(8px, 1cqw, 15px);
+    overflow: hidden;
+    color: #c5d6ef;
+    background:
+      radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--venue-accent), transparent 88%), transparent 42%),
+      #070d23;
+    border: 1px solid color-mix(in srgb, var(--venue-accent), #37557e 40%);
+    clip-path: polygon(0 14px, 14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+    pointer-events: none;
+  }
+  body.play-view .arena-rail-left {
+    left: max(8px, calc((100cqw - var(--arena-court-width)) / 4 - 83px));
+  }
+  body.play-view .arena-rail-right {
+    right: max(8px, calc((100cqw - var(--arena-court-width)) / 4 - 83px));
+    border-color: color-mix(in srgb, var(--pink), #37557e 42%);
+    text-align: right;
+    clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px, calc(100% - 14px) 0);
+  }
+  .arena-rail strong {
+    display: block;
+    color: var(--pink);
+    font: italic 800 clamp(12px, 0.9vw, 16px) / 0.9 var(--display);
+    transform: skewY(-5deg);
+  }
+  .arena-rail-rule {
+    display: block;
+    height: 1px;
+    margin: clamp(18px, 3.5cqh, 36px) 0 12px;
+    background: #536b8e;
+  }
+  .arena-rail p {
+    margin: 0 0 11px;
+    color: #cbdcf4;
+    font: 700 clamp(7px, 0.55vw, 9px) / 1.35 var(--sign);
+    letter-spacing: clamp(1.5px, 0.18vw, 3px);
+  }
+  .arena-rail-tour,
+  .arena-rail-coordinates {
+    position: absolute;
+    right: clamp(8px, 1cqw, 15px);
+    bottom: clamp(12px, 2cqh, 22px);
+    left: clamp(8px, 1cqw, 15px);
+    color: var(--venue-accent);
+    font: 700 clamp(7px, 0.55vw, 9px) / 1.5 var(--sign);
+    letter-spacing: clamp(1px, 0.18vw, 3px);
+  }
+}
 .settings-utilities {
   margin-top: 14px;
 }

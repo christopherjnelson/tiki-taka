@@ -99,6 +99,11 @@ const SURFACES = {
   "sao-paulo": { dark: ["#173e38", "#205448"], light: ["#296355", "#367462"] },
   amsterdam: { dark: ["#163d79", "#20518d"], light: ["#2863a0", "#3975ad"] },
 };
+// A native-DPR court bitmap is large (and can be very large on a 4K display).
+// Keeping the current theme plus one recently used variant makes theme/venue
+// transitions instant without retaining a full-resolution bitmap for every
+// court a player has visited.
+const MAX_BACKGROUND_CACHE_ENTRIES = 2;
 
 export class Renderer {
   constructor(canvas) {
@@ -109,6 +114,19 @@ export class Renderer {
     this.clock = 0;
     this.backgrounds = new Map();
     this.orientation = "landscape";
+    // Reading layout and resetting the canvas transform on every animation
+    // frame needlessly makes the game canvas a layout dependency. The canvas
+    // only needs either operation when its CSS box, orientation or DPR has
+    // changed. ResizeObserver also catches panel-size changes that do not
+    // come from a window resize (for example a desktop shell reflow).
+    this.resizeNeeded = true;
+    this.dpr = 0;
+    if (typeof ResizeObserver === "function") {
+      this.resizeObserver = new ResizeObserver(() => {
+        this.resizeNeeded = true;
+      });
+      this.resizeObserver.observe(canvas);
+    }
     this.reducedMotion =
       typeof matchMedia === "function" &&
       matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -130,15 +148,25 @@ export class Renderer {
   // itself was. Baking it at the canvas's own backing-store resolution
   // instead — same design-space drawing code, just run through a matching
   // scale transform onto a bigger bitmap — makes it native-sharp. The cache
-  // is one entry per venue/theme; a resize just repaints that entry in place
-  // rather than growing the map with every intermediate size. The transform
+  // holds the current venue/theme plus one recent variant; a resize
+  // repaints that entry in place rather than growing the map with every
+  // intermediate size. The transform
   // mirrors resize() exactly, rotation included, so a portrait canvas gets a
   // background baked already rotated — it is blitted back with no transform
   // at all, so the rotation has to already be in the pixels.
   backgroundFor(v, t, w, h, portrait) {
     const key = `${v.id}:${t}:${portrait ? "p" : "l"}`;
     const cached = this.backgrounds.get(key);
-    if (cached && cached.w === w && cached.h === h) return cached.canvas;
+    if (cached && cached.w === w && cached.h === h) {
+      // Refresh insertion order so the cap below behaves as a tiny LRU cache.
+      this.backgrounds.delete(key);
+      this.backgrounds.set(key, cached);
+      return cached.canvas;
+    }
+    if (!cached && this.backgrounds.size >= MAX_BACKGROUND_CACHE_ENTRIES) {
+      const oldestKey = this.backgrounds.keys().next().value;
+      this.backgrounds.delete(oldestKey);
+    }
     const el = cached ? cached.canvas : document.createElement("canvas");
     el.width = w;
     el.height = h;
@@ -512,9 +540,16 @@ export class Renderer {
     if (this.effects.length > 32) this.effects.shift();
   }
   resize(orientation = this.orientation) {
-    this.orientation = orientation === "portrait" ? "portrait" : "landscape";
+    const nextOrientation = orientation === "portrait" ? "portrait" : "landscape",
+      d = Math.min(globalThis.devicePixelRatio || 1, 2);
+    if (
+      !this.resizeNeeded &&
+      this.orientation === nextOrientation &&
+      this.dpr === d
+    )
+      return;
+    this.orientation = nextOrientation;
     const r = this.canvas.getBoundingClientRect(),
-      d = Math.min(globalThis.devicePixelRatio || 1, 2),
       w = Math.max(1, Math.round((r.width || WIDTH) * d)),
       h = Math.max(1, Math.round((r.height || HEIGHT) * d));
     if (this.canvas.width !== w || this.canvas.height !== h) {
@@ -525,6 +560,8 @@ export class Renderer {
       this.ctx.setTransform(0, h / WIDTH, -w / HEIGHT, 0, w, 0);
     else this.ctx.setTransform(w / WIDTH, 0, 0, h / HEIGHT, 0, 0);
     this.ctx._tikiPortrait = this.orientation === "portrait";
+    this.dpr = d;
+    this.resizeNeeded = false;
   }
   screenToWorld(clientX, clientY) {
     const r = this.canvas.getBoundingClientRect();
@@ -703,7 +740,10 @@ export class Renderer {
     if (game.ball) this.drawBall(game.ball.x, game.ball.y, game.elapsed * 7);
     for (const e of this.effects)
       if (e.type !== "one-touch" || !e.milestone) this.drawEffect(e);
-    this.effects = this.effects.filter((e) => e.age < e.life);
+    // Most frames have no transient effects. Avoid allocating a replacement
+    // empty array at display refresh rate in that common case.
+    if (this.effects.length)
+      this.effects = this.effects.filter((e) => e.age < e.life);
     c.globalAlpha = 1;
     c.setLineDash([]);
   }

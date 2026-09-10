@@ -18,14 +18,20 @@ npm test
 npm run build
 ```
 
-Install Playwright's browsers once, then run all six browser suites:
+The current active browser target is desktop. Install Playwright's browsers once, then run the six required desktop browser suites:
 
 ```sh
 npx playwright install chromium
 npm run test:web
 ```
 
-`test:web` covers gameplay, interface, navigation, one-touch, desktop-account, and audio. Each suite also has a standalone script, such as `npm run test:desktop-account`, for focused iteration.
+`test:web` covers desktop gameplay, interface, navigation, one-touch, desktop-account, and audio. Each suite also has a standalone script, such as `npm run test:desktop-account`, for focused iteration.
+
+Mobile and coarse-pointer layouts are frozen: their existing implementation and tests remain, but they are not an active product target and do not gate desktop UI work. Run their optional regression coverage only when intentionally changing that area:
+
+```sh
+npm run test:mobile-layouts
+```
 
 Firefox coverage for the primary gameplay suite is available separately:
 
@@ -54,4 +60,4 @@ This is a commercial game repository. No license grant is provided.
 
 ## Continuous integration
 
-[GitHub Actions CI](.github/workflows/ci.yml) runs one job on pushes to `main` and pull requests: unit tests, the production build, and the browser suites. Failed runs retain browser screenshots as workflow artifacts for 7 days.
+[GitHub Actions CI](.github/workflows/ci.yml) runs one required desktop job on pushes to `main` and pull requests: unit tests, the production build, and the desktop browser suites. Mobile-layout regression coverage is intentionally optional and non-blocking. Failed runs retain browser screenshots as workflow artifacts for 7 days.
