@@ -723,19 +723,18 @@ await check(
   },
 );
 
-// The side rails and the ambience: readouts move into the space beside the
-// court when there is enough of it, the court never gives up a pixel for them,
-// and the ambience is painted only in the letterbox.
+// The readouts used to move into two floating cards beside the court
+// whenever there was room for them, which read as disconnected from the
+// game. They now live in two grouped cards (.hud-group-score,
+// .hud-group-match) permanently attached to the court's own top edge, and
+// the space beside/above/below the court that used to hold the rails (or sat
+// empty) is full-bleed venue background instead — see .game-panel in
+// style.css. This checks the court keeps its size and the panel goes edge to
+// edge at every supported size, whether the court is height- or
+// width-limited.
 await check(
-  "the readouts move into the side space without the court losing any of it",
+  "the HUD stays attached to the court's frame and the panel goes full-bleed",
   async () => {
-    // 1920x1080 and 1280x720 have room beside a height-limited court;
-    // 1080x1024 is width-limited and has none, so the band keeps the stats.
-    const expected = {
-      "1920x1080": "on",
-      "1280x720": "on",
-      "1080x1024": "off",
-    };
     for (const viewport of [
       { width: 1920, height: 1080 },
       { width: 1280, height: 720 },
@@ -760,23 +759,17 @@ await check(
           return { left, top, right, bottom, width, height };
         };
         return {
-          rails: document.body.dataset.rails,
+          panel: box(".game-panel"),
           court: box("#court"),
-          left: box("#rail-left"),
-          right: box("#rail-right"),
+          scoreGroup: box(".hud-group-score"),
+          matchGroup: box(".hud-group-match"),
           combo: box("#combo-value"),
           lives: box("#lives-value"),
           score: box("#score-value"),
-          inLeftRail: document.querySelector("#rail-left").contains(
-            document.querySelector("#score-value"),
-          ),
-          inRightRail: document.querySelector("#rail-right").contains(
-            document.querySelector("#combo-value"),
-          ),
+          best: box("#best-label"),
+          time: box("#time-value"),
+          rail: document.querySelector(".court-rail, #rail-left, #rail-right"),
           courtShare: box("#court").width / window.innerWidth,
-          courtAreaShare:
-            (box("#court").width * box("#court").height) /
-            (window.innerWidth * window.innerHeight),
           scrollWidth: document.documentElement.scrollWidth,
           scrollHeight: document.documentElement.scrollHeight,
           innerWidth: window.innerWidth,
@@ -789,9 +782,17 @@ await check(
           })(),
         };
       });
-      assert.equal(layout.rails, expected[label], `rail state at ${label}`);
+      // The old floating side rails are gone entirely; nothing should match.
+      assert.equal(layout.rail, null, `no leftover rail element at ${label}`);
+      // The panel is the viewport (minus the top bar), edge to edge: this is
+      // the full-bleed background the court now sits inside of.
+      assert.ok(
+        layout.panel.left <= 1 &&
+          layout.panel.right >= layout.innerWidth - 1,
+        `the game panel must span the full window width at ${label}: ${JSON.stringify(layout.panel)}`,
+      );
       // The court is the thing that must not move: it was 87% of the width of
-      // a 1920x1080 window before the rails existed and has to stay there.
+      // a 1920x1080 window before this redesign and has to stay there.
       if (viewport.width === 1920)
         assert.ok(
           layout.courtShare > 0.869,
@@ -808,28 +809,25 @@ await check(
         `no vertical scroll at ${label}: scrollHeight ${layout.scrollHeight} > innerHeight ${layout.innerHeight}`,
       );
       assert.ok(layout.topBarVisible, `the top bar must stay visible at ${label}`);
-      if (layout.rails === "on") {
-        assert.ok(layout.inLeftRail && layout.inRightRail,
-          `the readouts must be in the rails at ${label}`);
+      // Every readout stays visible, grouped into its card, and nothing is
+      // clipped past the edge of the viewport.
+      for (const [name, box] of [
+        ["score", layout.score],
+        ["personal best", layout.best],
+        ["clock", layout.time],
+        ["multiplier", layout.combo],
+        ["possessions", layout.lives],
+      ]) {
+        assert.ok(box && box.width > 0 && box.height > 0, `${name} has no box at ${label}`);
         assert.ok(
-          layout.left.right <= layout.court.left + 1 &&
-            layout.right.left >= layout.court.right - 1,
-          `the rails must sit beside the court, not over it, at ${label}: ${JSON.stringify(layout)}`,
+          box.left >= -1 && box.right <= layout.innerWidth + 1,
+          `${name} must not be clipped at the viewport edge at ${label}: ${JSON.stringify(box)}`,
         );
-        for (const [name, stat] of [
-          ["multiplier", layout.combo],
-          ["possessions", layout.lives],
-          ["score", layout.score],
-        ])
-          assert.ok(
-            stat.right <= layout.court.left + 1 || stat.left >= layout.court.right - 1,
-            `the ${name} readout must clear the court at ${label}: ${JSON.stringify(stat)}`,
-          );
-      } else {
-        assert.ok(!layout.inLeftRail && !layout.inRightRail,
-          `with no room beside the court the readouts belong in the band at ${label}`);
-        assert.ok(layout.combo.width > 0, `the multiplier must stay visible at ${label}`);
       }
+      assert.ok(
+        layout.scoreGroup.left < layout.matchGroup.left,
+        `the score card must sit left of the match-stats card at ${label}`,
+      );
       assert.deepEqual(errors, []);
       await context.close();
     }

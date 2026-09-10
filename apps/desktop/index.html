@@ -242,27 +242,35 @@
             ambience and is clipped to it: it never paints inside the court.
             It sits behind everything and is decorative only. -->
             <canvas id="ambience" class="ambience" aria-hidden="true"></canvas>
-            <!-- Where the scoreboard's readouts go when the side space is wide
-            enough to hold them; main.js moves the same elements between here
-            and the band, so nothing about them is duplicated. -->
-            <div id="rail-left" class="court-rail court-rail-left"></div>
-            <div id="rail-right" class="court-rail court-rail-right"></div>
+            <!-- The HUD band hugging the court's top edge. It is one composed
+            row, not floating cards: a score cluster on the left (with the
+            personal best for this court pinned to it), the live-match
+            numbers grouped on the right, and the pause control last. Nothing
+            here ever sits beside the court any more — see the note on
+            .game-panel in style.css for where that space went instead. -->
             <div id="scoreboard" class="scoreboard" aria-label="Match statistics">
-              <div class="stat score-stat">
-                <span id="score-label" class="stat-label">FLOW SCORE</span
-                ><strong id="score-value">000</strong>
+              <div class="hud-group hud-group-score">
+                <div class="stat score-stat">
+                  <span id="score-label" class="stat-label">FLOW SCORE</span
+                  ><strong id="score-value">000</strong>
+                </div>
+                <div class="hud-group-score-foot">
+                  <span id="best-label" class="best-chip">PERSONAL BEST —</span>
+                  <div class="stat clock-stat">
+                    <span class="stat-label">ON THE CLOCK</span
+                    ><strong id="time-value">1:15</strong>
+                  </div>
+                </div>
               </div>
-              <div class="stat">
-                <span class="stat-label">ON THE CLOCK</span
-                ><strong id="time-value">1:15</strong>
-              </div>
-              <div class="stat">
-                <span class="stat-label">MULTIPLIER</span
-                ><strong id="combo-value">×1</strong>
-              </div>
-              <div class="stat lives-stat">
-                <span class="stat-label">POSSESSIONS</span
-                ><strong id="lives-value">● ● ●</strong>
+              <div class="hud-group hud-group-match">
+                <div class="stat">
+                  <span class="stat-label">MULTIPLIER</span
+                  ><strong id="combo-value">×1</strong>
+                </div>
+                <div class="stat lives-stat">
+                  <span class="stat-label">POSSESSIONS</span
+                  ><strong id="lives-value">● ● ●</strong>
+                </div>
               </div>
               <button
                 id="pause-button"
@@ -473,8 +481,7 @@
           <div class="below-court">
             <section class="objective-card" aria-label="Court objective">
               <div class="card-heading">
-                <span class="section-label">THE OBJECTIVE</span
-                ><span id="best-label">PERSONAL BEST —</span>
+                <span class="section-label">THE OBJECTIVE</span>
               </div>
               <p id="goal-label">
                 Reach 180 points &amp; last until the whistle.
