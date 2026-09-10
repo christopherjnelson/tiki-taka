@@ -591,21 +591,8 @@
               ></div>
             </div>
             <div class="court-toolbar">
-              <div class="target-info">
-                <span class="target-dot" aria-hidden="true"></span
-                ><span id="target-label">Find the open player</span>
-              </div>
-              <div class="play-actions">
-                <button id="pass-button" title="Pass (Space)" disabled>
-                  Pass <kbd>SPACE</kbd></button
-                ><button
-                  id="bank-button"
-                  aria-pressed="false"
-                  title="Toggle wall pass (B)"
-                  disabled
-                >
-                  Wall pass <kbd>B</kbd></button
-                ><button
+              <div class="target-info focus-info">
+                <button
                   id="focus-button"
                   aria-pressed="false"
                   title="Earn Focus with wall passes, triangles, or bonus zones. Toggle here or hold E."
@@ -613,7 +600,7 @@
                 >
                   Focus
                   <span id="focus-value" class="focus-value">0.0 / 5s</span>
-                  <kbd>E</kbd
+                  <kbd data-binding="focusHold">E</kbd
                   ><span
                     id="focus-meter"
                     class="focus-track"
@@ -625,6 +612,30 @@
                     aria-valuetext="0.0 of 5 seconds"
                     ><span id="focus-fill"></span
                   ></span>
+                </button>
+              </div>
+              <span id="target-label" class="sr-only" aria-live="polite"
+                >Find the open player</span
+              >
+              <div class="play-actions">
+                <button id="pass-button" title="Pass (Space)" disabled>
+                  Pass <kbd>SPACE</kbd></button
+                ><button
+                  id="bank-button"
+                  aria-pressed="false"
+                  title="Toggle wall pass (B)"
+                  disabled
+                >
+                  Wall pass <kbd data-binding="wallToggle">B</kbd></button
+                ><button id="shout-button" title="Shout target to bonus zone (F)" disabled>
+                  Shout <kbd data-binding="shout">F</kbd></button
+                ><button
+                  id="boost-button"
+                  aria-pressed="false"
+                  title="Hold Boost (R). Boost uses Focus."
+                  disabled
+                >
+                  Boost <kbd data-binding="boostHold">R</kbd>
                 </button>
               </div>
             </div>
@@ -706,6 +717,10 @@
               <kbd data-binding="smartPass">SPACE</kbd> smart pass
               <span class="footer-divider">/</span>
               <kbd data-binding="focusHold">E</kbd> Focus
+              <span class="footer-divider">/</span>
+              <kbd data-binding="boostHold">R</kbd> Boost
+              <span class="footer-divider">/</span>
+              <kbd data-binding="shout">F</kbd> Shout
               <span class="footer-divider">/</span> earn it: wall · zone ·
               triangle
             </p>
@@ -1041,6 +1056,19 @@
               </dd>
             </div>
             <div>
+              <dt>Boost</dt>
+              <dd>
+                Hold <span data-binding="boostHold">R</span> / Boost button
+              </dd>
+            </div>
+            <div>
+              <dt>Shout</dt>
+              <dd>
+                <span data-binding="shout">F</span> sends the selected pass
+                target toward the highlighted bonus zone
+              </dd>
+            </div>
+            <div>
               <dt>Pause</dt>
               <dd><span data-binding="pause">Esc</span></dd>
             </div>
@@ -1055,10 +1083,16 @@
             LT before using newly earned Focus.
           </p>
           <p>
+            <strong>Boost uses the same Focus reserve</strong> to make the ball
+            carrier faster while you hold it. Use it to escape pressure, but
+            it cannot run alongside Focus.
+          </p>
+          <p>
             <strong>Gamepad:</strong> left stick moves, right stick aims and
             picks the teammate A will pass to — the chosen player is ringed on
             the court, so you can deliberately thread a lane between two
-            defenders for SPLIT THE PRESS. X arms the wall pass, LT holds focus,
+            defenders for SPLIT THE PRESS. X arms the wall pass, LT holds Focus,
+            RT holds Boost, and LB shouts the selected target to the bonus zone.
             Start opens the pause menu. Use the D-pad and A in menus, B to go
             back.
           </p>

@@ -133,13 +133,15 @@ let mode = "career",
   // ignores it, and the boot below rewrites the URL so it cannot then lie.
   view = "home",
   bank = false,
-  focusToggle = false;
+  focusToggle = false,
+  boostToggle = false;
 let keys = new Set(),
   aim = null,
   pointerMove = null,
   stick = { x: 0, y: 0 },
   gamepadMove = { x: 0, y: 0 },
-  gamepadFocus = false;
+  gamepadFocus = false,
+  gamepadBoost = false;
 let padPrevious = [],
   padConnected = false,
   menuRepeat = 0,
@@ -557,6 +559,8 @@ function setControlsEnabled(enabled) {
     "pass-button",
     "bank-button",
     "focus-button",
+    "boost-button",
+    "shout-button",
     "touch-pass",
     "touch-bank",
     "touch-focus",
@@ -616,6 +620,7 @@ function prepare() {
   roundCleared = false;
   bank = false;
   focusToggle = false;
+  boostToggle = false;
   endHold();
   clearInput();
   $("eyebrow").textContent = game.config.place;
@@ -643,6 +648,7 @@ function prepare() {
   setControlsEnabled(false);
   $("bank-button").setAttribute("aria-pressed", "false");
   $("focus-button").setAttribute("aria-pressed", "false");
+  $("boost-button").setAttribute("aria-pressed", "false");
   $("touch-bank").setAttribute("aria-pressed", "false");
   $("touch-focus").setAttribute("aria-pressed", "false");
   $("invitation-note").textContent =
@@ -800,6 +806,7 @@ function beginHold(reason) {
   );
   $("resume-reason").textContent = reason || "POSSESSION LOST";
   focusToggle = false;
+  boostToggle = false;
   clearInput();
   setControlsEnabled(false);
   syncFocusButtons();
@@ -833,6 +840,7 @@ function clearInput() {
   pointerMove = null;
   aim = null;
   gamepadFocus = false;
+  gamepadBoost = false;
   pointerId = null;
   joystickId = null;
   game?.clearQueuedPass?.();
@@ -842,9 +850,11 @@ function pause() {
   if (phase !== "playing") return;
   phase = "paused";
   focusToggle = false;
+  boostToggle = false;
   clearInput();
   setControlsEnabled(false);
   $("focus-button").setAttribute("aria-pressed", "false");
+  $("boost-button").setAttribute("aria-pressed", "false");
   $("touch-focus").setAttribute("aria-pressed", "false");
   setPauseState(true);
   syncResumePrompt();
@@ -908,11 +918,42 @@ function toggleFocus() {
     return;
   }
   focusToggle = !focusToggle;
+  if (focusToggle) boostToggle = false;
+  syncFocusButtons();
+  syncBoostButtons();
+}
+function toggleBoost() {
+  if (phase !== "playing") return;
+  if (game.focus <= 0) {
+    boostToggle = false;
+    syncBoostButtons();
+    toast("Earn Focus with wall passes, triangles, or bonus zones.");
+    return;
+  }
+  boostToggle = !boostToggle;
+  if (boostToggle) focusToggle = false;
+  syncBoostButtons();
   syncFocusButtons();
 }
 function syncFocusButtons() {
   $("focus-button").setAttribute("aria-pressed", String(focusToggle));
   $("touch-focus").setAttribute("aria-pressed", String(focusToggle));
+}
+function syncBoostButtons() {
+  const active = boostToggle || game?.boostActive;
+  $("boost-button").setAttribute("aria-pressed", String(active));
+}
+function selectedPassTarget() {
+  return game.queuedPass?.id ?? queuedSmartTarget();
+}
+function shoutTarget() {
+  if (phase !== "playing" || awaitingResume) return;
+  const target = selectedPassTarget();
+  if (game.shout(target)) {
+    toast(`Player ${target + 1} is moving to the bonus zone.`);
+  } else {
+    toast("No selected teammate can move to the bonus zone.");
+  }
 }
 // THE COURT'S OWN BOX
 //
@@ -1136,7 +1177,13 @@ function syncHud() {
     ? "∞"
     : `${Math.max(0, 3 - game.turnovers)} / 3`;
   if (focusToggle && game.focus <= 0) focusToggle = false;
+  if (boostToggle && game.focus <= 0) boostToggle = false;
+  // The engine gives Boost priority for simultaneously held physical inputs.
+  // Mirror that exclusivity in click state so the HUD never claims both
+  // abilities are active together.
+  if (game.boostActive) focusToggle = false;
   syncFocusButtons();
+  syncBoostButtons();
   const focusCap = game.tactic.focus;
   const focusAmount = Math.max(0, game.focus);
   const focusRatio = focusCap ? focusAmount / focusCap : 0;
@@ -1164,7 +1211,7 @@ function syncHud() {
         ? `QUEUED → ${game.queuedPass.id + 1} · RELEASE ON ARRIVAL`
         : game.ball
           ? `NEXT PASS → ${game.bestQueuedTarget(aim) + 1} · QUEUE IT NOW`
-          : `${bank ? "WALL PASS" : "PASS"} → ${game.bestTarget(aim) + 1} · ${game.combo} IN A ROW`
+          : `${bank ? "WALL PASS" : "PASS"} → ${game.bestTarget(aim) + 1}`
       : "FIND THE SPACE. MAKE THE PASS.";
   $("time-value").classList.toggle("urgent", game.time < 15);
   $("court-wrap").classList.toggle("is-playing", phase === "playing");
@@ -1176,6 +1223,7 @@ function finish() {
   finished = true;
   phase = "finished";
   focusToggle = false;
+  boostToggle = false;
   clearInput();
   endHold();
   $("pause-button").disabled = false;
@@ -1285,6 +1333,8 @@ $("bank-button").addEventListener("click", toggleBank);
 $("touch-bank").addEventListener("click", toggleBank);
 $("focus-button").addEventListener("click", toggleFocus);
 $("touch-focus").addEventListener("click", toggleFocus);
+$("boost-button").addEventListener("click", toggleBoost);
+$("shout-button").addEventListener("click", shoutTarget);
 $("tactic-select").addEventListener("change", (e) => {
   progress.tactic = e.target.value;
   persist();
@@ -1437,9 +1487,11 @@ function syncSettingChrome() {
   $("bank-button").title =
     `Toggle wall pass (${bindingText("wallToggle")}); hold ${bindingText("wallHold")}`;
   $("focus-button").title = `Hold Focus (${bindingText("focusHold")})`;
+  $("boost-button").title = `Hold Boost (${bindingText("boostHold")}). Boost uses Focus.`;
+  $("shout-button").title = `Shout selected target to bonus zone (${bindingText("shout")})`;
   $("court").setAttribute(
     "aria-label",
-    `Tiki Taka court. Move with ${bindingText("moveUp")}, ${bindingText("moveLeft")}, ${bindingText("moveDown")}, and ${bindingText("moveRight")}. Smart pass with ${bindingText("smartPass")}; direct passes with ${[1, 2, 3, 4].map((number) => bindingText(`direct${number}`)).join(", ")}.`,
+    `Tiki Taka court. Move with ${bindingText("moveUp")}, ${bindingText("moveLeft")}, ${bindingText("moveDown")}, and ${bindingText("moveRight")}. Smart pass with ${bindingText("smartPass")}; direct passes with ${[1, 2, 3, 4].map((number) => bindingText(`direct${number}`)).join(", ")}. Hold Focus with ${bindingText("focusHold")}, Boost with ${bindingText("boostHold")}, and shout the selected target with ${bindingText("shout")}.`,
   );
   $("pause-button").title =
     `${phase === "paused" ? "Resume" : "Pause"} (${settings.bindings.pause.map(readableKey).join(" / ")})`;
@@ -1862,6 +1914,7 @@ window.addEventListener("keydown", (e) => {
   if (action?.startsWith("direct")) doPass(Number(action.slice(-1)) - 1);
   if (action === "smartPass") doPass();
   if (action === "wallToggle") toggleBank();
+  if (action === "shout") shoutTarget();
 });
 window.addEventListener("keyup", (e) => {
   keys.delete(e.code);
@@ -2061,15 +2114,19 @@ function pollGamepad(dt) {
     padPrevious = [];
     gamepadMove = { x: 0, y: 0 };
     gamepadFocus = false;
+    gamepadBoost = false;
     return;
   }
   if (!padConnected) {
     padConnected = true;
     toast(
-      "Controller connected. Right stick picks the pass · A plays it · X arms the wall · LT focuses.",
+      "Controller connected. Right stick picks the pass · A plays it · X arms the wall · LT focuses · RT boosts · LB shouts.",
     );
   }
-  const pressed = pad.buttons.map((b) => b.pressed),
+  // Standard gamepad triggers expose an analog value even when their `pressed`
+  // bit is unreliable. Treat a quarter pull as held and retain that normalized
+  // state for edge-triggered buttons such as LB.
+  const pressed = pad.buttons.map((b) => b.pressed || (b.value || 0) >= 0.25),
     tap = (i) => pressed[i] && !padPrevious[i];
   // A gamepad press is not a user activation gesture, so this will not unblock
   // a browser on its own. It costs nothing, it does unblock the packaged shell
@@ -2090,7 +2147,8 @@ function pollGamepad(dt) {
   // Otherwise a nudge behind the pause overlay would keep repainting aim lanes.
   if (acceptingPlayInput()) {
     gamepadMove = { x: dead(pad.axes[0]), y: dead(pad.axes[1]) };
-    gamepadFocus = !!pressed[6];
+    gamepadFocus = pressed[6];
+    gamepadBoost = pressed[7];
     if (Math.hypot(dead(pad.axes[2]), dead(pad.axes[3])) > 0.2)
       aim = { x: pad.axes[2], y: pad.axes[3] };
     else if (Math.hypot(gamepadMove.x, gamepadMove.y) > 0.2)
@@ -2098,6 +2156,7 @@ function pollGamepad(dt) {
   } else {
     gamepadMove = { x: 0, y: 0 };
     gamepadFocus = false;
+    gamepadBoost = false;
   }
   const direction =
     pressed[13] || pressed[15] || pad.axes[1] > 0.6
@@ -2149,6 +2208,7 @@ function pollGamepad(dt) {
   } else if (view === "arena" && phase === "playing" && !awaitingResume) {
     if (tap(0)) doPass();
     if (tap(2)) toggleBank();
+    if (tap(4)) shoutTarget();
     if (tap(9)) openPauseMenu();
   } else if (view === "arena" && awaitingResume) {
     if (tap(9)) openPauseMenu();
@@ -2262,6 +2322,10 @@ function frame(now) {
         focusToggle ||
         actionDown(settings.bindings, keys, "focusHold") ||
         gamepadFocus,
+      boost:
+        boostToggle ||
+        actionDown(settings.bindings, keys, "boostHold") ||
+        gamepadBoost,
     });
     // Found before the loop rather than during it: the engine can emit a score
     // and the turnover that ended it in the same batch, in either order, and

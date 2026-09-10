@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Game, COURTS, TACTICS, FOCUS_REWARDS, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross } from '../src/game.js';
+import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -419,6 +419,79 @@ test('focus never regenerates while idle or dribbling', () => {
   assert.equal(game.focus, 0);
 });
 
+test('boost spends Focus to increase only the carrier movement at normal game speed', () => {
+  const normal = openGame({ speed: 0 }), boosted = openGame({ speed: 0 });
+  const start = { ...normal.players[0] };
+  boosted.focus = boosted.tactic.focus;
+  advance(normal, 1, { x: 1 });
+  advance(boosted, 1, { x: 1, boost: true });
+  assert.equal(boosted.boostActive, true);
+  assert.equal(boosted.focusActive, false);
+  assert.ok(Math.abs(boosted.elapsed - normal.elapsed) < 1e-8, 'Boost must not slow the clock like Focus');
+  assert.ok(
+    Math.abs(
+      distance(start, boosted.players[0]) /
+        distance(start, normal.players[0]) -
+        BOOST_SPEED_MULTIPLIER,
+    ) < 1e-8,
+    'Boost applies its multiplier to the controlled player only',
+  );
+  assert.ok(Math.abs(boosted.focus - (boosted.tactic.focus - BOOST_DRAIN_RATE)) < 1e-8);
+  assert.deepEqual(boosted.players.slice(1), normal.players.slice(1), 'Boost does not change teammate AI movement');
+});
+
+test('boost has a deterministic partial final frame, release gate, and Boost priority', () => {
+  const game = openGame({ speed: 0 });
+  game.focus = 0.02;
+  const start = { ...game.players[0] };
+  game.update(0.05, { x: 1, boost: true });
+  assert.ok(Math.abs(distance(start, game.players[0]) - game.tactic.speed * (0.05 + 0.02 * (BOOST_SPEED_MULTIPLIER - 1))) < 1e-8);
+  assert.equal(game.focus, 0);
+  assert.equal(game.boostNeedsRelease, true);
+
+  game.focus = 1;
+  const gated = { ...game.players[0] };
+  game.update(0.05, { x: 1, boost: true });
+  assert.ok(Math.abs(distance(gated, game.players[0]) - game.tactic.speed * 0.05) < 1e-8, 'a held empty trigger cannot spend later-earned Focus');
+  game.update(0.05, { x: 1, focus: true });
+  assert.ok(Math.abs(distance(gated, game.players[0]) - game.tactic.speed * 0.1) < 1e-8, 'switching to Focus while Boost remains held cannot bypass the shared release gate');
+  game.update(0.05, { x: 1 });
+  const released = { ...game.players[0] };
+  game.update(0.05, { x: 1, boost: true });
+  assert.ok(distance(released, game.players[0]) > game.tactic.speed * 0.05, 'releasing makes Boost available again');
+
+  const shared = openGame({ speed: 0 });
+  shared.focus = 1;
+  const focusedStart = { ...shared.players[0] };
+  shared.update(0.05, { x: 1, focus: true, boost: true });
+  assert.equal(shared.focusActive, false);
+  assert.equal(shared.boostActive, true);
+  assert.ok(distance(focusedStart, shared.players[0]) > shared.tactic.speed * 0.05, 'Boost wins when both shared-resource controls are held');
+});
+
+test('boost does not alter a pass, its clock, or its Focus reward eligibility', () => {
+  const normal = openGame({ speed: 0 }), boosted = openGame({ speed: 0 });
+  normal.zone = { ...normal.players[1], r: 92 };
+  boosted.zone = { ...boosted.players[1], r: 92 };
+  boosted.focus = 1;
+  assert.equal(normal.pass(1), true);
+  assert.equal(boosted.pass(1), true);
+  normal.update(0.05);
+  boosted.update(0.05, { boost: true });
+  assert.deepEqual(boosted.ball, normal.ball, 'Boost must not change pass speed or flight state');
+  assert.equal(boosted.elapsed, normal.elapsed);
+  assert.equal(boosted.time, normal.time);
+  assert.equal(boosted.focus, 1, 'Boost cannot spend Focus while the player is not carrying');
+  assert.equal(boosted.focusActive, false);
+  assert.equal(boosted.boostActive, false);
+  assert.equal(boosted.ball.focusUsed, false, 'Boost cannot suppress normal Focus rewards');
+  while (normal.ball) normal.update(STEP);
+  while (boosted.ball) boosted.update(STEP, { boost: true });
+  assert.equal(normal.focus, FOCUS_REWARDS.zone);
+  assert.equal(boosted.focus, 1 + FOCUS_REWARDS.zone, 'the pass reward remains intact after a held Boost trigger');
+  assert.equal(normal.score, boosted.score);
+});
+
 test('plain passes earn no focus and combined skill rewards stack at tactic capacity', () => {
   const game = openGame({}, 'runner');
   completePass(game, 1);
@@ -502,6 +575,29 @@ test('aim assists toward the selected direction and never chooses the carrier', 
   assert.equal(game.bestTarget({ x: 1, y: 0 }), 2);
   assert.equal(game.bestTarget({ x: 0, y: -1 }), 3);
   assert.notEqual(game.bestTarget(), 0);
+});
+
+test('shout sends an eligible pass target to the active bonus zone without affecting scoring', () => {
+  const game = openGame();
+  game.zone = { x: 735, y: 430, r: 92 };
+  const target = game.players[1];
+  const before = distance(target, game.zone);
+  assert.equal(game.shout(target.id), true);
+  advance(game, 1);
+  assert.ok(distance(target, game.zone) < before, 'target should close on the bonus zone');
+  assert.equal(game.score, 0);
+  assert.equal(game.passes, 0);
+  assert.equal(game.shout(game.carrier), false, 'the ball carrier cannot be shouted');
+  assert.equal(game.shout(99), false, 'missing targets are ignored');
+  game.zone = { x: 260, y: 185, r: 92 };
+  assert.equal(game.shout(2), true, 'the most recent shout replaces the earlier intent');
+  assert.equal(game.players[1].shoutTarget, null, 'the earlier shout target is cleared');
+  assert.deepEqual(game.players[2].shoutTarget, { zoneIndex: game.zoneIndex }, 'the new shout target is set');
+  game.rotateZone();
+  advance(game, STEP);
+  assert.equal(game.players[2].shoutTarget, null, 'a zone rotation clears stale shout intent');
+  game.zone = null;
+  assert.equal(game.shout(2), false, 'a missing bonus zone is ignored');
 });
 
 test('segment distance handles endpoints and zero-length segments', () => {

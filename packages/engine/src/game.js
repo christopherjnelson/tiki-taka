@@ -23,6 +23,11 @@ export const ONE_TOUCH = {
   milestoneEvery: 10,
   milestoneBonus: 50,
 };
+// Boost spends the same earned Focus seconds as slow motion, but applies only
+// to the carrier's movement. Keeping its tuning here makes it a simulation
+// concern rather than an input- or renderer-specific multiplier.
+export const BOOST_SPEED_MULTIPLIER = 1.75;
+export const BOOST_DRAIN_RATE = 1;
 export const TACTICS = {
   balanced: {
     name: "Playmaker",
@@ -241,6 +246,8 @@ export class Game {
     this.focus = 0;
     this.focusActive = false;
     this.focusNeedsRelease = false;
+    this.boostActive = false;
+    this.boostNeedsRelease = false;
     this.hold = 0;
     this.grace = 1.5;
     this.lock = 0;
@@ -377,11 +384,29 @@ export class Game {
   clearQueuedPass() {
     this.queuedPass = null;
   }
+  // A shout is an intent for an off-ball teammate, not a pass and not a
+  // scoring action. The intent stays with the live zone until it rotates so a
+  // teammate who arrives early does not immediately drift back out of it.
+  shout(id) {
+    const teammate = this.players[id];
+    if (
+      this.status !== "playing" ||
+      !teammate ||
+      id === this.carrier ||
+      id === this.ball?.to ||
+      !this.zone
+    )
+      return false;
+    for (const player of this.players) player.shoutTarget = null;
+    teammate.shoutTarget = { zoneIndex: this.zoneIndex };
+    return true;
+  }
   receive() {
     const ball = this.ball;
     const queued = this.queuedPass;
     this.queuedPass = null;
     this.carrier = ball.to;
+    this.players[this.carrier].shoutTarget = null;
     this.ball = null;
     this.hold = 0;
     this.grace = 0.55;
@@ -501,6 +526,8 @@ export class Game {
     this.oneTouchDistance = 0;
     this.oneTouchEligible = false;
     this.clearQueuedPass();
+    this.focusActive = false;
+    this.boostActive = false;
     this.lock = 1.2;
     this.emit("turnover", reason, 500, 310);
     if (this.turnovers >= 3 && !this.config.practice) {
@@ -514,23 +541,54 @@ export class Game {
     this.time = 0;
     this.status = "finished";
     this.clearQueuedPass();
+    for (const player of this.players) player.shoutTarget = null;
+    this.focusActive = false;
+    this.boostActive = false;
     this.emit("end", "");
   }
   update(dt, input = {}) {
     if (this.status !== "playing") return;
     dt = clamp(dt, 0, 0.05);
-    if (!input.focus) this.focusNeedsRelease = false;
-    if (input.focus && this.focus <= 0) this.focusNeedsRelease = true;
+    // Both abilities draw the same charge. Once that charge is empty, a
+    // player must release both held ability controls before either one can
+    // activate again; switching triggers cannot bypass the release gate.
+    if (!input.focus && !input.boost) {
+      this.focusNeedsRelease = false;
+      this.boostNeedsRelease = false;
+    }
+    if ((input.focus || input.boost) && this.focus <= 0) {
+      this.focusNeedsRelease = true;
+      this.boostNeedsRelease = true;
+    }
     if (this.lock > 0) {
       this.focusActive = false;
+      this.boostActive = false;
       this.lock = Math.max(0, this.lock - dt);
       return;
     }
+    // Boost owns the shared meter if both controls arrive in one frame. Slow
+    // motion would otherwise reduce the very movement Boost is meant to aid.
+    const boostRequested = input.boost && !this.boostNeedsRelease;
     const focusedTime =
-      input.focus && !this.focusNeedsRelease ? Math.min(dt, this.focus) : 0;
+      !boostRequested && input.focus && !this.focusNeedsRelease
+        ? Math.min(dt, this.focus)
+        : 0;
+    const boostedTime =
+      boostRequested &&
+      !this.ball
+        ? Math.min(dt, this.focus / BOOST_DRAIN_RATE)
+        : 0;
     this.focusActive = focusedTime > 0;
-    this.focus = clamp(this.focus - focusedTime, 0, this.tactic.focus);
-    if (input.focus && this.focus <= 0) this.focusNeedsRelease = true;
+    this.boostActive = boostedTime > 0;
+    this.focus = clamp(
+      this.focus - focusedTime - boostedTime * BOOST_DRAIN_RATE,
+      0,
+      this.tactic.focus,
+    );
+    if ((input.focus || input.boost) && this.focus <= 0) {
+      this.focusNeedsRelease = true;
+      this.boostNeedsRelease = true;
+    }
     if (this.ball && this.focusActive) this.ball.focusUsed = true;
     const delta = dt - focusedTime * 0.68;
     this.time -= delta;
@@ -562,8 +620,13 @@ export class Game {
       }
       const oldX = p.x,
         oldY = p.y;
-      p.x = clamp(p.x + mx * this.tactic.speed * delta, 80, 920);
-      p.y = clamp(p.y + my * this.tactic.speed * delta, 80, 540);
+      // When the charge runs out within a frame, only the portion actually
+      // boosted gets the additional distance. This keeps outcomes stable for
+      // different frame partitions.
+      const movementTime =
+        delta + boostedTime * (BOOST_SPEED_MULTIPLIER - 1);
+      p.x = clamp(p.x + mx * this.tactic.speed * movementTime, 80, 920);
+      p.y = clamp(p.y + my * this.tactic.speed * movementTime, 80, 540);
       if (this.oneTouchEligible) {
         this.oneTouchDistance += Math.hypot(p.x - oldX, p.y - oldY);
         if (this.oneTouchDistance > ONE_TOUCH.moveTolerance) {
@@ -579,6 +642,15 @@ export class Game {
       const t = this.motionTime * 0.55 + teammate.phase;
       let tx = teammate.home.x + Math.sin(t) * 65,
         ty = teammate.home.y + Math.cos(t * 0.8) * 42;
+      if (teammate.shoutTarget?.zoneIndex === this.zoneIndex && this.zone) {
+        tx = this.zone.x;
+        ty = this.zone.y;
+      } else {
+        teammate.shoutTarget = null;
+      }
+      // A shouted run still respects the same pressure avoidance as normal
+      // teammate movement; the zone is the intention, not a straight-line
+      // command through a defender.
       for (const d of this.defenders) {
         const dist = distance(teammate, d);
         if (dist < 125) {

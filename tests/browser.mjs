@@ -225,6 +225,9 @@ await check('desktop gameplay, controls, progression, help, and full run', async
 
   await page.locator('#start-button').click();
   await observeGame(page);
+  assert.equal(await page.locator('#focus-button').isVisible(), true);
+  assert.equal(await page.locator('#boost-button').isVisible(), true);
+  assert.equal(await page.locator('#shout-button').isVisible(), true);
   // Keep this round focused on input and exact Focus rewards, independent of
   // runner speed. Restarting below and the separate career test retain live AI.
   await page.evaluate(() => {
@@ -372,6 +375,75 @@ await check('a complete playable career run clears and unlocks the next court', 
   assert.ok(saved.courts['0'].stars >= 1);
   assert.ok(saved.records['court-0'] >= 180);
   assert.equal(await page.locator('.court-item').nth(1).isDisabled(), false);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+await check('Boost and Shout work through remappable keyboard controls and analog gamepad triggers', async () => {
+  const context = await browser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  await context.addInitScript(() => {
+    const state = { connected: true, axes: [0, 0, 0, 0], values: Array(16).fill(0) };
+    Object.defineProperty(navigator, 'getGamepads', { configurable: true, value: () => state.connected ? [{
+      connected: true, index: 0, id: 'Analog controls gamepad', mapping: 'standard',
+      axes: [...state.axes],
+      buttons: state.values.map(value => ({ pressed: value >= 1, touched: value > 0, value })),
+    }] : [] });
+    window.__setAbilityPad = ({ button, value, axes }) => {
+      if (button !== undefined) state.values[button] = value;
+      if (axes) state.axes = axes;
+    };
+  });
+  const page = await context.newPage();
+  const errors = watchErrors(page);
+  await gotoArena(page, baseURL);
+  await page.locator('#start-button').click();
+  await observeGame(page);
+  await page.evaluate(() => {
+    const game = window.__observedGame.game;
+    game.focus = 2;
+    game.zone = { x: 735, y: 430, r: 92 };
+  });
+  await page.locator('#focus-button').click();
+  assert.equal(await page.locator('#focus-button').getAttribute('aria-pressed'), 'true');
+  await page.locator('#boost-button').click();
+  assert.equal(await page.locator('#focus-button').getAttribute('aria-pressed'), 'false', 'click controls are mutually exclusive');
+  assert.equal(await page.locator('#boost-button').getAttribute('aria-pressed'), 'true');
+  await page.locator('#boost-button').click();
+  const focusBeforeKeyboardBoost = await focusSeconds(page);
+  await page.keyboard.down('KeyR');
+  await page.waitForFunction(() => window.__observedGame.input?.boost === true);
+  await page.waitForTimeout(180);
+  await page.keyboard.up('KeyR');
+  assert.ok(await focusSeconds(page) < focusBeforeKeyboardBoost, 'R should hold Boost and consume Focus');
+
+  await page.evaluate(() => window.__observedGame.game.focus = 2);
+  const focusBeforeTriggerBoost = await focusSeconds(page);
+  await page.evaluate(() => window.__setAbilityPad({ button: 7, value: 0.8 }));
+  await page.waitForFunction(() => window.__observedGame.input?.boost === true);
+  await page.waitForTimeout(180);
+  await page.evaluate(() => window.__setAbilityPad({ button: 7, value: 0 }));
+  assert.ok(await focusSeconds(page) < focusBeforeTriggerBoost, 'an analog RT pull should hold Boost');
+
+  await page.evaluate(() => {
+    const game = window.__observedGame.game;
+    game.focus = 2;
+    game.players[0].x = 250; game.players[0].y = 310;
+    game.players[1].x = 500; game.players[1].y = 155;
+    game.players[2].x = 770; game.players[2].y = 290;
+    game.players[3].x = 510; game.players[3].y = 470;
+  });
+  await page.evaluate(() => window.__setAbilityPad({ axes: [0, 0, 1, 0] }));
+  const target = await page.waitForFunction(() => {
+    const value = document.querySelector('#court-wrap')?.dataset.target;
+    return /^\d$/.test(value || '') ? Number(value) : null;
+  });
+  await page.evaluate(() => window.__setAbilityPad({ button: 4, value: 1 }));
+  await page.waitForFunction(id => Boolean(window.__observedGame.game.players[id]?.shoutTarget), await target.jsonValue());
+  await page.evaluate(() => window.__setAbilityPad({ button: 4, value: 0 }));
+  await page.evaluate(id => { window.__observedGame.game.players[id].shoutTarget = null; }, await target.jsonValue());
+  await page.keyboard.press('KeyF');
+  await page.waitForFunction(id => Boolean(window.__observedGame.game.players[id]?.shoutTarget), await target.jsonValue());
+  await page.evaluate(() => window.__setAbilityPad({ axes: [0, 0, 0, 0] }));
   assert.deepEqual(errors, []);
   await context.close();
 });
