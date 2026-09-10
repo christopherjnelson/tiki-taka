@@ -144,6 +144,11 @@ let keys = new Set(),
   gamepadBoost = false;
 let padPrevious = [],
   padConnected = false,
+  // The toolbar's key chips track which input the player is actually using,
+  // not merely whether a pad is connected — a pad can stay plugged in for a
+  // whole session while the player never touches it, so switching on
+  // connection alone would show gamepad glyphs to a keyboard player.
+  inputSource = "keyboard",
   menuRepeat = 0,
   sliderRepeat = 0,
   finished = false,
@@ -1472,6 +1477,52 @@ for (const [id, key] of [
   });
   $(id).addEventListener("change", () => persistSettings());
 }
+// Xbox-style labels for the five actions pollGamepad() reads off the
+// standard gamepad mapping (see the button comments there). Only the
+// court toolbar's chips swap to these; everywhere else (the frozen footer
+// legend, the help dialog) stays keyboard-phrased regardless of input.
+const GAMEPAD_ACTION_LABELS = {
+  smartPass: "A",
+  wallToggle: "X",
+  shout: "LB",
+  focusHold: "LT",
+  boostHold: "RT",
+};
+// The label a toolbar chip/title should show for an action right now: the
+// gamepad glyph while the player is actively using a pad, otherwise the
+// player's configured key(s).
+function chipLabel(action) {
+  if (inputSource === "gamepad" && GAMEPAD_ACTION_LABELS[action])
+    return GAMEPAD_ACTION_LABELS[action];
+  const codes = settings.bindings[action] || [];
+  return codes.map(readableKey).join(" / ") || "Unbound";
+}
+// Refreshes just the toolbar's key chips and their titles. Split out of
+// syncSettingChrome() so an input-source flip — which can happen mid-round,
+// every time the player's hands move between keyboard and pad — doesn't
+// also redo the theme, audio rail and scoreboard-height work that function
+// does on a real settings change.
+function refreshToolbarChips() {
+  document.querySelectorAll("[data-binding]").forEach((element) => {
+    element.textContent = element.closest(".court-toolbar")
+      ? chipLabel(element.dataset.binding)
+      : (settings.bindings[element.dataset.binding] || [])
+          .map(readableKey)
+          .join(" / ") || "Unbound";
+  });
+  $("pass-button").title =
+    `Smart pass (${chipLabel("smartPass")}); press during flight to queue the next pass`;
+  $("bank-button").title =
+    `Toggle wall pass (${chipLabel("wallToggle")}); hold ${settings.bindings.wallHold.map(readableKey).join(" / ") || "unbound"}`;
+  $("focus-button").title = `Hold Focus (${chipLabel("focusHold")})`;
+  $("boost-button").title = `Hold Boost (${chipLabel("boostHold")}). Boost uses Focus.`;
+  $("shout-button").title = `Shout selected target to bonus zone (${chipLabel("shout")})`;
+}
+function setInputSource(source) {
+  if (inputSource === source) return;
+  inputSource = source;
+  refreshToolbarChips();
+}
 function syncSettingChrome() {
   syncAudioChrome();
   document.documentElement.dataset.theme = settings.theme;
@@ -1485,19 +1536,12 @@ function syncSettingChrome() {
   $("theme-button").innerHTML =
     `<span aria-hidden="true">◐</span> ${settings.theme === "dark" ? "Light" : "Dark"}`;
   if ($("preset-select")) $("preset-select").value = settings.preset;
-  document.querySelectorAll("[data-binding]").forEach((element) => {
-    const codes = settings.bindings[element.dataset.binding] || [];
-    element.textContent = codes.map(readableKey).join(" / ") || "Unbound";
-  });
+  refreshToolbarChips();
+  // The court's own aria-label stays keyboard-phrased: it is read once by a
+  // screen reader, not glanced at mid-play, so it is not worth chasing the
+  // live input source the way the visible chips are.
   const bindingText = (action) =>
     settings.bindings[action].map(readableKey).join(" / ") || "unbound";
-  $("pass-button").title =
-    `Smart pass (${bindingText("smartPass")}); press during flight to queue the next pass`;
-  $("bank-button").title =
-    `Toggle wall pass (${bindingText("wallToggle")}); hold ${bindingText("wallHold")}`;
-  $("focus-button").title = `Hold Focus (${bindingText("focusHold")})`;
-  $("boost-button").title = `Hold Boost (${bindingText("boostHold")}). Boost uses Focus.`;
-  $("shout-button").title = `Shout selected target to bonus zone (${bindingText("shout")})`;
   $("court").setAttribute(
     "aria-label",
     `Tiki Taka court. Move with ${bindingText("moveUp")}, ${bindingText("moveLeft")}, ${bindingText("moveDown")}, and ${bindingText("moveRight")}. Smart pass with ${bindingText("smartPass")}; direct passes with ${[1, 2, 3, 4].map((number) => bindingText(`direct${number}`)).join(", ")}. Hold Focus with ${bindingText("focusHold")}, Boost with ${bindingText("boostHold")}, and shout the selected target with ${bindingText("shout")}.`,
@@ -1830,6 +1874,11 @@ $("help-dialog").addEventListener("click", (e) => {
       e.target.close();
   }
 });
+// Any keyboard or pointer activity switches the toolbar chips back off
+// gamepad glyphs, however the player got there — capturing a new binding,
+// clicking a menu, or just typing, not only in-round play.
+window.addEventListener("keydown", () => setInputSource("keyboard"));
+window.addEventListener("pointerdown", () => setInputSource("keyboard"));
 window.addEventListener("keydown", (e) => {
   if (capture) {
     e.preventDefault();
@@ -2124,6 +2173,9 @@ function pollGamepad(dt) {
     gamepadMove = { x: 0, y: 0 };
     gamepadFocus = false;
     gamepadBoost = false;
+    // A pad that is gone cannot be the input in use, so the chips go back to
+    // keys rather than advertising buttons the player no longer has.
+    setInputSource("keyboard");
     return;
   }
   if (!padConnected) {
@@ -2136,12 +2188,25 @@ function pollGamepad(dt) {
   // bit is unreliable. Treat a quarter pull as held and retain that normalized
   // state for edge-triggered buttons such as LB.
   const pressed = pad.buttons.map((b) => b.pressed || (b.value || 0) >= 0.25),
-    tap = (i) => pressed[i] && !padPrevious[i];
+    tap = (i) => pressed[i] && !padPrevious[i],
+    dead = (v) => (Math.abs(v || 0) > 0.18 ? v : 0);
   // A gamepad press is not a user activation gesture, so this will not unblock
   // a browser on its own. It costs nothing, it does unblock the packaged shell
   // and any browser whose policy is relaxed, and on the rest it keeps the
   // context ready so the first key or click starts audio instantly.
   if (pressed.some((down, i) => down && !padPrevious[i])) unlockAudio();
+  // The toolbar's key chips switch to gamepad glyphs on real activity, not
+  // on mere connection — a pad can sit plugged in the whole session while
+  // the player uses the keyboard, so a fresh button press or a stick pushed
+  // past the deadzone is what counts as "actually using the pad".
+  if (
+    pressed.some((down, i) => down && !padPrevious[i]) ||
+    dead(pad.axes[0]) ||
+    dead(pad.axes[1]) ||
+    dead(pad.axes[2]) ||
+    dead(pad.axes[3])
+  )
+    setInputSource("gamepad");
   // Any button at all resumes after a turnover, but only on a fresh press:
   // tap() is edge-triggered, so a button still held from before is ignored.
   if (awaitingResume && !menuOpen && !anyDialogOpen()) {
@@ -2151,7 +2216,6 @@ function pollGamepad(dt) {
       return;
     }
   }
-  const dead = (v) => (Math.abs(v || 0) > 0.18 ? v : 0);
   // Sticks only drive the court while the round is actually accepting play.
   // Otherwise a nudge behind the pause overlay would keep repainting aim lanes.
   if (acceptingPlayInput()) {
