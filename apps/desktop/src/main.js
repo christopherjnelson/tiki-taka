@@ -47,23 +47,37 @@ const dataStorage = storage || {
   setItem: (key, value) => memory.set(key, value),
   removeItem: (key) => memory.delete(key),
 };
-// Runtime configuration, not a build-time one: an empty meta tag (the
-// default — see index.html) means no server and the game plays exactly as
-// it always has. A deployment that stands up server/ points this at it.
-// selectDataAdapter() itself falls back to the local adapter if that server
-// doesn't answer, so a misconfigured or offline API is invisible to a player
-// the same way an absent one is.
+// Supabase's publishable browser configuration is supplied at build/serve
+// time. With neither value present, the adapter remains entirely local so the
+// game still works offline. The older API-base setting stays as a migration
+// fallback for existing self-hosted deployments.
 const apiBase = document
   .querySelector('meta[name="tiki-taka-api-base"]')
   ?.content?.trim();
-let dataAdapter = await selectDataAdapter({ apiBase, storage: dataStorage });
+const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL?.trim();
+const supabasePublishableKey = import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
+// Browser tests can supply an in-memory adapter before this module evaluates.
+// It is intentionally not a deployment setting and is ignored unless the
+// exact test-only factory global is present.
+const testDataAdapterFactory = globalThis.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__;
+let dataAdapter = testDataAdapterFactory
+  ? await testDataAdapterFactory({ storage: dataStorage })
+  : await selectDataAdapter({
+      apiBase,
+      supabaseUrl,
+      supabasePublishableKey,
+      storage: dataStorage,
+    });
 let initialData;
 let storageFallback = false;
+let remoteDataUnavailable = false;
 try {
   initialData = await dataAdapter.loadUserData();
 } catch {
-  storageFallback = true;
-  dataAdapter = createLocalDataAdapter({
+  // A configured remote adapter must retain its identity and session if a
+  // transient profile/save read fails. Use local data only as a temporary
+  // playable snapshot; never silently replace the remote adapter with it.
+  const fallback = createLocalDataAdapter({
     storage:
       dataStorage === storage
         ? {
@@ -73,12 +87,25 @@ try {
           }
         : dataStorage,
   });
-  initialData = await dataAdapter.loadUserData();
+  if (["supabase", "server"].includes(dataAdapter.kind)) {
+    remoteDataUnavailable = true;
+    initialData = await fallback.loadUserData();
+  } else {
+    storageFallback = true;
+    dataAdapter = fallback;
+    initialData = await dataAdapter.loadUserData();
+  }
 }
 let progress = initialData.progress;
 let settings = initialData.settings;
 let accountStats = initialData.stats;
-let profile = (await dataAdapter.getSession())?.profile || null;
+let preferences = initialData.preferences || { scoreSaveChoice: "ask" };
+let profile = null;
+try {
+  profile = (await dataAdapter.getSession())?.profile || null;
+} catch {
+  remoteDataUnavailable = ["supabase", "server"].includes(dataAdapter.kind);
+}
 // One switch used to cover everything, and it lived on `progress.sound`.
 // Effects and music now have a switch and a level each, in settings. A player
 // who had turned the old switch off must not be blasted on the next launch, so
@@ -163,6 +190,14 @@ let padPrevious = [],
 const RESULT_ACTION_DELAY = 1200;
 let capture = null;
 let padFocusElement = null;
+// The completed round is held only until a player explicitly chooses how to
+// handle score saving. Its id is deliberately stable across an auth handoff or
+// retry so the remote adapter can make submissions idempotent.
+let pendingScoreRounds = [];
+let saveScoreAfterAuthentication = false;
+let dataContextGeneration = 0;
+let remoteRecoveryPromise = null;
+let pendingDrainPromise = null;
 // The pause menu is the one in-round menu. It owns Resume, Restart, Home and
 // Settings so nothing important hides behind a drawer. Home, not Courts: the
 // court picker and the title screen are the same screen now.
@@ -178,6 +213,10 @@ let pointerId = null,
   joystickId = null,
   joystickOrigin = null;
 function persist() {
+  if (remoteDataUnavailable && onlineAccount()) {
+    void recoverRemoteDataContext();
+    return;
+  }
   void dataAdapter
     .saveUserData({ progress })
     .catch(() =>
@@ -188,6 +227,10 @@ function persist() {
   }
 }
 function persistSettings() {
+  if (remoteDataUnavailable && onlineAccount()) {
+    void recoverRemoteDataContext();
+    return;
+  }
   void dataAdapter
     .saveUserData({ settings })
     .catch(() =>
@@ -202,10 +245,68 @@ function toast(text) {
   clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => $("toast").classList.remove("visible"), 4000);
 }
+if (remoteDataUnavailable)
+  setTimeout(() => toast("Account data is temporarily unavailable. Your game is still playable."), 0);
+async function recordRound(round) {
+  if (remoteDataUnavailable && onlineAccount()) {
+    if (!(await recoverRemoteDataContext())) return false;
+  }
+  const roundProfileId = profile?.id || null;
+  try {
+    const nextStats = await dataAdapter.recordRound(round);
+    if ((profile?.id || null) !== roundProfileId) return true;
+    accountStats = nextStats;
+    syncHome();
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+function queuePendingScore(round, ownerId = null) {
+  if (!pendingScoreRounds.some((item) => item.round.id === round.id))
+    pendingScoreRounds.push({ round, ownerId });
+}
+function showScoreSaveDialog(status = "") {
+  if (!pendingScoreRounds.length || preferences.scoreSaveChoice !== "ask") return;
+  $("score-save-status").textContent = status;
+  if (!$("score-save-dialog").open) $("score-save-dialog").showModal();
+}
+async function saveScorePreference(choice) {
+  if (remoteDataUnavailable && onlineAccount())
+    throw new Error("Account data is temporarily unavailable. Reconnect before saving this choice.");
+  const nextPreferences = { ...preferences, scoreSaveChoice: choice };
+  await dataAdapter.saveUserData({ preferences: nextPreferences });
+  preferences = nextPreferences;
+}
+async function savePendingScores() {
+  if (pendingDrainPromise) return pendingDrainPromise;
+  pendingDrainPromise = (async () => {
+    let allSaved = true;
+    const remaining = [];
+    for (const item of pendingScoreRounds) {
+      if (item.ownerId && item.ownerId !== profile?.id) {
+        remaining.push(item);
+        continue;
+      }
+      if (!(await recordRound(item.round))) {
+        allSaved = false;
+        remaining.push(item);
+      }
+    }
+    pendingScoreRounds = remaining;
+    return allSaved;
+  })();
+  try {
+    return await pendingDrainPromise;
+  } finally {
+    pendingDrainPromise = null;
+  }
+}
 const anyDialogOpen = () =>
   $("settings-dialog").open ||
   $("help-dialog").open ||
   $("account-dialog").open ||
+  $("score-save-dialog").open ||
   $("leaderboard-dialog").open;
 // Any menu that must swallow gameplay input before it reaches the court.
 const menuBlocking = () => menuOpen || anyDialogOpen();
@@ -1239,19 +1340,26 @@ function finish() {
   setControlsEnabled(false);
   const result = awardMatch(progress, game, mode, courtIndex);
   roundCleared = result.cleared;
-  const roundProfileId = profile?.id || null;
-  void dataAdapter
-    .recordRound({
-      score: game.score,
-      passes: game.passes,
-      bestOneTouch: game.bestOneTouch,
-    })
-    .then((nextStats) => {
-      if ((profile?.id || null) !== roundProfileId) return;
-      accountStats = nextStats;
-      syncHome();
-    })
-    .catch(() => toast("Round stats could not be stored."));
+  const completedRound = {
+    id: globalThis.crypto?.randomUUID?.() || `round-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    mode,
+    court: courtIndex,
+    score: game.score,
+    passes: game.passes,
+    bestOneTouch: game.bestOneTouch,
+  };
+  if (dataAdapter.kind !== "supabase") {
+    void recordRound(completedRound).then((saved) => {
+      if (!saved) toast("Round stats could not be stored.");
+    });
+  } else if (profile && preferences.scoreSaveChoice === "always") {
+    queuePendingScore(completedRound, profile.id);
+    void savePendingScores().then((saved) => {
+      if (!saved) toast("Score could not be saved. It will retry after your next completed game.");
+    });
+  } else if (preferences.scoreSaveChoice === "ask") {
+    queuePendingScore(completedRound);
+  }
   persist();
   syncProgress();
   const outOfPossessions = game.turnovers >= 3 && !game.config.practice;
@@ -1302,6 +1410,21 @@ function finish() {
   announce(
     `Round complete. ${game.score} points. ${result.cleared ? "Court cleared." : ""}`,
   );
+  if (pendingScoreRounds.length) showScoreSaveDialog();
+}
+if (testDataAdapterFactory) {
+  // A deliberately narrow test hook: it exercises the post-round consent
+  // path without manufacturing pointer/gamepad input or exposing game state
+  // in production builds.
+  globalThis.__TIKI_TAKA_TEST_HOOKS__ = {
+    finishRound: finish,
+    prepareRound: prepare,
+    switchContext: switchDataContext,
+    setScoreSaveChoice: (choice) => {
+      preferences = { ...preferences, scoreSaveChoice: choice };
+    },
+    recoverRemote: recoverRemoteDataContext,
+  };
 }
 $("start-button").addEventListener("click", () => {
   if (phase === "finished" && !resultActionsReady) return;
@@ -1599,7 +1722,7 @@ function openSettings() {
   renderBindings();
   $("settings-dialog").showModal();
 }
-const onlineAccount = () => dataAdapter.kind === "server";
+const onlineAccount = () => ["supabase", "server"].includes(dataAdapter.kind);
 function syncAccountDialog() {
   $("account-guest").hidden = Boolean(profile);
   $("account-profile").hidden = !profile;
@@ -1614,11 +1737,14 @@ function syncAccountDialog() {
   $("register-password").required = online;
   $("login-password-row").hidden = !online;
   $("login-password").required = online;
+  $("login-identifier").type = online ? "email" : "text";
   $("account-eyebrow").textContent = online
     ? "ONLINE ACCOUNT"
     : "THIS DEVICE / LOCAL DEMO";
-  $("account-note").textContent = online
-    ? "Real accounts, kept on the accounts server. Scores you submit are not independently verified — see the leaderboard for that note."
+  $("account-note").textContent = remoteDataUnavailable
+    ? "Account data is temporarily unavailable. You are still playing locally; reconnect before relying on saved scores."
+    : online
+    ? "Your email stays private. Your username is public on the friendly leaderboard. Scores you submit are not independently verified — see the leaderboard for that note."
     : "These passwordless demo profiles stay only in this browser. They are not online accounts and do not sync.";
   $("account-title").textContent = online ? "Your account." : "Local profiles.";
   $("account-button").textContent = `◎ ${profile?.username || (online ? "Account" : "Local profile")}`;
@@ -1635,13 +1761,21 @@ function syncAccountDialog() {
   );
 }
 async function switchDataContext(nextProfile) {
+  const generation = ++dataContextGeneration;
   if (phase === "playing") pause();
   clearInput();
-  profile = nextProfile;
   const data = await dataAdapter.loadUserData();
+  if (generation !== dataContextGeneration) return false;
+  applyDataContext(data, nextProfile);
+  return true;
+}
+function applyDataContext(data, nextProfile) {
+  profile = nextProfile;
+  remoteDataUnavailable = false;
   progress = data.progress;
   settings = data.settings;
   accountStats = data.stats;
+  preferences = data.preferences || { scoreSaveChoice: "ask" };
   mode = "career";
   courtIndex = progress.lastCourt;
   // A switched-to profile brings its own audio settings, and may never have
@@ -1658,6 +1792,32 @@ async function switchDataContext(nextProfile) {
   syncSettingChrome();
   syncAccountDialog();
   applyView("home");
+}
+async function recoverRemoteDataContext() {
+  if (!remoteDataUnavailable || !onlineAccount()) return !remoteDataUnavailable;
+  if (remoteRecoveryPromise) return remoteRecoveryPromise;
+  const generation = ++dataContextGeneration;
+  remoteRecoveryPromise = (async () => {
+    try {
+      // Read the live session and its authoritative save before lifting the
+      // write gate; the fallback guest snapshot is never written remotely.
+      const session = await dataAdapter.getSession();
+      const data = await dataAdapter.loadUserData();
+      if (generation !== dataContextGeneration) return false;
+      applyDataContext(data, session?.profile || profile);
+      if (preferences.scoreSaveChoice === "always" && pendingScoreRounds.length)
+        void savePendingScores().then((saved) => {
+          if (!saved) toast("Queued scores are still waiting for a connection.");
+        });
+      toast("Account connection restored.");
+      return true;
+    } catch {
+      return false;
+    } finally {
+      remoteRecoveryPromise = null;
+    }
+  })();
+  return remoteRecoveryPromise;
 }
 function openAccount() {
   if (phase === "playing") pause();
@@ -1684,11 +1844,17 @@ $("register-form").addEventListener("submit", async (event) => {
     });
     await switchDataContext(next);
     $("account-dialog").close();
-    toast(
-      online
-        ? `Account ${next.username} created.`
-        : `Local profile ${next.username} created on this device.`,
-    );
+    if (saveScoreAfterAuthentication) {
+      saveScoreAfterAuthentication = false;
+      showScoreSaveDialog();
+      await chooseAlwaysSave();
+    } else {
+      toast(
+        online
+          ? `Account ${next.username} created.`
+          : `Local profile ${next.username} created on this device.`,
+      );
+    }
   } catch (error) {
     $("account-status").textContent = error.message;
   }
@@ -1703,7 +1869,13 @@ $("login-form").addEventListener("submit", async (event) => {
     });
     await switchDataContext(next);
     $("account-dialog").close();
-    toast(online ? `Signed in as ${next.username}.` : `Playing locally as ${next.username}.`);
+    if (saveScoreAfterAuthentication) {
+      saveScoreAfterAuthentication = false;
+      showScoreSaveDialog();
+      await chooseAlwaysSave();
+    } else {
+      toast(online ? `Signed in as ${next.username}.` : `Playing locally as ${next.username}.`);
+    }
   } catch (error) {
     $("account-status").textContent = error.message;
   }
@@ -1714,6 +1886,53 @@ $("logout-button").addEventListener("click", async () => {
   $("account-dialog").close();
   toast("Returned to guest progress.");
 });
+$("close-score-save").addEventListener("click", () => $("score-save-dialog").close());
+$("score-save-later").addEventListener("click", () => $("score-save-dialog").close());
+$("score-save-never").addEventListener("click", async () => {
+  try {
+    await saveScorePreference("never");
+    pendingScoreRounds = [];
+    $("score-save-dialog").close();
+    toast("Scores will stay on this device.");
+  } catch (error) {
+    $("score-save-status").textContent = error.message || "Your choice could not be saved.";
+  }
+});
+async function chooseAlwaysSave() {
+  if (!profile) {
+    saveScoreAfterAuthentication = true;
+    $("score-save-dialog").close();
+    openAccount();
+    $("account-status").textContent = "Create an account or sign in to save this score.";
+    return;
+  }
+  try {
+    const saved = await savePendingScores();
+    if (!saved) {
+      // Keep both the round and the ask preference so no score is silently
+      // lost, and a transient failure cannot silently turn on future uploads.
+      $("score-save-status").textContent = "Score could not be saved. Check your connection and try again.";
+      return;
+    }
+    await saveScorePreference("always");
+    $("score-save-dialog").close();
+    toast("Score saved. Future completed games will save automatically.");
+  } catch (error) {
+    $("score-save-status").textContent = error.message || "Your score preference could not be saved.";
+  }
+}
+$("score-save-always").addEventListener("click", chooseAlwaysSave);
+// Sessions can change in another tab or when Supabase restores one after the
+// shell has booted. Keep the visible account and scoped local state honest.
+const unsubscribeAuthState = dataAdapter.onAuthStateChange?.((session) => {
+  const nextProfile = session?.profile || null;
+  if ((nextProfile?.id || null) === (profile?.id || null)) return;
+  void switchDataContext(nextProfile).catch(() =>
+    toast("Your account changed, but its saved data could not be loaded."),
+  );
+});
+window.addEventListener("pagehide", () => unsubscribeAuthState?.(), { once: true });
+window.addEventListener("online", () => void recoverRemoteDataContext());
 // Leaderboard: only the "server" adapter can answer this (it feature-detects
 // getLeaderboard), and with no server configured — the everyday case — the
 // dialog says so honestly instead of pretending nothing changed.
@@ -2249,6 +2468,9 @@ function pollGamepad(dt) {
   if ($("help-dialog").open) {
     if (tap(1) || tap(9)) $("help-dialog").close();
     else nav($("help-dialog"));
+  } else if ($("score-save-dialog").open) {
+    if (tap(1) || tap(9)) $("score-save-dialog").close();
+    else nav($("score-save-dialog"));
   } else if ($("account-dialog").open) {
     if (tap(1) || tap(9)) $("account-dialog").close();
     else nav($("account-dialog"));

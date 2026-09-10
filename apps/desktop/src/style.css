@@ -2253,6 +2253,7 @@ body.play-view #bank-button {
   text-transform: uppercase;
 }
 .account-note,
+.score-save-note,
 .leaderboard-note {
   color: var(--muted);
   line-height: 1.55;
@@ -2299,6 +2300,14 @@ body.play-view #bank-button {
   padding: 18px;
   background: var(--panel);
   border-left: 4px solid var(--cyan);
+}
+.score-save-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+.score-save-actions button {
+  width: 100%;
 }
 .leaderboard-controls {
   display: flex;
