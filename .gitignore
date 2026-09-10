@@ -40,8 +40,9 @@ Thumbs.db
 *.swp
 *~
 
-# Local server database
-data/
+# Local server database (root only — an unanchored `data/` also swallowed
+# packages/data/, hiding tracked source from git)
+/data/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
