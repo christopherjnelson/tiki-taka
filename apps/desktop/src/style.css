@@ -846,6 +846,12 @@ kbd {
   border: 1px solid currentColor;
   color: var(--muted);
   font-size: 8px;
+  /* Gamepad labels (LB/LT/RT) run wider than the single keyboard letters
+     they replace; a fixed min-width keeps the chip — and the button it
+     sits in — from resizing when the input source swaps live. */
+  min-width: 14px;
+  box-sizing: content-box;
+  text-align: center;
 }
 .focus-value {
   color: var(--cyan);

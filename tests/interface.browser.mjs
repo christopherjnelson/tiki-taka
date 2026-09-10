@@ -399,6 +399,83 @@ await check(
 );
 
 await check(
+  "toolbar key chips follow real input, not mere pad connection",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1200, height: 850 },
+      reducedMotion: "reduce",
+      serviceWorkers: "block",
+    });
+    await context.addInitScript(() => {
+      const pressed = Array(16).fill(false);
+      window.__interfacePad = { polls: 0, buttons: pressed.slice() };
+      Object.defineProperty(navigator, "getGamepads", {
+        configurable: true,
+        value: () => {
+          const buttons = pressed.slice();
+          window.__interfacePad.polls++;
+          window.__interfacePad.buttons = buttons;
+          return [
+            {
+              connected: true,
+              axes: [0, 0, 0, 0],
+              buttons: buttons.map((value) => ({
+                pressed: value,
+                value: Number(value),
+              })),
+            },
+          ];
+        },
+      });
+      window.__setInterfacePad = (index, value) => {
+        pressed[index] = value;
+        return window.__interfacePad.polls;
+      };
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await gotoArena(page, baseURL);
+    await page.locator("#start-button").click();
+    // Connecting alone must not touch the chips: give the pad a few polls
+    // untouched before asserting anything.
+    await page.waitForFunction(() => window.__interfacePad.polls > 3);
+    assert.equal(await page.locator("#pass-button kbd").textContent(), "Space");
+    assert.equal(await page.locator("#bank-button kbd").textContent(), "B");
+    assert.equal(await page.locator("#shout-button kbd").textContent(), "F");
+    assert.equal(await page.locator("#focus-button kbd").textContent(), "E");
+    assert.equal(await page.locator("#boost-button kbd").textContent(), "R");
+    assert.match(
+      await page.locator("#pass-button").getAttribute("title"),
+      /Space/,
+      "an untouched pad must not switch the title either",
+    );
+
+    // A real press (button 0 / A) flips the chips to gamepad glyphs.
+    await pulsePad(page, 0);
+    await page.waitForFunction(
+      () => document.querySelector("#pass-button kbd").textContent === "A",
+    );
+    assert.equal(await page.locator("#bank-button kbd").textContent(), "X");
+    assert.equal(await page.locator("#shout-button kbd").textContent(), "LB");
+    assert.equal(await page.locator("#focus-button kbd").textContent(), "LT");
+    assert.equal(await page.locator("#boost-button kbd").textContent(), "RT");
+    assert.match(
+      await page.locator("#shout-button").getAttribute("title"),
+      /LB/,
+      "the title must agree with the visible chip once on gamepad",
+    );
+
+    // Any keydown reverts to keyboard chips immediately.
+    await page.keyboard.press("KeyG");
+    assert.equal(await page.locator("#pass-button kbd").textContent(), "Space");
+    assert.equal(await page.locator("#focus-button kbd").textContent(), "E");
+
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
   "theme and Play view persist with exact canvas geometry and accurate pointer passing",
   async () => {
     const context = await browser.newContext({
