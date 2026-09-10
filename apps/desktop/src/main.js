@@ -2173,6 +2173,9 @@ function pollGamepad(dt) {
     gamepadMove = { x: 0, y: 0 };
     gamepadFocus = false;
     gamepadBoost = false;
+    // A pad that is gone cannot be the input in use, so the chips go back to
+    // keys rather than advertising buttons the player no longer has.
+    setInputSource("keyboard");
     return;
   }
   if (!padConnected) {

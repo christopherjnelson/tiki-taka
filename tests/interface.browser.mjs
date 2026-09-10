@@ -408,6 +408,7 @@ await check(
     });
     await context.addInitScript(() => {
       const pressed = Array(16).fill(false);
+      let connected = true;
       window.__interfacePad = { polls: 0, buttons: pressed.slice() };
       Object.defineProperty(navigator, "getGamepads", {
         configurable: true,
@@ -415,6 +416,7 @@ await check(
           const buttons = pressed.slice();
           window.__interfacePad.polls++;
           window.__interfacePad.buttons = buttons;
+          if (!connected) return [];
           return [
             {
               connected: true,
@@ -429,6 +431,10 @@ await check(
       });
       window.__setInterfacePad = (index, value) => {
         pressed[index] = value;
+        return window.__interfacePad.polls;
+      };
+      window.__unplugInterfacePad = () => {
+        connected = false;
         return window.__interfacePad.polls;
       };
     });
@@ -469,6 +475,20 @@ await check(
     await page.keyboard.press("KeyG");
     assert.equal(await page.locator("#pass-button kbd").textContent(), "Space");
     assert.equal(await page.locator("#focus-button kbd").textContent(), "E");
+
+    // Unplugging mid-round must not leave the chips advertising buttons the
+    // player no longer has: back on the pad, then pull it out.
+    await pulsePad(page, 0);
+    await page.waitForFunction(
+      () => document.querySelector("#pass-button kbd").textContent === "A",
+    );
+    const unplugged = await page.evaluate(() => window.__unplugInterfacePad());
+    await page.waitForFunction(
+      (after) => window.__interfacePad.polls > after + 2,
+      unplugged,
+    );
+    assert.equal(await page.locator("#pass-button kbd").textContent(), "Space");
+    assert.equal(await page.locator("#boost-button kbd").textContent(), "R");
 
     assert.deepEqual(errors, []);
     await context.close();
