@@ -867,11 +867,13 @@ kbd {
   background: linear-gradient(90deg, var(--pink), var(--cyan));
   box-shadow: 0 0 8px var(--cyan);
 }
-#focus-button {
+#focus-button,
+#boost-button {
   min-width: 205px;
   justify-content: center;
 }
 #focus-button.focus-earned,
+#boost-button.focus-earned,
 #touch-focus.focus-earned {
   animation: earned 0.65s;
 }
@@ -1611,16 +1613,20 @@ body.play-view .court-toolbar .play-actions,
 body.play-view .court-toolbar .target-info {
   pointer-events: auto;
 }
-/* Focus now owns the left-hand status slot. The pass target remains available
-   to assistive technology and through the on-court selection ring instead of
-   competing with the shared Focus meter. */
-body.play-view .court-toolbar .focus-info {
+/* Focus now owns the left-hand status slot, and Boost mirrors it on the
+   right-hand slot since both draw the same hidden Focus reserve. The pass
+   target remains available to assistive technology and through the
+   on-court selection ring instead of competing with either meter. */
+body.play-view .court-toolbar .focus-info,
+body.play-view .court-toolbar .boost-info {
   padding: 0;
 }
-body.play-view .court-toolbar .focus-info::before {
+body.play-view .court-toolbar .focus-info::before,
+body.play-view .court-toolbar .boost-info::before {
   display: none;
 }
-body.play-view .court-toolbar .focus-info #focus-button {
+body.play-view .court-toolbar .focus-info #focus-button,
+body.play-view .court-toolbar .boost-info #boost-button {
   width: 100%;
 }
 /* The target hint is the one element here with no fixed size of its own, so
@@ -1652,7 +1658,8 @@ body.play-view .court-toolbar .play-actions button {
   padding: 6px 10px;
   background: #120a2ce8;
 }
-body.play-view #focus-button {
+body.play-view #focus-button,
+body.play-view #boost-button {
   min-width: clamp(88px, 13vw, 150px);
 }
 body.play-view #pass-button,
@@ -1997,7 +2004,8 @@ body.play-view #bank-button {
 :root[data-theme="light"] .brand-tagline {
   color: var(--accent-text);
 }
-#focus-button {
+#focus-button,
+#boost-button {
   min-width: 240px;
   min-height: 64px;
   display: grid;
@@ -2035,7 +2043,8 @@ body.play-view #bank-button {
   height: 7px !important;
 }
 @media (max-width: 900px) {
-  #focus-button {
+  #focus-button,
+  #boost-button {
     min-width: 0;
     min-height: 58px;
     font-size: 12px;
@@ -3291,7 +3300,7 @@ body.play-view .arena-view .below-court {
     letter-spacing: 1.3px;
     text-transform: uppercase;
   }
-  body.play-view .court-toolbar .target-info:not(.focus-info)::before {
+  body.play-view .court-toolbar .target-info:not(.focus-info):not(.boost-info)::before {
     content: "STREAK";
     color: var(--pink);
     font-size: 8px;
@@ -3306,8 +3315,10 @@ body.play-view .arena-view .below-court {
   }
   body.play-view .court-toolbar .play-actions {
     display: grid;
-    grid-template-columns: minmax(76px, 0.7fr) minmax(82px, 0.85fr) minmax(76px, 0.7fr) minmax(92px, 0.85fr);
-    flex: 1 1 70%;
+    /* Boost moved out to its own mirrored target-info slot, so only the
+       three remaining action buttons share this track. */
+    grid-template-columns: minmax(76px, 0.7fr) minmax(82px, 0.85fr) minmax(76px, 0.7fr);
+    flex: 1 1 40%;
     gap: 0;
   }
   body.play-view .court-toolbar .play-actions button {
@@ -3330,7 +3341,8 @@ body.play-view .arena-view .below-court {
     color: #070b1c;
     background: var(--pink);
   }
-  body.play-view #focus-button {
+  body.play-view #focus-button,
+  body.play-view #boost-button {
     min-width: 0;
     grid-template-columns: auto 1fr auto;
     grid-template-rows: 1fr 6px;
@@ -3338,11 +3350,13 @@ body.play-view .arena-view .below-court {
     color: #fff;
     background: #11112d;
   }
-  body.play-view #focus-button .focus-value {
+  body.play-view #focus-button .focus-value,
+  body.play-view #boost-button .focus-value {
     color: var(--venue-accent);
     font-size: clamp(16px, 1.5vw, 22px);
   }
-  body.play-view #focus-button .focus-track {
+  body.play-view #focus-button .focus-track,
+  body.play-view #boost-button .focus-track {
     height: 6px;
   }
   body.play-view .court-toolbar kbd {
