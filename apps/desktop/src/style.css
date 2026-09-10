@@ -1814,7 +1814,8 @@ body.play-view #focus-button {
   gap: 8px 6px;
   margin: 0;
 }
-.account-note {
+.account-note,
+.leaderboard-note {
   color: var(--muted);
   line-height: 1.55;
 }
@@ -1860,6 +1861,60 @@ body.play-view #focus-button {
   padding: 18px;
   background: var(--panel);
   border-left: 4px solid var(--cyan);
+}
+.leaderboard-controls {
+  display: flex;
+  gap: 14px;
+  margin: 4px 0 14px;
+}
+.leaderboard-controls label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  text-transform: uppercase;
+  font: 700 9px var(--sign);
+  letter-spacing: 1px;
+}
+.leaderboard-controls select {
+  min-height: 40px;
+  padding: 7px 9px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font:
+    400 14px Arial,
+    sans-serif;
+}
+.leaderboard-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.leaderboard-list li {
+  display: grid;
+  grid-template-columns: 2em 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 9px 12px;
+  background: var(--panel);
+  border-left: 4px solid var(--cyan);
+}
+.leaderboard-list li:nth-child(2n) {
+  border-left-color: var(--pink);
+}
+.leaderboard-list .leaderboard-rank {
+  color: var(--muted);
+  font: 700 12px var(--sign);
+}
+.leaderboard-list .leaderboard-name {
+  color: var(--ink);
+  font: 700 14px var(--sign);
+}
+.leaderboard-list .leaderboard-score {
+  color: var(--pink);
+  font: italic 800 16px var(--display);
 }
 .home-progress dl div {
   min-width: 0;

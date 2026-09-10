@@ -29,7 +29,7 @@ import {
   readableKey,
   captureAllowed,
 } from "../../../packages/engine/src/settings.js";
-import { createLocalDataAdapter } from "../../../packages/data/src/index.js";
+import { createLocalDataAdapter, selectDataAdapter } from "../../../packages/data/src/index.js";
 import { createMusic } from "./music.js";
 import { TRACKS } from "./playlist.js";
 import { SAMPLES } from "./samples.js";
@@ -46,7 +46,16 @@ const dataStorage = storage || {
   setItem: (key, value) => memory.set(key, value),
   removeItem: (key) => memory.delete(key),
 };
-let dataAdapter = createLocalDataAdapter({ storage: dataStorage });
+// Runtime configuration, not a build-time one: an empty meta tag (the
+// default — see index.html) means no server and the game plays exactly as
+// it always has. A deployment that stands up server/ points this at it.
+// selectDataAdapter() itself falls back to the local adapter if that server
+// doesn't answer, so a misconfigured or offline API is invisible to a player
+// the same way an absent one is.
+const apiBase = document
+  .querySelector('meta[name="tiki-taka-api-base"]')
+  ?.content?.trim();
+let dataAdapter = await selectDataAdapter({ apiBase, storage: dataStorage });
 let initialData;
 let storageFallback = false;
 try {
@@ -185,7 +194,8 @@ function toast(text) {
 const anyDialogOpen = () =>
   $("settings-dialog").open ||
   $("help-dialog").open ||
-  $("account-dialog").open;
+  $("account-dialog").open ||
+  $("leaderboard-dialog").open;
 // Any menu that must swallow gameplay input before it reaches the court.
 const menuBlocking = () => menuOpen || anyDialogOpen();
 function syncPauseMenu() {
@@ -1366,21 +1376,39 @@ function openSettings() {
   renderBindings();
   $("settings-dialog").showModal();
 }
+const onlineAccount = () => dataAdapter.kind === "server";
 function syncAccountDialog() {
   $("account-guest").hidden = Boolean(profile);
   $("account-profile").hidden = !profile;
   $("profile-username").textContent = profile?.username || "";
   $("profile-email").textContent = profile?.email || "";
-  $("account-button").textContent = `◎ ${profile?.username || "Local profile"}`;
-  // The bar says "Guest" until a local demo profile is chosen, and never
-  // claims to be signed in to anything: the chip's second line is the word
-  // "local demo profile" and it opens the dialog that says the same.
+  // Real accounts (dataAdapter.kind === "server") take a password; local
+  // demo profiles never do. Toggling both the row's visibility and the
+  // input's `required` keeps the passwordless local form exactly as before
+  // when no server is configured.
+  const online = onlineAccount();
+  $("register-password-row").hidden = !online;
+  $("register-password").required = online;
+  $("login-password-row").hidden = !online;
+  $("login-password").required = online;
+  $("account-eyebrow").textContent = online
+    ? "ONLINE ACCOUNT"
+    : "THIS DEVICE / LOCAL DEMO";
+  $("account-note").textContent = online
+    ? "Real accounts, kept on the accounts server. Scores you submit are not independently verified — see the leaderboard for that note."
+    : "These passwordless demo profiles stay only in this browser. They are not online accounts and do not sync.";
+  $("account-title").textContent = online ? "Your account." : "Local profiles.";
+  $("account-button").textContent = `◎ ${profile?.username || (online ? "Account" : "Local profile")}`;
+  // The bar says "Guest" until a profile is chosen, and never claims more
+  // than the active adapter actually provides.
   $("profile-chip-name").textContent = profile?.username || "Guest";
+  const chipKind = document.querySelector(".profile-chip-kind");
+  if (chipKind) chipKind.textContent = online ? "ACCOUNT" : "LOCAL DEMO PROFILE";
   $("profile-button").setAttribute(
     "aria-label",
     profile
-      ? `Local demo profile ${profile.username}. Open profile and settings.`
-      : "Playing as Guest. Open local demo profiles and settings.",
+      ? `${online ? "Account" : "Local demo profile"} ${profile.username}. Open profile and settings.`
+      : `Playing as Guest. Open ${online ? "account" : "local demo profiles"} and settings.`,
   );
 }
 async function switchDataContext(nextProfile) {
@@ -1424,27 +1452,35 @@ $("top-pause").addEventListener("click", togglePause);
 $("close-account").addEventListener("click", () => $("account-dialog").close());
 $("register-form").addEventListener("submit", async (event) => {
   event.preventDefault();
+  const online = onlineAccount();
   try {
     const next = await dataAdapter.register({
       email: $("register-email").value,
       username: $("register-username").value,
+      ...(online ? { password: $("register-password").value } : {}),
     });
     await switchDataContext(next);
     $("account-dialog").close();
-    toast(`Local profile ${next.username} created on this device.`);
+    toast(
+      online
+        ? `Account ${next.username} created.`
+        : `Local profile ${next.username} created on this device.`,
+    );
   } catch (error) {
     $("account-status").textContent = error.message;
   }
 });
 $("login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
+  const online = onlineAccount();
   try {
     const next = await dataAdapter.login({
       identifier: $("login-identifier").value,
+      ...(online ? { password: $("login-password").value } : {}),
     });
     await switchDataContext(next);
     $("account-dialog").close();
-    toast(`Playing locally as ${next.username}.`);
+    toast(online ? `Signed in as ${next.username}.` : `Playing locally as ${next.username}.`);
   } catch (error) {
     $("account-status").textContent = error.message;
   }
@@ -1455,6 +1491,56 @@ $("logout-button").addEventListener("click", async () => {
   $("account-dialog").close();
   toast("Returned to guest progress.");
 });
+// Leaderboard: only the "server" adapter can answer this (it feature-detects
+// getLeaderboard), and with no server configured — the everyday case — the
+// dialog says so honestly instead of pretending nothing changed.
+async function loadLeaderboard() {
+  if (!dataAdapter.getLeaderboard) return;
+  $("leaderboard-status").textContent = "Loading…";
+  $("leaderboard-list").replaceChildren();
+  try {
+    const mode = $("leaderboard-mode").value;
+    const courtValue = $("leaderboard-court").value;
+    const board = await dataAdapter.getLeaderboard({
+      mode,
+      court: courtValue === "" ? undefined : Number(courtValue),
+      limit: 10,
+    });
+    const entries = board?.entries || [];
+    $("leaderboard-status").textContent = entries.length ? "" : "No scores yet on this board.";
+    $("leaderboard-list").replaceChildren(
+      ...entries.map((entry, index) => {
+        const li = document.createElement("li");
+        const rank = document.createElement("span");
+        rank.className = "leaderboard-rank";
+        rank.textContent = `#${index + 1}`;
+        const name = document.createElement("span");
+        name.className = "leaderboard-name";
+        name.textContent = entry.username;
+        const score = document.createElement("span");
+        score.className = "leaderboard-score";
+        score.textContent = entry.score;
+        li.append(rank, name, score);
+        return li;
+      }),
+    );
+  } catch (error) {
+    $("leaderboard-status").textContent = error.message || "Leaderboard could not be loaded.";
+  }
+}
+function openLeaderboard() {
+  if (phase === "playing") pause();
+  clearInput();
+  const available = Boolean(dataAdapter.getLeaderboard);
+  $("leaderboard-unavailable").hidden = available;
+  $("leaderboard-available").hidden = !available;
+  $("leaderboard-dialog").showModal();
+  if (available) void loadLeaderboard();
+}
+$("leaderboard-button").addEventListener("click", openLeaderboard);
+$("close-leaderboard").addEventListener("click", () => $("leaderboard-dialog").close());
+$("leaderboard-mode").addEventListener("change", loadLeaderboard);
+$("leaderboard-court").addEventListener("change", loadLeaderboard);
 $("settings-button").addEventListener("click", openSettings);
 $("close-settings").addEventListener("click", () =>
   $("settings-dialog").close(),
@@ -1916,6 +2002,9 @@ function pollGamepad(dt) {
   } else if ($("account-dialog").open) {
     if (tap(1) || tap(9)) $("account-dialog").close();
     else nav($("account-dialog"));
+  } else if ($("leaderboard-dialog").open) {
+    if (tap(1) || tap(9)) $("leaderboard-dialog").close();
+    else nav($("leaderboard-dialog"));
   } else if ($("settings-dialog").open) {
     if (tap(1) || tap(9)) {
       if (capture) cancelCapture();

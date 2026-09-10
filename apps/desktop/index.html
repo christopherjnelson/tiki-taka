@@ -21,6 +21,12 @@
       content="Four players. One ball. Endless possibilities. A single-player possession game about finding your rhythm."
     />
     <title>tiki-taka — No goals. All flow.</title>
+    <!-- Empty by default: with no API base configured here, the app plays
+    entirely off local storage, exactly as it always has. A deployment that
+    stands up server/ (see server/README.md) sets this to that server's
+    origin (or leaves it same-origin, e.g. "/api" behind the nginx config in
+    that README) to turn on real accounts and leaderboards. -->
+    <meta name="tiki-taka-api-base" content="" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
@@ -516,7 +522,7 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <dialog id="account-dialog" aria-labelledby="account-title">
       <div class="dialog-top">
-        <p class="eyebrow">THIS DEVICE / LOCAL DEMO</p>
+        <p id="account-eyebrow" class="eyebrow">THIS DEVICE / LOCAL DEMO</p>
         <button
           id="close-account"
           type="button"
@@ -526,7 +532,7 @@
         </button>
       </div>
       <h2 id="account-title">Local profiles.</h2>
-      <p class="account-note">
+      <p id="account-note" class="account-note">
         These passwordless demo profiles stay only in this browser. They are not
         online accounts and do not sync.
       </p>
@@ -548,6 +554,15 @@
                 required
                 minlength="2"
                 autocomplete="username" /></label
+            ><label
+              id="register-password-row"
+              hidden
+              >Password<input
+                id="register-password"
+                name="password"
+                type="password"
+                minlength="8"
+                autocomplete="new-password" /></label
             ><button class="primary-button" type="submit">
               Create local profile
             </button>
@@ -560,6 +575,14 @@
                 name="identifier"
                 required
                 autocomplete="username" /></label
+            ><label
+              id="login-password-row"
+              hidden
+              >Password<input
+                id="login-password"
+                name="password"
+                type="password"
+                autocomplete="current-password" /></label
             ><button class="primary-button" type="submit">
               Continue locally
             </button>
@@ -579,6 +602,55 @@
         role="status"
         aria-live="polite"
       ></p>
+    </dialog>
+    <dialog id="leaderboard-dialog" aria-labelledby="leaderboard-title">
+      <div class="dialog-top">
+        <p class="eyebrow">TOP FLOW</p>
+        <button
+          id="close-leaderboard"
+          type="button"
+          aria-label="Close leaderboard"
+        >
+          ×
+        </button>
+      </div>
+      <h2 id="leaderboard-title">Leaderboard.</h2>
+      <!-- Honesty over polish: every round is played and scored in the
+      browser, so nothing here is server-verified. Said once, plainly, and
+      left alone. -->
+      <p class="leaderboard-note">
+        Scores are reported by each player's game and are not verified by the
+        server — treat this as a friendly leaderboard, not a tamper-proof one.
+      </p>
+      <div id="leaderboard-unavailable" hidden>
+        <p class="leaderboard-note">
+          This device has no accounts server configured, so there is no
+          leaderboard to show — only local demo profiles.
+        </p>
+      </div>
+      <div id="leaderboard-available">
+        <div class="leaderboard-controls">
+          <label
+            >Mode<select id="leaderboard-mode">
+              <option value="career">Career</option>
+              <option value="daily">Daily</option>
+              <option value="practice">Practice</option>
+            </select></label
+          ><label
+            >Court<select id="leaderboard-court">
+              <option value="">All courts</option>
+              <option value="0">1 · The Courtyard</option>
+              <option value="1">2</option>
+              <option value="2">3</option>
+              <option value="3">4</option>
+              <option value="4">5</option>
+              <option value="5">6</option>
+            </select></label
+          >
+        </div>
+        <ol id="leaderboard-list" class="leaderboard-list"></ol>
+        <p id="leaderboard-status" class="binding-status" role="status" aria-live="polite"></p>
+      </div>
     </dialog>
     <!-- The old sidebar drawer is gone; every utility it held lives here, and
     both the title menu and the pause menu open this dialog. -->
@@ -605,6 +677,9 @@
         </button>
         <button id="account-button" type="button">
           <span aria-hidden="true">◎</span> Local profile
+        </button>
+        <button id="leaderboard-button" type="button" aria-haspopup="dialog">
+          <span aria-hidden="true">☰</span> Leaderboard
         </button>
       </div>
       <!-- Effects and soundtrack each get their own switch and trim. The
