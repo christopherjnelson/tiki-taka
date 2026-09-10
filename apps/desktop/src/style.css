@@ -808,6 +808,7 @@ dialog h2 {
   background: var(--panel);
 }
 .target-info {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -853,12 +854,16 @@ kbd {
   box-sizing: content-box;
   text-align: center;
 }
-.focus-value {
+.energy-label {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.energy-value {
   color: var(--cyan);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
-.focus-track {
+.energy-track {
   position: absolute;
   right: 8px;
   bottom: 3px;
@@ -866,20 +871,14 @@ kbd {
   height: 4px;
   background: var(--line);
 }
-.focus-track span {
+.energy-track span {
   display: block;
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, var(--pink), var(--cyan));
   box-shadow: 0 0 8px var(--cyan);
 }
-#focus-button,
-#boost-button {
-  min-width: 205px;
-  justify-content: center;
-}
-#focus-button.focus-earned,
-#boost-button.focus-earned,
+#energy-info.focus-earned,
 #touch-focus.focus-earned {
   animation: earned 0.65s;
 }
@@ -1624,21 +1623,16 @@ body.play-view .court-toolbar .play-actions,
 body.play-view .court-toolbar .target-info {
   pointer-events: auto;
 }
-/* Focus now owns the left-hand status slot, and Boost mirrors it on the
-   right-hand slot since both draw the same hidden Focus reserve. The pass
-   target remains available to assistive technology and through the
-   on-court selection ring instead of competing with either meter. */
-body.play-view .court-toolbar .focus-info,
-body.play-view .court-toolbar .boost-info {
+/* Energy owns the left-hand status slot as a pure readout — Focus and Boost
+   moved into the play-actions chip row below, since both just spend this
+   one reserve rather than being readouts of their own. The pass target
+   remains available to assistive technology and through the on-court
+   selection ring instead of competing with the meter. */
+body.play-view .court-toolbar .energy-info {
   padding: 0;
 }
-body.play-view .court-toolbar .focus-info::before,
-body.play-view .court-toolbar .boost-info::before {
+body.play-view .court-toolbar .energy-info::before {
   display: none;
-}
-body.play-view .court-toolbar .focus-info #focus-button,
-body.play-view .court-toolbar .boost-info #boost-button {
-  width: 100%;
 }
 /* The target hint is the one element here with no fixed size of its own, so
    it is the one that gives way first: it shrinks and truncates rather than
@@ -1668,10 +1662,6 @@ body.play-view .court-toolbar .play-actions button {
   min-height: 40px;
   padding: 6px 10px;
   background: #120a2ce8;
-}
-body.play-view #focus-button,
-body.play-view #boost-button {
-  min-width: clamp(88px, 13vw, 150px);
 }
 body.play-view #pass-button,
 body.play-view #bank-button {
@@ -2010,30 +2000,16 @@ body.play-view #bank-button {
 }
 :root[data-theme="light"] .eyebrow,
 :root[data-theme="light"] .binding-status,
-:root[data-theme="light"] .focus-value,
+:root[data-theme="light"] .energy-value,
 :root[data-theme="light"] .touch-focus-value,
 :root[data-theme="light"] .brand-tagline {
   color: var(--accent-text);
 }
-#focus-button,
-#boost-button {
-  min-width: 240px;
-  min-height: 64px;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  grid-template-rows: 1fr 8px;
-  column-gap: 10px;
-  padding: 9px 13px;
-  font-size: 14px;
-}
-.focus-value {
+.energy-value {
   font: italic 800 22px/1 var(--display);
   text-align: right;
 }
-.focus-track {
-  position: static;
-  grid-column: 1/-1;
-  width: 100%;
+.energy-track {
   height: 8px;
   background: repeating-linear-gradient(
     90deg,
@@ -2043,7 +2019,7 @@ body.play-view #bank-button {
     transparent 20%
   );
 }
-.focus-track span {
+.energy-track span {
   background: linear-gradient(90deg, var(--pink), var(--cyan));
   filter: drop-shadow(0 0 5px var(--cyan));
 }
@@ -2054,13 +2030,7 @@ body.play-view #bank-button {
   height: 7px !important;
 }
 @media (max-width: 900px) {
-  #focus-button,
-  #boost-button {
-    min-width: 0;
-    min-height: 58px;
-    font-size: 12px;
-  }
-  .focus-value {
+  .energy-value {
     font-size: 18px;
   }
 }
@@ -3310,9 +3280,9 @@ body.play-view .arena-view .below-court {
     pointer-events: auto;
   }
   body.play-view .court-toolbar .target-info {
-    flex: 1 1 30%;
+    flex: 1 1 26%;
     align-items: center;
-    min-width: 190px;
+    min-width: 160px;
     margin: 0;
     padding: 7px 18px;
     color: #d8e4f7;
@@ -3324,7 +3294,7 @@ body.play-view .arena-view .below-court {
     letter-spacing: 1.3px;
     text-transform: uppercase;
   }
-  body.play-view .court-toolbar .target-info:not(.focus-info):not(.boost-info)::before {
+  body.play-view .court-toolbar .target-info:not(.energy-info)::before {
     content: "STREAK";
     color: var(--pink);
     font-size: 8px;
@@ -3337,18 +3307,25 @@ body.play-view .arena-view .below-court {
     box-shadow: none;
     transform: rotate(45deg);
   }
+  body.play-view .court-toolbar .energy-value {
+    font-size: clamp(15px, 1.4vw, 20px);
+  }
+  body.play-view .court-toolbar .energy-track {
+    height: 6px;
+  }
+  /* Five chips now share the centre track (Pass, Wall pass, Shout, Focus,
+     Boost) — equal columns keep them even now that Boost no longer has its
+     own mirrored slot on the right. */
   body.play-view .court-toolbar .play-actions {
     display: grid;
-    /* Boost moved out to its own mirrored target-info slot, so only the
-       three remaining action buttons share this track. */
-    grid-template-columns: minmax(76px, 0.7fr) minmax(82px, 0.85fr) minmax(76px, 0.7fr);
-    flex: 1 1 40%;
+    grid-template-columns: repeat(5, minmax(58px, 1fr));
+    flex: 1 1 60%;
     gap: 0;
   }
   body.play-view .court-toolbar .play-actions button {
     min-height: 0;
     justify-content: center;
-    padding: 7px 10px;
+    padding: 7px 8px;
     color: #dce9f8;
     background: #080f28;
     border: 0;
@@ -3364,24 +3341,6 @@ body.play-view .arena-view .below-court {
   body.play-view .court-toolbar .play-actions button.active {
     color: #070b1c;
     background: var(--pink);
-  }
-  body.play-view #focus-button,
-  body.play-view #boost-button {
-    min-width: 0;
-    grid-template-columns: auto 1fr auto;
-    grid-template-rows: 1fr 6px;
-    column-gap: 8px;
-    color: #fff;
-    background: #11112d;
-  }
-  body.play-view #focus-button .focus-value,
-  body.play-view #boost-button .focus-value {
-    color: var(--venue-accent);
-    font-size: clamp(16px, 1.5vw, 22px);
-  }
-  body.play-view #focus-button .focus-track,
-  body.play-view #boost-button .focus-track {
-    height: 6px;
   }
   body.play-view .court-toolbar kbd {
     color: #9db4d4;

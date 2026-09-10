@@ -919,7 +919,7 @@ function toggleFocus() {
   if (game.focus <= 0) {
     focusToggle = false;
     syncFocusButtons();
-    toast("Earn Focus with wall passes, triangles, or bonus zones.");
+    toast("Earn Energy with wall passes, triangles, or bonus zones.");
     return;
   }
   focusToggle = !focusToggle;
@@ -932,7 +932,7 @@ function toggleBoost() {
   if (game.focus <= 0) {
     boostToggle = false;
     syncBoostButtons();
-    toast("Earn Focus with wall passes, triangles, or bonus zones.");
+    toast("Earn Energy with wall passes, triangles, or bonus zones.");
     return;
   }
   boostToggle = !boostToggle;
@@ -1194,27 +1194,21 @@ function syncHud() {
   const focusRatio = focusCap ? focusAmount / focusCap : 0;
   const focusText = `${focusAmount.toFixed(1)} / ${focusCap}s`;
   const focusEmpty = focusAmount <= 0;
-  // Boost and Focus draw from the same hidden reserve (game.focus), so the
-  // Boost meter is just a second readout of the same numbers as Focus.
-  const setMeter = (meterId) => {
-    $(meterId).setAttribute("aria-valuemax", String(focusCap));
-    $(meterId).setAttribute("aria-valuenow", focusAmount.toFixed(1));
-    $(meterId).setAttribute(
-      "aria-valuetext",
-      `${focusAmount.toFixed(1)} of ${focusCap} seconds`,
-    );
-  };
-  $("focus-value").textContent = focusText;
+  // Focus and Boost both spend the same hidden engine reserve (game.focus);
+  // the toolbar shows it once, as the Energy readout, rather than duplicating
+  // the same numbers behind each ability's chip.
+  $("energy-value").textContent = focusText;
   $("touch-focus-value").textContent = focusText;
-  $("boost-value").textContent = focusText;
-  $("focus-fill").style.width = `${focusRatio * 100}%`;
+  $("energy-fill").style.width = `${focusRatio * 100}%`;
   $("touch-focus-fill").style.width = `${focusRatio * 100}%`;
-  $("boost-fill").style.width = `${focusRatio * 100}%`;
-  setMeter("focus-meter");
-  setMeter("boost-meter");
-  $("focus-button").classList.toggle("is-empty", focusEmpty);
+  $("energy-meter").setAttribute("aria-valuemax", String(focusCap));
+  $("energy-meter").setAttribute("aria-valuenow", focusAmount.toFixed(1));
+  $("energy-meter").setAttribute(
+    "aria-valuetext",
+    `${focusAmount.toFixed(1)} of ${focusCap} seconds`,
+  );
+  $("energy-info").classList.toggle("is-empty", focusEmpty);
   $("touch-focus").classList.toggle("is-empty", focusEmpty);
-  $("boost-button").classList.toggle("is-empty", focusEmpty);
   $("goal-fill").style.width =
     `${game.config.target ? Math.min(100, (game.score / game.config.target) * 100) : Math.min(100, (game.time / 60) * 100)}%`;
   $("best-label").textContent =
@@ -1515,7 +1509,7 @@ function refreshToolbarChips() {
   $("bank-button").title =
     `Toggle wall pass (${chipLabel("wallToggle")}); hold ${settings.bindings.wallHold.map(readableKey).join(" / ") || "unbound"}`;
   $("focus-button").title = `Hold Focus (${chipLabel("focusHold")})`;
-  $("boost-button").title = `Hold Boost (${chipLabel("boostHold")}). Boost uses Focus.`;
+  $("boost-button").title = `Hold Boost (${chipLabel("boostHold")}). Boost uses Energy.`;
   $("shout-button").title = `Shout selected target to bonus zone (${chipLabel("shout")})`;
 }
 function setInputSource(source) {
@@ -2414,20 +2408,17 @@ function frame(now) {
       // has decided whether this was a clear or a defeat.
       if (event.type !== "end") sound.play(event.type);
       if (event.type === "focus") {
-        // Boost shares the Focus reserve, so it flashes along with Focus.
+        // The flash is about the Energy resource, not either ability chip.
         clearTimeout(focusEarnedTimeout);
-        $("focus-button").classList.remove("focus-earned");
+        $("energy-info").classList.remove("focus-earned");
         $("touch-focus").classList.remove("focus-earned");
-        $("boost-button").classList.remove("focus-earned");
         requestAnimationFrame(() => {
-          $("focus-button").classList.add("focus-earned");
+          $("energy-info").classList.add("focus-earned");
           $("touch-focus").classList.add("focus-earned");
-          $("boost-button").classList.add("focus-earned");
         });
         focusEarnedTimeout = setTimeout(() => {
-          $("focus-button").classList.remove("focus-earned");
+          $("energy-info").classList.remove("focus-earned");
           $("touch-focus").classList.remove("focus-earned");
-          $("boost-button").classList.remove("focus-earned");
         }, 700);
       }
       if (event.type === "one-touch" && event.milestone) {
