@@ -808,6 +808,7 @@ dialog h2 {
   background: var(--panel);
 }
 .target-info {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -853,12 +854,26 @@ kbd {
   box-sizing: content-box;
   text-align: center;
 }
-.focus-value {
+.energy-label {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.energy-value {
   color: var(--cyan);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
-.focus-track {
+/* Mirrors .energy-label/.energy-value on the toolbar's opposite panel — same
+   treatment, its own pink so the two readouts stay easy to tell apart. */
+.clock-label {
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.clock-value {
+  color: var(--pink);
+  font-variant-numeric: tabular-nums;
+}
+.energy-track {
   position: absolute;
   right: 8px;
   bottom: 3px;
@@ -866,20 +881,14 @@ kbd {
   height: 4px;
   background: var(--line);
 }
-.focus-track span {
+.energy-track span {
   display: block;
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, var(--pink), var(--cyan));
   box-shadow: 0 0 8px var(--cyan);
 }
-#focus-button,
-#boost-button {
-  min-width: 205px;
-  justify-content: center;
-}
-#focus-button.focus-earned,
-#boost-button.focus-earned,
+#energy-info.focus-earned,
 #touch-focus.focus-earned {
   animation: earned 0.65s;
 }
@@ -1539,20 +1548,8 @@ body.play-view .scoreboard {
   gap: 5px;
   padding: 7px 16px 8px;
 }
-/* The clock sits beside the score as a peer stat now, not shrunk into the
-   foot row — it matters mid-round and needs to read at a glance. A thin
-   divider separates the two the same way the match stats divide each other. */
-.hud-group-score-main {
-  display: flex;
-  align-items: baseline;
-  gap: 18px;
-}
-.hud-group-score-main .clock-stat {
-  padding-left: 16px;
-  border-left: 1px solid #ffffff1c;
-}
 /* Personal best is the only thing left down here, so it stays a quiet chip
-   underneath the score and clock rather than competing with them for size. */
+   underneath the score rather than competing with it for size. */
 .hud-group-score-foot {
   display: flex;
   align-items: baseline;
@@ -1583,19 +1580,18 @@ body.play-view .scoreboard .stat strong {
   font-size: clamp(18px, 1.7vw, 28px);
 }
 /* The score is the one number that matters most, so it stays the biggest
-   thing in the band — the match stats beside it are secondary. The clock
-   now rivals it in size (it matters mid-round too) but keeps its own pink
-   so the two stay easy to tell apart at a glance. */
+   thing in the band — the match stats beside it are secondary. With the
+   clock gone, the card is score-only, so both the number and its label get
+   to grow into the room that freed up. */
 body.play-view .scoreboard .hud-group-score .score-stat strong {
-  font-size: clamp(24px, 2.6vw, 40px);
+  font-size: clamp(28px, 3.2vw, 46px);
 }
-body.play-view .scoreboard .hud-group-score .clock-stat strong {
-  font-size: clamp(20px, 2.2vw, 34px);
-  color: var(--pink);
+body.play-view .scoreboard .hud-group-score .stat-label {
+  font-size: 10px;
 }
 .best-chip {
   color: var(--pink);
-  font: 700 8px var(--sign);
+  font: 700 10px var(--sign);
   letter-spacing: 1.5px;
   white-space: nowrap;
 }
@@ -1624,21 +1620,16 @@ body.play-view .court-toolbar .play-actions,
 body.play-view .court-toolbar .target-info {
   pointer-events: auto;
 }
-/* Focus now owns the left-hand status slot, and Boost mirrors it on the
-   right-hand slot since both draw the same hidden Focus reserve. The pass
-   target remains available to assistive technology and through the
-   on-court selection ring instead of competing with either meter. */
-body.play-view .court-toolbar .focus-info,
-body.play-view .court-toolbar .boost-info {
+/* Energy owns the left-hand status slot as a pure readout — Focus and Boost
+   moved into the play-actions chip row below, since both just spend this
+   one reserve rather than being readouts of their own. The pass target
+   remains available to assistive technology and through the on-court
+   selection ring instead of competing with the meter. */
+body.play-view .court-toolbar .energy-info {
   padding: 0;
 }
-body.play-view .court-toolbar .focus-info::before,
-body.play-view .court-toolbar .boost-info::before {
+body.play-view .court-toolbar .energy-info::before {
   display: none;
-}
-body.play-view .court-toolbar .focus-info #focus-button,
-body.play-view .court-toolbar .boost-info #boost-button {
-  width: 100%;
 }
 /* The target hint is the one element here with no fixed size of its own, so
    it is the one that gives way first: it shrinks and truncates rather than
@@ -1668,10 +1659,6 @@ body.play-view .court-toolbar .play-actions button {
   min-height: 40px;
   padding: 6px 10px;
   background: #120a2ce8;
-}
-body.play-view #focus-button,
-body.play-view #boost-button {
-  min-width: clamp(88px, 13vw, 150px);
 }
 body.play-view #pass-button,
 body.play-view #bank-button {
@@ -2010,30 +1997,20 @@ body.play-view #bank-button {
 }
 :root[data-theme="light"] .eyebrow,
 :root[data-theme="light"] .binding-status,
-:root[data-theme="light"] .focus-value,
+:root[data-theme="light"] .energy-value,
 :root[data-theme="light"] .touch-focus-value,
 :root[data-theme="light"] .brand-tagline {
   color: var(--accent-text);
 }
-#focus-button,
-#boost-button {
-  min-width: 240px;
-  min-height: 64px;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  grid-template-rows: 1fr 8px;
-  column-gap: 10px;
-  padding: 9px 13px;
-  font-size: 14px;
-}
-.focus-value {
+.energy-value {
   font: italic 800 22px/1 var(--display);
   text-align: right;
 }
-.focus-track {
-  position: static;
-  grid-column: 1/-1;
-  width: 100%;
+.clock-value {
+  font: italic 800 22px/1 var(--display);
+  text-align: right;
+}
+.energy-track {
   height: 8px;
   background: repeating-linear-gradient(
     90deg,
@@ -2043,7 +2020,7 @@ body.play-view #bank-button {
     transparent 20%
   );
 }
-.focus-track span {
+.energy-track span {
   background: linear-gradient(90deg, var(--pink), var(--cyan));
   filter: drop-shadow(0 0 5px var(--cyan));
 }
@@ -2054,13 +2031,7 @@ body.play-view #bank-button {
   height: 7px !important;
 }
 @media (max-width: 900px) {
-  #focus-button,
-  #boost-button {
-    min-width: 0;
-    min-height: 58px;
-    font-size: 12px;
-  }
-  .focus-value {
+  .energy-value {
     font-size: 18px;
   }
 }
@@ -3185,21 +3156,14 @@ body.play-view .arena-view .below-court {
     clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 50%, calc(100% - 15px) 100%, 0 100%, 10px 50%);
   }
   body.play-view .hud-group-score {
-    /* Wider than before: the card now holds score and clock side by side
-       instead of score alone with the clock tucked into the foot. */
-    width: clamp(260px, 27cqw, 390px);
+    /* Narrower than while it held the clock too: score alone doesn't need
+       as much width, and the freed room goes into the number itself. */
+    width: clamp(190px, 17cqw, 270px);
     gap: 3px;
     padding-left: 20px;
     background:
       linear-gradient(90deg, color-mix(in srgb, var(--venue-accent), transparent 87%), transparent 60%),
       #080d25;
-  }
-  body.play-view .hud-group-score-main {
-    gap: 16px;
-  }
-  body.play-view .hud-group-score-main .clock-stat {
-    padding-left: 16px;
-    border-left: 1px solid #314568;
   }
   body.play-view .hud-group-match {
     width: clamp(244px, 23cqw, 345px);
@@ -3210,24 +3174,20 @@ body.play-view .arena-view .below-court {
       linear-gradient(270deg, color-mix(in srgb, var(--pink), transparent 88%), transparent 60%),
       #080d25;
   }
+  /* The score is score-only in this card now, so it can claim the room the
+     clock used to share with it. */
   body.play-view .scoreboard .hud-group-score .score-stat strong {
     color: var(--venue-accent);
-    font-size: clamp(31px, 3.1vw, 48px);
-    line-height: 0.82;
-    text-shadow: none;
-  }
-  /* The clock rivals the score for size now that it matters mid-round; the
-     match card's pink keeps it visually distinct from the score's cyan even
-     at this scale. */
-  body.play-view .scoreboard .hud-group-score .clock-stat strong {
-    color: var(--pink);
-    font-size: clamp(26px, 2.6vw, 40px);
+    font-size: clamp(36px, 3.8vw, 56px);
     line-height: 0.82;
     text-shadow: none;
   }
   body.play-view .scoreboard .stat-label {
     margin-bottom: 4px;
     color: #b9cae7;
+  }
+  body.play-view .scoreboard .hud-group-score .stat-label {
+    font-size: 11px;
   }
   body.play-view .scoreboard .hud-group-match .stat {
     min-width: 0;
@@ -3249,6 +3209,7 @@ body.play-view .arena-view .below-court {
   }
   body.play-view .best-chip {
     color: var(--pink);
+    font-size: 11px;
   }
   body.play-view .pause-button {
     align-self: stretch;
@@ -3309,22 +3270,37 @@ body.play-view .arena-view .below-court {
     border-bottom: 1px solid #233e6a;
     pointer-events: auto;
   }
+  /* Energy (left) and the clock (right) are a matched pair flanking the
+     chips now, so they share one flex basis — each gives a little more room
+     to the chips than the old single-panel 26% did, leaving space for the
+     chips themselves to grow in a later pass. */
   body.play-view .court-toolbar .target-info {
-    flex: 1 1 30%;
+    flex: 1 1 21%;
     align-items: center;
-    min-width: 190px;
+    min-width: 150px;
     margin: 0;
     padding: 7px 18px;
     color: #d8e4f7;
     background: transparent;
     border: 0;
-    border-right: 1px solid #24395a;
     border-radius: 0;
     font: 700 10px var(--sign);
     letter-spacing: 1.3px;
     text-transform: uppercase;
   }
-  body.play-view .court-toolbar .target-info:not(.focus-info):not(.boost-info)::before {
+  body.play-view .court-toolbar .energy-info {
+    border-right: 1px solid #24395a;
+  }
+  /* The clock mirrors Energy from the opposite edge: same panel, but its
+     content hugs the court-side edge instead of the chip-side one. */
+  body.play-view .court-toolbar .clock-info {
+    justify-content: flex-end;
+    border-left: 1px solid #24395a;
+  }
+  /* Vestigial from an earlier streak readout that no longer exists; excluded
+     from both current panels so it stays inert rather than resurfacing on
+     the clock. */
+  body.play-view .court-toolbar .target-info:not(.energy-info):not(.clock-info)::before {
     content: "STREAK";
     color: var(--pink);
     font-size: 8px;
@@ -3337,18 +3313,31 @@ body.play-view .arena-view .below-court {
     box-shadow: none;
     transform: rotate(45deg);
   }
+  body.play-view .court-toolbar .energy-value {
+    font-size: clamp(15px, 1.4vw, 20px);
+  }
+  body.play-view .court-toolbar .energy-track {
+    height: 6px;
+  }
+  /* Large and legible on purpose — this was the whole point of moving the
+     clock out of the scoreboard, so it gets noticeably more room than
+     Energy's compact figure. */
+  body.play-view .court-toolbar .clock-value {
+    font-size: clamp(24px, 2.2vw, 34px);
+  }
+  /* Five chips now share the centre track (Pass, Wall pass, Shout, Focus,
+     Boost) — equal columns keep them even. Basis left below 100% on
+     purpose: a later pass grows these chips to match the flanking panels. */
   body.play-view .court-toolbar .play-actions {
     display: grid;
-    /* Boost moved out to its own mirrored target-info slot, so only the
-       three remaining action buttons share this track. */
-    grid-template-columns: minmax(76px, 0.7fr) minmax(82px, 0.85fr) minmax(76px, 0.7fr);
-    flex: 1 1 40%;
+    grid-template-columns: repeat(5, minmax(58px, 1fr));
+    flex: 1 1 46%;
     gap: 0;
   }
   body.play-view .court-toolbar .play-actions button {
     min-height: 0;
     justify-content: center;
-    padding: 7px 10px;
+    padding: 7px 8px;
     color: #dce9f8;
     background: #080f28;
     border: 0;
@@ -3364,24 +3353,6 @@ body.play-view .arena-view .below-court {
   body.play-view .court-toolbar .play-actions button.active {
     color: #070b1c;
     background: var(--pink);
-  }
-  body.play-view #focus-button,
-  body.play-view #boost-button {
-    min-width: 0;
-    grid-template-columns: auto 1fr auto;
-    grid-template-rows: 1fr 6px;
-    column-gap: 8px;
-    color: #fff;
-    background: #11112d;
-  }
-  body.play-view #focus-button .focus-value,
-  body.play-view #boost-button .focus-value {
-    color: var(--venue-accent);
-    font-size: clamp(16px, 1.5vw, 22px);
-  }
-  body.play-view #focus-button .focus-track,
-  body.play-view #boost-button .focus-track {
-    height: 6px;
   }
   body.play-view .court-toolbar kbd {
     color: #9db4d4;

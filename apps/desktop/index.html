@@ -393,19 +393,13 @@
             .game-panel in style.css for where that space went instead. -->
             <div id="scoreboard" class="scoreboard" aria-label="Match statistics">
               <div class="hud-group hud-group-score">
-                <!-- The clock now rides beside the score as a peer stat, not
-                shrunk into the foot row — it matters mid-round and needs to
-                read at a glance. Personal best is the only thing left in the
-                quiet foot row underneath. -->
-                <div class="hud-group-score-main">
-                  <div class="stat score-stat">
-                    <span id="score-label" class="stat-label">FLOW SCORE</span
-                    ><strong id="score-value">000</strong>
-                  </div>
-                  <div class="stat clock-stat">
-                    <span class="stat-label">ON THE CLOCK</span
-                    ><strong id="time-value">1:15</strong>
-                  </div>
+                <!-- The clock moved down to the court toolbar, where it now
+                mirrors the Energy readout across the chip row. The score is
+                the only thing this card carries, so it and the personal
+                best underneath it both get to grow into the freed space. -->
+                <div class="stat score-stat">
+                  <span id="score-label" class="stat-label">FLOW SCORE</span
+                  ><strong id="score-value">000</strong>
                 </div>
                 <div class="hud-group-score-foot">
                   <span id="best-label" class="best-chip">PERSONAL BEST —</span>
@@ -597,28 +591,23 @@
               ></div>
             </div>
             <div class="court-toolbar">
-              <div class="target-info focus-info">
-                <button
-                  id="focus-button"
-                  aria-pressed="false"
-                  title="Earn Focus with wall passes, triangles, or bonus zones. Toggle here or hold E."
-                  disabled
-                >
-                  Focus
-                  <span id="focus-value" class="focus-value">0.0 / 5s</span>
-                  <kbd data-binding="focusHold">E</kbd
-                  ><span
-                    id="focus-meter"
-                    class="focus-track"
-                    role="meter"
-                    aria-label="Focus reserve"
-                    aria-valuemin="0"
-                    aria-valuemax="5"
-                    aria-valuenow="0"
-                    aria-valuetext="0.0 of 5 seconds"
-                    ><span id="focus-fill"></span
-                  ></span>
-                </button>
+              <div id="energy-info" class="target-info energy-info">
+                <!-- Pure readout: Focus and Boost both spend this one hidden
+                reserve (engine field `game.focus`); the UI calls it Energy so
+                the two abilities below can keep their own names. -->
+                <span class="energy-label">Energy</span>
+                <span id="energy-value" class="energy-value">0.0 / 5s</span>
+                <span
+                  id="energy-meter"
+                  class="energy-track"
+                  role="meter"
+                  aria-label="Energy reserve"
+                  aria-valuemin="0"
+                  aria-valuemax="5"
+                  aria-valuenow="0"
+                  aria-valuetext="0.0 of 5 seconds"
+                  ><span id="energy-fill"></span
+                ></span>
               </div>
               <span id="target-label" class="sr-only" aria-live="polite"
                 >Find the open player</span
@@ -635,30 +624,29 @@
                   Wall pass <kbd data-binding="wallToggle">B</kbd></button
                 ><button id="shout-button" title="Shout target to bonus zone (F)" disabled>
                   Shout <kbd data-binding="shout">F</kbd></button
-                >
-              </div>
-              <div class="target-info boost-info">
-                <button
-                  id="boost-button"
+                ><button
+                  id="focus-button"
                   aria-pressed="false"
-                  title="Hold Boost (R). Boost uses Focus."
+                  title="Earn Energy with wall passes, triangles, or bonus zones. Toggle here or hold E."
                   disabled
                 >
-                  Boost
-                  <span id="boost-value" class="focus-value">0.0 / 5s</span>
-                  <kbd data-binding="boostHold">R</kbd
-                  ><span
-                    id="boost-meter"
-                    class="focus-track"
-                    role="meter"
-                    aria-label="Boost reserve"
-                    aria-valuemin="0"
-                    aria-valuemax="5"
-                    aria-valuenow="0"
-                    aria-valuetext="0.0 of 5 seconds"
-                    ><span id="boost-fill"></span
-                  ></span>
-                </button>
+                  Focus <kbd data-binding="focusHold">E</kbd></button
+                ><button
+                  id="boost-button"
+                  aria-pressed="false"
+                  title="Hold Boost (R). Boost uses Energy."
+                  disabled
+                >
+                  Boost <kbd data-binding="boostHold">R</kbd></button
+                >
+              </div>
+              <!-- The clock takes the slot Boost's meter used to occupy,
+              mirroring the Energy readout on the opposite end of the rail —
+              same panel, right-aligned so its numerals land flush with the
+              court edge. -->
+              <div id="clock-info" class="target-info clock-info">
+                <span class="clock-label">On the clock</span>
+                <strong id="time-value" class="clock-value">1:15</strong>
               </div>
             </div>
           </section>
@@ -1016,15 +1004,15 @@
             </li>
             <li>
               <strong>Triangle:</strong> A → B → C → A adds 35 points and earns
-              1.5 seconds of Focus.
+              1.5 seconds of Energy.
             </li>
             <li>
               <strong>Zone:</strong> receive in the highlighted circle for 25
-              extra points and 1 second of Focus.
+              extra points and 1 second of Energy.
             </li>
             <li>
               <strong>Wall pass:</strong> bank off the boundary for 18 extra
-              points and 0.5 seconds of Focus.
+              points and 0.5 seconds of Energy.
             </li>
           </ul>
           <p>
@@ -1097,17 +1085,18 @@
           </dl>
           <p>
             <strong>Focus slows the action</strong> and gives you time to find
-            the next pass. Each round starts empty. Successful normal-speed wall
-            passes earn 0.5 seconds, bonus zones earn 1 second, and triangles
-            earn 1.5 seconds. Rewards stack up to your tactic’s reserve (5 / 3 /
-            4 seconds); plain passes and passes slowed by Focus earn none. You
-            cannot earn while Focus is active. After it runs out, release E or
-            LT before using newly earned Focus.
+            the next pass. Each round starts with an empty Energy reserve.
+            Successful normal-speed wall passes earn 0.5 seconds, bonus zones
+            earn 1 second, and triangles earn 1.5 seconds. Rewards stack up to
+            your tactic’s reserve (5 / 3 / 4 seconds); plain passes and passes
+            slowed by Focus earn none. You cannot earn while Focus is active.
+            After it runs out, release E or LT before using newly earned
+            Energy.
           </p>
           <p>
-            <strong>Boost uses the same Focus reserve</strong> to make the ball
-            carrier faster while you hold it. Use it to escape pressure, but
-            it cannot run alongside Focus.
+            <strong>Boost uses the same Energy reserve</strong> to make the
+            ball carrier faster while you hold it. Use it to escape pressure,
+            but it cannot run alongside Focus.
           </p>
           <p>
             <strong>Gamepad:</strong> left stick moves, right stick aims and

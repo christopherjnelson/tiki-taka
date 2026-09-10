@@ -247,13 +247,13 @@ await check('desktop gameplay, controls, progression, help, and full run', async
   assert.ok(playerAfter.x > playerBefore.x + 10, `keyboard movement should move the carrier (${playerBefore.x} → ${playerAfter.x})`);
 
   assert.equal(await focusSeconds(page), 0, 'focus should start empty');
-  const emptyWidth = parseFloat(await page.locator('#focus-fill').evaluate(el => el.style.width));
+  const emptyWidth = parseFloat(await page.locator('#energy-fill').evaluate(el => el.style.width));
   await page.waitForTimeout(650);
   assert.equal(await focusSeconds(page), 0, 'focus should not refill while idle');
-  assert.equal(parseFloat(await page.locator('#focus-fill').evaluate(el => el.style.width)), emptyWidth);
+  assert.equal(parseFloat(await page.locator('#energy-fill').evaluate(el => el.style.width)), emptyWidth);
   await page.locator('#focus-button').click();
   assert.equal(await page.locator('#focus-button').getAttribute('aria-pressed'), 'false');
-  await expectText(page.locator('#toast'), /earn focus|wall pass|triangle|bonus zone/i);
+  await expectText(page.locator('#toast'), /earn energy|wall pass|triangle|bonus zone/i);
 
   await page.keyboard.press('KeyB');
   assert.equal(await page.locator('#bank-button').getAttribute('aria-pressed'), 'true');
