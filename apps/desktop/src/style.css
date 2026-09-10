@@ -1533,25 +1533,24 @@ body.play-view .scoreboard {
   gap: 5px;
   padding: 7px 16px 8px;
 }
-/* Personal best and the clock are secondary to the score itself, so they sit
-   in a quiet row underneath it rather than competing with it for size. */
+/* The clock sits beside the score as a peer stat now, not shrunk into the
+   foot row — it matters mid-round and needs to read at a glance. A thin
+   divider separates the two the same way the match stats divide each other. */
+.hud-group-score-main {
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+}
+.hud-group-score-main .clock-stat {
+  padding-left: 16px;
+  border-left: 1px solid #ffffff1c;
+}
+/* Personal best is the only thing left down here, so it stays a quiet chip
+   underneath the score and clock rather than competing with them for size. */
 .hud-group-score-foot {
   display: flex;
   align-items: baseline;
   gap: 14px;
-}
-.hud-group-score-foot .clock-stat {
-  display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  gap: 5px;
-}
-.hud-group-score-foot .stat-label {
-  margin-bottom: 0;
-}
-body.play-view .scoreboard #time-value {
-  font-size: 14px;
-  color: var(--cyan);
 }
 .hud-group-match {
   gap: 0;
@@ -1578,9 +1577,15 @@ body.play-view .scoreboard .stat strong {
   font-size: clamp(18px, 1.7vw, 28px);
 }
 /* The score is the one number that matters most, so it stays the biggest
-   thing in the band — the match stats beside it are secondary. */
-body.play-view .scoreboard .hud-group-score .stat strong {
+   thing in the band — the match stats beside it are secondary. The clock
+   now rivals it in size (it matters mid-round too) but keeps its own pink
+   so the two stay easy to tell apart at a glance. */
+body.play-view .scoreboard .hud-group-score .score-stat strong {
   font-size: clamp(24px, 2.6vw, 40px);
+}
+body.play-view .scoreboard .hud-group-score .clock-stat strong {
+  font-size: clamp(20px, 2.2vw, 34px);
+  color: var(--pink);
 }
 .best-chip {
   color: var(--pink);
@@ -3174,12 +3179,21 @@ body.play-view .arena-view .below-court {
     clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 50%, calc(100% - 15px) 100%, 0 100%, 10px 50%);
   }
   body.play-view .hud-group-score {
-    width: clamp(210px, 21cqw, 315px);
+    /* Wider than before: the card now holds score and clock side by side
+       instead of score alone with the clock tucked into the foot. */
+    width: clamp(260px, 27cqw, 390px);
     gap: 3px;
     padding-left: 20px;
     background:
       linear-gradient(90deg, color-mix(in srgb, var(--venue-accent), transparent 87%), transparent 60%),
       #080d25;
+  }
+  body.play-view .hud-group-score-main {
+    gap: 16px;
+  }
+  body.play-view .hud-group-score-main .clock-stat {
+    padding-left: 16px;
+    border-left: 1px solid #314568;
   }
   body.play-view .hud-group-match {
     width: clamp(244px, 23cqw, 345px);
@@ -3190,9 +3204,18 @@ body.play-view .arena-view .below-court {
       linear-gradient(270deg, color-mix(in srgb, var(--pink), transparent 88%), transparent 60%),
       #080d25;
   }
-  body.play-view .scoreboard .hud-group-score .stat strong {
+  body.play-view .scoreboard .hud-group-score .score-stat strong {
     color: var(--venue-accent);
     font-size: clamp(31px, 3.1vw, 48px);
+    line-height: 0.82;
+    text-shadow: none;
+  }
+  /* The clock rivals the score for size now that it matters mid-round; the
+     match card's pink keeps it visually distinct from the score's cyan even
+     at this scale. */
+  body.play-view .scoreboard .hud-group-score .clock-stat strong {
+    color: var(--pink);
+    font-size: clamp(26px, 2.6vw, 40px);
     line-height: 0.82;
     text-shadow: none;
   }
@@ -3216,12 +3239,7 @@ body.play-view .arena-view .below-court {
   }
   body.play-view .hud-group-score-foot {
     width: 100%;
-    justify-content: space-between;
     gap: 8px;
-  }
-  body.play-view .scoreboard #time-value {
-    color: #fff;
-    font-size: 13px;
   }
   body.play-view .best-chip {
     color: var(--pink);
