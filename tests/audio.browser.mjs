@@ -511,6 +511,50 @@ await check('a sampled effect plays through the effects master, and a missing on
   await context.close();
 });
 
+// What the court's ambience is driven by. The reading has to be a real number
+// while a track is audible and null whenever there is nothing to measure, and
+// null is what tells the ambience to fall back to its idle animation instead
+// of freezing on a stale value.
+await check('the music bus reports its energy while playing and null when there is nothing to measure', async () => {
+  const context = await relaxedBrowser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const errors = errorsFor(page);
+  await page.goto(`${baseURL}/`);
+  const result = await page.evaluate(async () => {
+    const { createMusic } = await import('/apps/desktop/src/music.js');
+    const { TRACKS } = await import('/apps/desktop/src/playlist.js');
+    const music = createMusic({
+      tracks: TRACKS.slice(0, 1),
+      resolve: track => new URL(`/public/audio/${track.file}`, location.origin).href,
+    });
+    const silent = music.energy;
+    music.setEnabled(true);
+    music.unlock();
+    // The bus fades in over 350ms and a track has quiet moments, so this
+    // waits for a settled reading rather than grabbing the first one.
+    let playing = null;
+    for (let attempt = 0; attempt < 80; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+      const reading = music.energy;
+      if (typeof reading === 'number' && reading > 0) { playing = reading; break; }
+      if (playing === null && reading !== null) playing = reading;
+    }
+    const state = music.state;
+    music.setEnabled(false);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return { silent, playing, muted: music.energy, state };
+  });
+  assert.equal(result.silent, null, 'nothing is playing yet, so there is nothing to measure');
+  assert.equal(result.state, 'playing', `the track should be running, got ${result.state}`);
+  assert.equal(typeof result.playing, 'number',
+    `a playing track must report a number, got ${result.playing}`);
+  assert.ok(result.playing > 0 && result.playing <= 1,
+    `the reading must be a 0..1 energy, got ${result.playing}`);
+  assert.equal(result.muted, null, 'a muted bus must report null so the ambience idles');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 await browser.close();
 await relaxedBrowser.close();
 if (server) server.kill();

@@ -229,6 +229,17 @@
           </section>
 
           <section class="game-panel" aria-label="Possession game">
+            <!-- The court is height-limited in a wide window, so the panel
+            keeps a band of empty space down each side (and top and bottom in a
+            tall one). This canvas fills that space with music-reactive
+            ambience and is clipped to it: it never paints inside the court.
+            It sits behind everything and is decorative only. -->
+            <canvas id="ambience" class="ambience" aria-hidden="true"></canvas>
+            <!-- Where the scoreboard's readouts go when the side space is wide
+            enough to hold them; main.js moves the same elements between here
+            and the band, so nothing about them is duplicated. -->
+            <div id="rail-left" class="court-rail court-rail-left"></div>
+            <div id="rail-right" class="court-rail court-rail-right"></div>
             <div id="scoreboard" class="scoreboard" aria-label="Match statistics">
               <div class="stat score-stat">
                 <span id="score-label" class="stat-label">FLOW SCORE</span

@@ -723,6 +723,206 @@ await check(
   },
 );
 
+// The side rails and the ambience: readouts move into the space beside the
+// court when there is enough of it, the court never gives up a pixel for them,
+// and the ambience is painted only in the letterbox.
+await check(
+  "the readouts move into the side space without the court losing any of it",
+  async () => {
+    // 1920x1080 and 1280x720 have room beside a height-limited court;
+    // 1080x1024 is width-limited and has none, so the band keeps the stats.
+    const expected = {
+      "1920x1080": "on",
+      "1280x720": "on",
+      "1080x1024": "off",
+    };
+    for (const viewport of [
+      { width: 1920, height: 1080 },
+      { width: 1280, height: 720 },
+      { width: 1080, height: 1024 },
+    ]) {
+      const context = await browser.newContext({
+        viewport,
+        serviceWorkers: "block",
+      });
+      const page = await context.newPage(),
+        errors = errorsFor(page);
+      await gotoArena(page, baseURL);
+      await page.locator("#start-button").click();
+      await page.waitForTimeout(400);
+      const label = `${viewport.width}x${viewport.height}`;
+      const layout = await page.evaluate(() => {
+        const box = (selector) => {
+          const element = document.querySelector(selector);
+          if (!element) return null;
+          const { left, top, right, bottom, width, height } =
+            element.getBoundingClientRect();
+          return { left, top, right, bottom, width, height };
+        };
+        return {
+          rails: document.body.dataset.rails,
+          court: box("#court"),
+          left: box("#rail-left"),
+          right: box("#rail-right"),
+          combo: box("#combo-value"),
+          lives: box("#lives-value"),
+          score: box("#score-value"),
+          inLeftRail: document.querySelector("#rail-left").contains(
+            document.querySelector("#score-value"),
+          ),
+          inRightRail: document.querySelector("#rail-right").contains(
+            document.querySelector("#combo-value"),
+          ),
+          courtShare: box("#court").width / window.innerWidth,
+        };
+      });
+      assert.equal(layout.rails, expected[label], `rail state at ${label}`);
+      // The court is the thing that must not move: it was 87% of the width of
+      // a 1920x1080 window before the rails existed and has to stay there.
+      if (viewport.width === 1920)
+        assert.ok(
+          layout.courtShare > 0.869,
+          `the court must keep its share of a 1920x1080 window, got ${(layout.courtShare * 100).toFixed(1)}%`,
+        );
+      if (layout.rails === "on") {
+        assert.ok(layout.inLeftRail && layout.inRightRail,
+          `the readouts must be in the rails at ${label}`);
+        assert.ok(
+          layout.left.right <= layout.court.left + 1 &&
+            layout.right.left >= layout.court.right - 1,
+          `the rails must sit beside the court, not over it, at ${label}: ${JSON.stringify(layout)}`,
+        );
+        for (const [name, stat] of [
+          ["multiplier", layout.combo],
+          ["possessions", layout.lives],
+          ["score", layout.score],
+        ])
+          assert.ok(
+            stat.right <= layout.court.left + 1 || stat.left >= layout.court.right - 1,
+            `the ${name} readout must clear the court at ${label}: ${JSON.stringify(stat)}`,
+          );
+      } else {
+        assert.ok(!layout.inLeftRail && !layout.inRightRail,
+          `with no room beside the court the readouts belong in the band at ${label}`);
+        assert.ok(layout.combo.width > 0, `the multiplier must stay visible at ${label}`);
+      }
+      assert.deepEqual(errors, []);
+      await context.close();
+    }
+  },
+);
+
+await check(
+  "the ambience stays outside the court, keeps moving without music, and stills for reduced motion",
+  async () => {
+    // Sampling the ambience canvas: alpha inside the court rectangle must be
+    // zero at every probe, and the letterbox must have something in it.
+    const sample = () =>
+      page.evaluate(() => {
+        const canvas = document.querySelector("#ambience");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        const scale = canvas.width / canvas.getBoundingClientRect().width;
+        const court = document.querySelector("#court").getBoundingClientRect();
+        const panel = canvas.getBoundingClientRect();
+        const at = (x, y) => {
+          const data = ctx.getImageData(
+            Math.round((x - panel.left) * scale),
+            Math.round((y - panel.top) * scale),
+            1,
+            1,
+          ).data;
+          return { a: data[3], r: data[0], g: data[1], b: data[2] };
+        };
+        const inside = [0.25, 0.5, 0.75].flatMap((fx) =>
+          [0.25, 0.5, 0.75].map((fy) =>
+            at(court.left + court.width * fx, court.top + court.height * fy),
+          ),
+        );
+        const outside = [
+          at(panel.left + court.left * 0.5, panel.top + panel.height * 0.4),
+          at(panel.right - court.left * 0.5, panel.top + panel.height * 0.6),
+        ];
+        return {
+          insideAlpha: Math.max(...inside.map((pixel) => pixel.a)),
+          outsideAlpha: Math.max(...outside.map((pixel) => pixel.a)),
+          outsideSum: outside.reduce((total, pixel) => total + pixel.a, 0),
+        };
+      });
+    const context = await browser.newContext({
+      viewport: { width: 1920, height: 1080 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await gotoArena(page, baseURL);
+    await page.locator("#start-button").click();
+    await page.waitForTimeout(600);
+    const first = await sample();
+    assert.equal(first.insideAlpha, 0,
+      "nothing may be painted inside the court");
+    assert.ok(first.outsideAlpha > 0,
+      "the space beside the court should not be left empty");
+    assert.ok(first.outsideAlpha < 120,
+      `the ambience must stay low-contrast, got alpha ${first.outsideAlpha}`);
+    // Music off is the common case (a muted player, a blocked autoplay, a
+    // track still loading): the wash must keep breathing rather than freeze.
+    await page.keyboard.press("Escape");
+    await page.locator("#pause-settings").click();
+    await page.locator("#settings-dialog").waitFor({ state: "visible" });
+    await page.locator("#music-button").click();
+    await page.locator("#close-settings").click();
+    await page.locator("#pause-resume").click();
+    await page.waitForTimeout(400);
+    let moved = false;
+    let previous = (await sample()).outsideSum;
+    for (let attempt = 0; attempt < 12 && !moved; attempt++) {
+      await page.waitForTimeout(350);
+      const next = (await sample()).outsideSum;
+      if (next !== previous) moved = true;
+      previous = next;
+    }
+    assert.ok(moved, "with the music off the ambience must fall back to an idle animation");
+    assert.deepEqual(errors, []);
+    await context.close();
+
+    // prefers-reduced-motion: alive is not the point any more, staying still
+    // is, and it must still not paint over the court.
+    const stillContext = await browser.newContext({
+      viewport: { width: 1920, height: 1080 },
+      reducedMotion: "reduce",
+      serviceWorkers: "block",
+    });
+    const stillPage = await stillContext.newPage(),
+      stillErrors = errorsFor(stillPage);
+    await gotoArena(stillPage, baseURL);
+    await stillPage.locator("#start-button").click();
+    await stillPage.waitForTimeout(1200);
+    const still = await stillPage.evaluate(() => {
+      const canvas = document.querySelector("#ambience");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      const court = document.querySelector("#court").getBoundingClientRect();
+      const panel = canvas.getBoundingClientRect();
+      const scale = canvas.width / panel.width;
+      const at = (x, y) =>
+        ctx.getImageData(
+          Math.round((x - panel.left) * scale),
+          Math.round((y - panel.top) * scale),
+          1,
+          1,
+        ).data[3];
+      return {
+        inside: at(court.left + court.width / 2, court.top + court.height / 2),
+        outside: at(panel.left + court.left * 0.5, panel.top + panel.height * 0.4),
+      };
+    });
+    assert.equal(still.inside, 0,
+      "reduced motion must still keep the court clear");
+    assert.ok(still.outside >= 0, "reduced motion must not break the ambience");
+    assert.deepEqual(stillErrors, []);
+    await stillContext.close();
+  },
+);
+
 await browser.close();
 if (server) server.kill();
 if (failures) process.exitCode = 1;

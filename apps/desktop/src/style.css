@@ -942,6 +942,77 @@ body.play-view #court {
   aspect-ratio: 1000/620;
   transform: translate(-50%, -50%);
 }
+/* The two side rails and the ambience canvas only exist while a round is on
+   screen, and the rails only when main.js has measured enough room beside the
+   court to hold them (body.play-view[data-rails="on"]). Everything here is
+   painted in the letterbox the court cannot use; none of it changes the
+   court's size. */
+.court-rail,
+.ambience {
+  display: none;
+}
+body.play-view .ambience {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+body.play-view[data-rails="on"] .court-rail {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  justify-content: center;
+  width: var(--court-gutter, 0px);
+  padding: 0 8px;
+  pointer-events: none;
+}
+body.play-view[data-rails="on"] .court-rail-left {
+  left: 0;
+  align-items: flex-start;
+  text-align: left;
+}
+body.play-view[data-rails="on"] .court-rail-right {
+  right: 0;
+  align-items: flex-end;
+  text-align: right;
+}
+/* A readout in a rail is a stacked block rather than a row in a bar, and it
+   sits on the panel's own background, so it drops the band's shadow. */
+body.play-view[data-rails="on"] .court-rail .stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 10px;
+  background: #0d0722a8;
+  border: 1px solid #ffffff14;
+  border-radius: 12px;
+  text-shadow: none;
+}
+body.play-view[data-rails="on"] .court-rail .stat-label {
+  color: #cdbfe8;
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+body.play-view[data-rails="on"] .court-rail .stat strong {
+  font-size: clamp(16px, 1.3vw, 26px);
+  line-height: 1;
+}
+body.play-view[data-rails="on"] .court-rail-right .stat {
+  align-items: flex-end;
+}
+/* With the readouts in the rails the band carries only the pause button, so it
+   stops competing with the court for the top of the frame. */
+body.play-view[data-rails="on"] .scoreboard {
+  background: none;
+}
 /* The top bar.
    It is a real row of the shell, not an overlay: .app-shell is a flex column
    and this is its first child, so nothing it holds can ever sit over the
