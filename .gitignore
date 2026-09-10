@@ -39,3 +39,9 @@ Thumbs.db
 .vscode/
 *.swp
 *~
+
+# Local server database
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
