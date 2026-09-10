@@ -10,6 +10,7 @@ const playwright = await import(moduleName);
 const browserName = process.env.BROWSER || 'chromium';
 const browserType = playwright[browserName];
 if (!browserType) throw new Error(`Unsupported BROWSER=${browserName}; use chromium, firefox, or webkit`);
+const includeMobileLayouts = process.env.MOBILE_LAYOUTS === '1';
 const baseURL = process.env.BASE_URL || `http://localhost:${await freePort()}`;
 const outputDir = new URL('../test-results/', import.meta.url);
 await mkdir(outputDir, { recursive: true });
@@ -517,7 +518,7 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   await context.close();
 });
 
-await check('portrait and landscape touch layouts remain usable without horizontal overflow', async () => {
+if (includeMobileLayouts) await check('portrait and landscape touch layouts remain usable without horizontal overflow', async () => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
   const page = await context.newPage();
   const errors = watchErrors(page);

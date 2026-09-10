@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   web:
-    name: Web and browser tests
+    name: Required desktop web and browser tests
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -34,7 +34,7 @@ jobs:
         run: npm test
       - name: Build the web app
         run: npm run build
-      - name: Run browser suites
+      - name: Run required desktop browser suites
         run: npm run test:web
       - name: Upload browser screenshots on failure
         if: failure()
@@ -44,4 +44,3 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
-

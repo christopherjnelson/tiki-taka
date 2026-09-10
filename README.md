@@ -26,7 +26,7 @@ The build creates a static site in `dist/desktop/`, including a generated servic
 
 ## Ways to play
 
-Play in a desktop browser with keyboard, mouse, or a standard gamepad. The production build caches its assets after the first online load and is installable where the browser supports it; service workers require localhost or HTTPS.
+Play in a desktop browser with keyboard, mouse, or a standard gamepad. Desktop is the current supported interface target; the existing mobile/coarse-pointer interface is frozen while desktop UI and performance are developed, and may be revisited later. The production build caches its assets after the first online load and is installable where the browser supports it; service workers require localhost or HTTPS.
 
 ## Game overview
 
