@@ -1505,11 +1505,69 @@ function drawRoundedSegment(ctx, x, y, w, h, r) {
   }
 }
 
-function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced) {
+const VENUE_SPECTRUM_THEMES = {
+  lisbon: {
+    low: "#21f3df",
+    mid: "#ffd64d",
+    high: "#ff587f",
+    glow: "#21f3df",
+    unlit: "rgba(10, 35, 50, 0.4)",
+  },
+  london: {
+    low: "#34e5ed",
+    mid: "#ffaa3b",
+    high: "#ff4f73",
+    glow: "#34e5ed",
+    unlit: "rgba(14, 28, 48, 0.4)",
+  },
+  barcelona: {
+    low: "#2debd2",
+    mid: "#ffc83b",
+    high: "#ff5d68",
+    glow: "#2debd2",
+    unlit: "rgba(12, 32, 45, 0.4)",
+  },
+  tokyo: {
+    low: "#38f5e5",
+    mid: "#bf55ec",
+    high: "#ff3c9c",
+    glow: "#ff3c9c",
+    unlit: "rgba(20, 15, 45, 0.4)",
+  },
+  "sao-paulo": {
+    low: "#6dff8a",
+    mid: "#ffe642",
+    high: "#ff4e8b",
+    glow: "#6dff8a",
+    unlit: "rgba(12, 38, 24, 0.4)",
+  },
+  amsterdam: {
+    low: "#40efff",
+    mid: "#ff9a3c",
+    high: "#ff4ba8",
+    glow: "#40efff",
+    unlit: "rgba(10, 30, 52, 0.4)",
+  },
+};
+
+function getVenueSpectrumTheme(venue) {
+  if (venue?.id && VENUE_SPECTRUM_THEMES[venue.id]) {
+    return VENUE_SPECTRUM_THEMES[venue.id];
+  }
+  return {
+    low: venue?.accent || "#00f0ff",
+    mid: "#ffd64d",
+    high: venue?.secondary || "#ff2a85",
+    glow: venue?.accent || "#00f0ff",
+    unlit: "rgba(16, 32, 64, 0.35)",
+  };
+}
+
+function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced, theme) {
   ctx.clearRect(0, 0, w, h);
 
   const topPad = Math.round(58 * dpr);
-  const botPad = Math.round(90 * dpr);
+  const botPad = Math.round(8 * dpr);
   const availH = h - topPad - botPad;
   if (availH <= 40 || w <= 10) return;
 
@@ -1518,7 +1576,7 @@ function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced) {
   const totalW = VIZ_BARS * barWidth + (VIZ_BARS - 1) * pad;
   const startX = Math.floor((w - totalW) / 2);
 
-  const numSegs = 36;
+  const numSegs = 44;
   const segGap = Math.max(2, Math.round(2.5 * dpr));
   const segH = Math.max(2, Math.floor((availH - (numSegs + 1) * segGap) / numSegs));
   const rx = Math.max(1, Math.round(1.5 * dpr));
@@ -1533,8 +1591,8 @@ function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced) {
     const litCount = Math.round(val * numSegs);
     const peakSeg = Math.min(numSegs - 1, Math.round(peak * numSegs));
 
-    // Subtle dark chassis channel behind each bar
-    ctx.fillStyle = "rgba(4, 9, 26, 0.35)";
+    // Subtle dark chassis channel behind each bar, tinted with venue tone
+    ctx.fillStyle = theme.unlit;
     drawRoundedSegment(ctx, bx - 1, topPad, barWidth + 2, availH, rx);
 
     for (let s = 0; s < numSegs; s++) {
@@ -1545,21 +1603,21 @@ function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced) {
 
       if (isPeak) {
         ctx.fillStyle = "#ffffff";
-        ctx.shadowColor = "#ffffff";
+        ctx.shadowColor = theme.glow;
         ctx.shadowBlur = Math.round(6 * dpr);
         drawRoundedSegment(ctx, bx, sy, barWidth, segH, rx);
         ctx.shadowBlur = 0;
       } else if (isLit) {
+        let segColor;
         if (frac < 0.55) {
-          ctx.fillStyle = "#00f0ff";
-          ctx.shadowColor = "#00f0ff";
+          segColor = theme.low;
         } else if (frac < 0.8) {
-          ctx.fillStyle = "#ffd64d";
-          ctx.shadowColor = "#ffd64d";
+          segColor = theme.mid;
         } else {
-          ctx.fillStyle = "#ff2a85";
-          ctx.shadowColor = "#ff2a85";
+          segColor = theme.high;
         }
+        ctx.fillStyle = segColor;
+        ctx.shadowColor = segColor;
         ctx.shadowBlur = (s >= litCount - 2) ? Math.round(5 * dpr) : 0;
         drawRoundedSegment(ctx, bx, sy, barWidth, segH, rx);
         ctx.shadowBlur = 0;
@@ -1641,8 +1699,11 @@ function paintRailVisualizers(dt) {
     }
   }
 
-  renderSpectrumCanvas(railCtxLeft, railVizLeft.width, railVizLeft.height, true, dpr, reduced);
-  renderSpectrumCanvas(railCtxRight, railVizRight.width, railVizRight.height, false, dpr, reduced);
+  const venue = game ? getVenue(game.config) : VENUES[0];
+  const theme = getVenueSpectrumTheme(venue);
+
+  renderSpectrumCanvas(railCtxLeft, railVizLeft.width, railVizLeft.height, true, dpr, reduced, theme);
+  renderSpectrumCanvas(railCtxRight, railVizRight.width, railVizRight.height, false, dpr, reduced, theme);
 }
 
 // The scoreboard floats over the top of the court in play view and reflows

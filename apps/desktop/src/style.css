@@ -3668,7 +3668,7 @@ body.play-view .arena-view .below-court {
     align-items: stretch;
     justify-content: space-between;
     gap: 0;
-    width: min(100cqw, calc(var(--arena-court-width) + 28px));
+    width: var(--arena-court-width);
     min-height: var(--desktop-control-rail);
     padding: 0;
     background: linear-gradient(180deg, #070d24 0%, #040816 100%);
