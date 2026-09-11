@@ -85,7 +85,22 @@ http
             (name) =>
               pathname === `/${name}` || pathname === `/apps/desktop/${name}`,
           );
-      const aliasedPath = devAsset ? `/public/${devAsset}` : pathname;
+      // The soundtrack and sampled effects sit in public/audio in the source
+      // tree and beside index.html in a build. The page asks for them with one
+      // relative URL for both, so in source mode map that request back onto
+      // public/ — the page-relative form arrives under /apps/desktop/ too.
+      const audioPath = servingBuild
+        ? undefined
+        : pathname.startsWith("/audio/")
+          ? pathname
+          : pathname.startsWith("/apps/desktop/audio/")
+            ? pathname.slice("/apps/desktop".length)
+            : undefined;
+      const aliasedPath = devAsset
+        ? `/public/${devAsset}`
+        : audioPath
+          ? `/public${audioPath}`
+          : pathname;
       const requestPath =
         aliasedPath === "/"
           ? "/index.html"

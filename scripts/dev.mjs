@@ -71,6 +71,13 @@ const devSecurityPolicy = {
 const server = await createServer({
   configFile: path.resolve("vite.desktop.config.js"),
   plugins: [devSecurityPolicy],
+  // The config file sets publicDir false because the build copies these by
+  // hand (scripts/build.mjs), track list and all. Development has no such
+  // step, and the app's root is apps/desktop, so without this the soundtrack
+  // and the manifest are simply not served. They do not 404 visibly either:
+  // the dev server answers an unknown path with index.html, so a request for
+  // an .ogg comes back as HTML with a 200 and the music just never plays.
+  publicDir: path.resolve("public"),
   server: {
     port,
     host,

@@ -129,26 +129,24 @@ if (!settings.audioMigrated) {
 }
 const sound = new Sound(settings.effectsOn, settings.effectsVolume);
 // Sampled effects, if any are listed. The URL is resolved exactly the way the
-// soundtrack's is — copied next to index.html by a build, served from public/
-// in the source tree — and an empty list (the default) leaves every effect on
-// its synthesised voice with no fetch at all. See apps/desktop/src/samples.js.
+// soundtrack's is: a build copies these next to index.html, and the dev server
+// serves public/ at the same place, so one relative URL is right either way.
+// An empty list (the default) leaves every effect on its synthesised voice
+// with no fetch at all. See apps/desktop/src/samples.js.
 sound.useSamples(
   SAMPLES.map((sample) => ({
     ...sample,
-    url: import.meta.env?.PROD
-      ? new URL(`./audio/effects/${sample.file}`, document.baseURI).href
-      : new URL(`/public/audio/effects/${sample.file}`, location.origin).href,
+    url: new URL(`./audio/effects/${sample.file}`, document.baseURI).href,
   })),
 );
 const music = createMusic({
   tracks: TRACKS,
-  // A build copies the tracks next to index.html (scripts/build.mjs); the
-  // source tree is served straight from public/. Picking one rather than
-  // probing both keeps a 404 out of the console.
-  resolve: (track) =>
-    import.meta.env?.PROD
-      ? new URL(`./audio/${track.file}`, document.baseURI).href
-      : new URL(`/public/audio/${track.file}`, location.origin).href,
+  // A build copies the tracks next to index.html (scripts/build.mjs) and the
+  // dev server serves public/ at that same place, so this one relative URL is
+  // correct in both. It used to branch on PROD and reach for /public/ in
+  // development, which the dev server answers with index.html rather than a
+  // 404 — the decode then fails silently and the music simply never plays.
+  resolve: (track) => new URL(`./audio/${track.file}`, document.baseURI).href,
   trim: settings.musicVolume,
 });
 music.setEnabled(settings.musicOn);
@@ -2618,7 +2616,15 @@ function frame(now) {
       if (event !== turnoverEvent) renderer.addEvent(event);
       // finish() chooses the outcome-specific full-time sound after progress
       // has decided whether this was a clear or a defeat.
-      if (event.type !== "end") sound.play(event.type);
+      //
+      // A completed pass stays silent: the kick already marks it, and a voice
+      // on the reception too put a beep behind every single pass. The bonuses
+      // that can land on the same reception — wall, Focus, one-touch, the olé
+      // — still sound, so a noise now means something happened rather than
+      // just that the ball arrived. The score popup is unaffected; only the
+      // voice is dropped, and audio.js still defines one if it should return.
+      if (event.type !== "end" && event.type !== "score")
+        sound.play(event.type);
       if (event.type === "focus") {
         // The flash is about the Energy resource, not either ability chip.
         clearTimeout(focusEarnedTimeout);
