@@ -755,6 +755,37 @@ await check('service worker serves a complete app reload offline', async () => {
 async function offlineReload(baseURL) {
   const context = await browser.newContext({ serviceWorkers: 'allow' });
   try {
+    // Vite reads .env from the repository root, so a developer with Supabase
+    // credentials configured builds a bundle that would boot the real adapter
+    // here and call the live project. This check is about the service worker,
+    // not accounts, so pin a guest adapter through the test-only seam: the
+    // result must not depend on whether credentials happen to be present.
+    await context.addInitScript(() => {
+      const bindings = {
+        moveUp: ['KeyW', 'ArrowUp'], moveDown: ['KeyS', 'ArrowDown'],
+        moveLeft: ['KeyA', 'ArrowLeft'], moveRight: ['KeyD', 'ArrowRight'],
+        smartPass: ['Space'], direct1: ['Digit1'], direct2: ['Digit2'],
+        direct3: ['Digit3'], direct4: ['Digit4'], wallToggle: ['KeyB'],
+        wallHold: ['ShiftLeft'], focusHold: ['KeyE'], boostHold: ['KeyR'],
+        shout: ['KeyF'], pause: ['Escape'],
+      };
+      const stats = () => ({ games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 });
+      const data = () => ({
+        progress: { version: 1, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: 'balanced', lastCourt: 0 },
+        settings: { theme: 'dark', effectsOn: true, effectsVolume: 0.3, musicOn: true, musicVolume: 1, audioMigrated: true, preset: 'wasd', bindings },
+        stats: stats(),
+        preferences: { scoreSaveChoice: 'ask' },
+      });
+      window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
+        kind: 'local',
+        async getSession() { return null; },
+        async loadUserData() { return data(); },
+        async saveUserData() { return data(); },
+        async recordRound() { return stats(); },
+        async getLeaderboard() { return { entries: [] }; },
+        onAuthStateChange() { return () => {}; },
+      });
+    });
     const page = await context.newPage();
     const errors = watchErrors(page);
     await gotoArena(page, baseURL, { waitUntil: 'networkidle' });

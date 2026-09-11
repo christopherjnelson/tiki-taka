@@ -293,19 +293,21 @@ await check(
       await page.locator("#settings-dialog").evaluate((el) => el.open),
       true,
     );
-    // Everything the sidebar used to hold moved into settings.
+    // Everything the sidebar used to hold moved into settings. With no
+    // Supabase configuration (the default here), account-button is hidden —
+    // there is no account system to open it onto.
     for (const id of [
       "sound-button",
       "theme-button",
       "fullscreen-button",
       "help-button",
-      "account-button",
     ])
       assert.equal(
         await page.locator(`#${id}`).isVisible(),
         true,
         `${id} must stay reachable after the drawer was removed`,
       );
+    assert.equal(await page.locator("#account-button").isVisible(), false);
     await page.locator("#close-settings").click();
     // ...and on the pause menu once a round is on screen.
     await gotoArena(page, baseURL);
@@ -801,7 +803,7 @@ await check(
 );
 
 await check(
-  "the top bar carries one soundtrack player, the local demo profile and a mouse exit on every screen",
+  "the top bar carries one soundtrack player and a mouse exit on every screen",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
@@ -828,12 +830,7 @@ await check(
         true,
         `the top bar must be on screen on ${where}`,
       );
-      for (const selector of [
-        "#music-toggle",
-        "#music-skip",
-        ".top-brand-mark",
-        "#profile-button",
-      ])
+      for (const selector of ["#music-toggle", "#music-skip", ".top-brand-mark"])
         assert.equal(
           await page.locator(selector).isVisible(),
           true,
@@ -841,15 +838,10 @@ await check(
         );
     };
     await barIsUp("the title screen");
-    // The chip names the local demo profile, and says that is what it is.
-    assert.match(
-      await page.locator("#profile-chip-name").textContent(),
-      /^Guest$/,
-    );
-    assert.match(
-      await page.locator(".profile-chip-kind").textContent(),
-      /local demo/i,
-    );
+    // With no Supabase configuration (the default here), there is no account
+    // system at all, so the profile chip is hidden rather than offered
+    // disabled or pointing at a demo.
+    assert.equal(await page.locator("#profile-button").isVisible(), false);
     await page.locator("#title-play").click();
     await page.locator("#arena-view").waitFor({ state: "visible" });
     await barIsUp("the arena");
@@ -863,14 +855,6 @@ await check(
       "the bar's play/pause must still switch the soundtrack during play",
     );
     await page.locator("#music-toggle").click();
-    // The profile chip opens the account surface that already existed.
-    await page.locator("#profile-button").click();
-    await page.locator("#account-dialog").waitFor({ state: "visible" });
-    assert.match(
-      await page.locator(".account-note").textContent(),
-      /not\s+online accounts/i,
-    );
-    await page.locator("#close-account").click();
     assert.deepEqual(errors, []);
     await context.close();
   },

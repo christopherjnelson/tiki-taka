@@ -36,25 +36,22 @@ Build a flow multiplier with consecutive passes and queue passes for one-touch c
 
 See the [gameplay guide](docs/GAMEPLAY.md) for scoring, controls, modes, progression, tactics, accessibility, and offline behavior.
 
-## Local demo profiles and saves
+## Guest saves and accounts
 
-By default the account interface is a local demo. Registration accepts an email and username, but there are no passwords, verification emails, server accounts, or real authentication. Profiles, settings, progress, and stats remain in browser storage on that device. They do not synchronize, and clearing site data removes them.
+By default, with no Supabase configuration present, there is no account system at all: the game is guest-only. Settings, progress, and stats live in browser storage on that device, do not synchronize, and are removed if site data is cleared. The account entry point in the header is hidden in this state — there's nothing for it to lead to.
 
-Pages on the same origin share profiles.
+Pages on the same origin share this guest storage.
 
-### Optional accounts server
+### Supabase accounts
 
-`server/` is a small, zero-dependency accounts and leaderboard backend (Node's built-in `http`, `sqlite`, and `crypto` only — see `server/README.md`). It's entirely optional: with no server configured, or if a configured one is unreachable, the app falls back to the local demo behavior above and a player notices no difference. When it is configured (`<meta name="tiki-taka-api-base">` in `apps/desktop/index.html`, see that README), accounts get real passwords and there's a leaderboard — honestly labeled as client-reported, since all game logic runs in the browser and scores aren't currently verifiable.
-
-Run it locally alongside the web app with `npm run dev:full`, or the server alone with `npm run server`.
+Supabase is the only authentication path. When `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are configured at build time (see [docs/supabase-browser-config.md](docs/supabase-browser-config.md)), the account entry point appears and offers real registration and sign-in, with a leaderboard — honestly labeled as client-reported, since all game logic runs in the browser and scores aren't currently verifiable. A signed-out player, or one whose Supabase session is briefly unreachable, still plays on the guest save above.
 
 ## Repository layout
 
 - `apps/desktop/` — the browser interface and controls.
 - `packages/engine/` — simulation, AI, modes, progression, and settings.
 - `packages/presentation/` — shared renderer and synthesized audio.
-- `packages/data/` — data-provider API: the local demo adapter and the optional accounts-server adapter.
-- `server/` — optional accounts and leaderboard backend (see `server/README.md`).
+- `packages/data/` — data-provider API: guest-only local storage and the Supabase adapter.
 - `src/` — compatibility exports retained for regression coverage.
 - `tests/` — Node and browser integration tests.
 

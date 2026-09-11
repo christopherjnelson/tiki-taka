@@ -65,36 +65,26 @@ try {
       }),
     ),
   );
-  // The sidebar drawer that used to hold the profile button is gone: every
-  // utility lives in the settings dialog now, so the dialog has to be open
-  // before the profile button can be clicked.
-  const openAccount = async () => {
-    if (!(await page.locator("#settings-dialog").evaluate((el) => el.open)))
-      await page.locator("#settings-button").click();
-    await page.locator("#account-button").click();
-  };
+  // With no Supabase configuration (scripts/serve.mjs never sets
+  // import.meta.env, so this is the default here), there is no account
+  // system at all: the header chip and the settings-dialog entry point are
+  // both hidden rather than offered disabled, and guest progress still saves
+  // and reloads on its own.
   await page.goto(baseURL);
   assert.equal(await page.locator("#xp-label").textContent(), "180 / 300 XP");
-  await openAccount();
-  await page.locator("#register-email").fill("demo@example.com");
-  await page
-    .locator("#register-username")
-    .fill("<img src=x onerror=__injected=1>");
-  await page.locator("#register-form button").click();
-  await page.waitForFunction(
-    () => !document.querySelector("#account-dialog").open,
-  );
-  assert.equal(await page.locator("#xp-label").textContent(), "0 / 300 XP");
-  assert.equal(await page.locator("#account-button img").count(), 0);
-  assert.equal(await page.evaluate(() => window.__injected), undefined);
-  await openAccount();
-  await page.locator("#logout-button").click();
-  await page.waitForFunction(
-    () => !document.querySelector("#account-dialog").open,
-  );
+  assert.equal(await page.locator("#profile-button").isVisible(), false);
+  await page.locator("#settings-button").click();
+  await page.locator("#settings-dialog").waitFor({ state: "visible" });
+  assert.equal(await page.locator("#account-button").isVisible(), false);
+  await page.locator("#theme-button").click();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  await page.locator("#close-settings").click();
+  await page.reload();
   assert.equal(await page.locator("#xp-label").textContent(), "180 / 300 XP");
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  assert.equal(await page.locator("#profile-button").isVisible(), false);
   console.log(
-    "✓ local demo profile UI isolates guest progress and renders usernames as text",
+    "✓ with no Supabase configuration, no account UI is offered and guest progress saves and reloads",
   );
 
   const accountPage = await browser.newPage({ serviceWorkers: "block" });

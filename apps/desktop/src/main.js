@@ -48,12 +48,9 @@ const dataStorage = storage || {
   removeItem: (key) => memory.delete(key),
 };
 // Supabase's publishable browser configuration is supplied at build/serve
-// time. With neither value present, the adapter remains entirely local so the
-// game still works offline. The older API-base setting stays as a migration
-// fallback for existing self-hosted deployments.
-const apiBase = document
-  .querySelector('meta[name="tiki-taka-api-base"]')
-  ?.content?.trim();
+// time. With neither value present, there is no account system at all: the
+// adapter falls back to guest-only local storage and the game keeps working
+// offline, with no sign-in UI offered (see accountsAvailable below).
 const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL?.trim();
 const supabasePublishableKey = import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
 // Browser tests can supply an in-memory adapter before this module evaluates.
@@ -63,7 +60,6 @@ const testDataAdapterFactory = globalThis.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY_
 let dataAdapter = testDataAdapterFactory
   ? await testDataAdapterFactory({ storage: dataStorage })
   : await selectDataAdapter({
-      apiBase,
       supabaseUrl,
       supabasePublishableKey,
       storage: dataStorage,
@@ -87,7 +83,7 @@ try {
           }
         : dataStorage,
   });
-  if (["supabase", "server"].includes(dataAdapter.kind)) {
+  if (dataAdapter.kind === "supabase") {
     remoteDataUnavailable = true;
     initialData = await fallback.loadUserData();
   } else {
@@ -101,10 +97,23 @@ let settings = initialData.settings;
 let accountStats = initialData.stats;
 let preferences = initialData.preferences || { scoreSaveChoice: "ask" };
 let profile = null;
-try {
-  profile = (await dataAdapter.getSession())?.profile || null;
-} catch {
-  remoteDataUnavailable = ["supabase", "server"].includes(dataAdapter.kind);
+// Only the Supabase adapter has a session to ask about; the guest adapter
+// has no accounts at all.
+if (dataAdapter.kind === "supabase") {
+  try {
+    profile = (await dataAdapter.getSession())?.profile || null;
+  } catch {
+    remoteDataUnavailable = true;
+  }
+}
+// The account entry point in the header only makes sense once there is an
+// account system to open it onto. With no Supabase configuration, hiding it
+// (rather than showing it disabled) is the cleaner read: there is nothing
+// for it to lead to, and the game is fully playable as a guest either way.
+const accountsAvailable = dataAdapter.kind === "supabase";
+if (!accountsAvailable) {
+  $("profile-button").hidden = true;
+  $("account-button").hidden = true;
 }
 // One switch used to cover everything, and it lived on `progress.sound`.
 // Effects and music now have a switch and a level each, in settings. A player
@@ -1722,42 +1731,29 @@ function openSettings() {
   renderBindings();
   $("settings-dialog").showModal();
 }
-const onlineAccount = () => ["supabase", "server"].includes(dataAdapter.kind);
+// True only for the Supabase adapter: the sole account system left. With no
+// Supabase configuration, dataAdapter.kind is "guest" and the account entry
+// point in the header is hidden entirely (see accountsAvailable below), so
+// this dialog is unreachable in that state and its branching can assume
+// "online" whenever it does run.
+const onlineAccount = () => dataAdapter.kind === "supabase";
 function syncAccountDialog() {
   $("account-guest").hidden = Boolean(profile);
   $("account-profile").hidden = !profile;
   $("profile-username").textContent = profile?.username || "";
   $("profile-email").textContent = profile?.email || "";
-  // Real accounts (dataAdapter.kind === "server") take a password; local
-  // demo profiles never do. Toggling both the row's visibility and the
-  // input's `required` keeps the passwordless local form exactly as before
-  // when no server is configured.
-  const online = onlineAccount();
-  $("register-password-row").hidden = !online;
-  $("register-password").required = online;
-  $("login-password-row").hidden = !online;
-  $("login-password").required = online;
-  $("login-identifier").type = online ? "email" : "text";
-  $("account-eyebrow").textContent = online
-    ? "ONLINE ACCOUNT"
-    : "THIS DEVICE / LOCAL DEMO";
   $("account-note").textContent = remoteDataUnavailable
     ? "Account data is temporarily unavailable. You are still playing locally; reconnect before relying on saved scores."
-    : online
-    ? "Your email stays private. Your username is public on the friendly leaderboard. Scores you submit are not independently verified — see the leaderboard for that note."
-    : "These passwordless demo profiles stay only in this browser. They are not online accounts and do not sync.";
-  $("account-title").textContent = online ? "Your account." : "Local profiles.";
-  $("account-button").textContent = `◎ ${profile?.username || (online ? "Account" : "Local profile")}`;
+    : "Your email stays private. Your username is public on the friendly leaderboard. Scores you submit are not independently verified — see the leaderboard for that note.";
+  $("account-button").textContent = `◎ ${profile?.username || "Account"}`;
   // The bar says "Guest" until a profile is chosen, and never claims more
   // than the active adapter actually provides.
   $("profile-chip-name").textContent = profile?.username || "Guest";
-  const chipKind = document.querySelector(".profile-chip-kind");
-  if (chipKind) chipKind.textContent = online ? "ACCOUNT" : "LOCAL DEMO PROFILE";
   $("profile-button").setAttribute(
     "aria-label",
     profile
-      ? `${online ? "Account" : "Local demo profile"} ${profile.username}. Open profile and settings.`
-      : `Playing as Guest. Open ${online ? "account" : "local demo profiles"} and settings.`,
+      ? `Account ${profile.username}. Open profile and settings.`
+      : `Playing as Guest. Open account and settings.`,
   );
 }
 async function switchDataContext(nextProfile) {
@@ -1835,12 +1831,11 @@ $("top-pause").addEventListener("click", togglePause);
 $("close-account").addEventListener("click", () => $("account-dialog").close());
 $("register-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const online = onlineAccount();
   try {
     const next = await dataAdapter.register({
       email: $("register-email").value,
       username: $("register-username").value,
-      ...(online ? { password: $("register-password").value } : {}),
+      password: $("register-password").value,
     });
     await switchDataContext(next);
     $("account-dialog").close();
@@ -1849,11 +1844,7 @@ $("register-form").addEventListener("submit", async (event) => {
       showScoreSaveDialog();
       await chooseAlwaysSave();
     } else {
-      toast(
-        online
-          ? `Account ${next.username} created.`
-          : `Local profile ${next.username} created on this device.`,
-      );
+      toast(`Account ${next.username} created.`);
     }
   } catch (error) {
     $("account-status").textContent = error.message;
@@ -1861,11 +1852,10 @@ $("register-form").addEventListener("submit", async (event) => {
 });
 $("login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const online = onlineAccount();
   try {
     const next = await dataAdapter.login({
       identifier: $("login-identifier").value,
-      ...(online ? { password: $("login-password").value } : {}),
+      password: $("login-password").value,
     });
     await switchDataContext(next);
     $("account-dialog").close();
@@ -1874,7 +1864,7 @@ $("login-form").addEventListener("submit", async (event) => {
       showScoreSaveDialog();
       await chooseAlwaysSave();
     } else {
-      toast(online ? `Signed in as ${next.username}.` : `Playing locally as ${next.username}.`);
+      toast(`Signed in as ${next.username}.`);
     }
   } catch (error) {
     $("account-status").textContent = error.message;
@@ -1933,9 +1923,9 @@ const unsubscribeAuthState = dataAdapter.onAuthStateChange?.((session) => {
 });
 window.addEventListener("pagehide", () => unsubscribeAuthState?.(), { once: true });
 window.addEventListener("online", () => void recoverRemoteDataContext());
-// Leaderboard: only the "server" adapter can answer this (it feature-detects
-// getLeaderboard), and with no server configured — the everyday case — the
-// dialog says so honestly instead of pretending nothing changed.
+// Leaderboard: only the Supabase adapter can answer this (it feature-detects
+// getLeaderboard), and with no Supabase configuration — the everyday guest
+// case — the dialog says so honestly instead of pretending nothing changed.
 async function loadLeaderboard() {
   if (!dataAdapter.getLeaderboard) return;
   $("leaderboard-status").textContent = "Loading…";

@@ -21,13 +21,6 @@
       content="Four players. One ball. Endless possibilities. A single-player possession game about finding your rhythm."
     />
     <title>tiki-taka — No goals. All flow.</title>
-    <!-- Empty by default: with no API base configured here, the app plays
-    entirely off local storage, exactly as it always has. A deployment that
-    stands up server/ (see server/README.md) sets this to that server's
-    origin — origin only, no path, e.g. "https://tiki-taka.example.com" — to
-    turn on real accounts and leaderboards. Endpoints already start with
-    "/api/...", so this is not "/api" itself. -->
-    <meta name="tiki-taka-api-base" content="" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
@@ -37,7 +30,8 @@
     <a class="skip-link" href="#main">Skip to the court</a>
     <div class="app-shell">
       <!-- One bar, every screen, including during play. It carries the
-      wordmark, the single soundtrack player and the local demo profile. There
+      wordmark, the single soundtrack player and the account chip (hidden
+      entirely when no Supabase configuration is present — see main.js). There
       used to be two players — a side rail in the play-view gutter and the
       switches in Settings — and two places the wordmark lived; this is the one
       that is always on screen. It reserves its own row above <main>, so it can
@@ -91,7 +85,7 @@
           <span class="profile-avatar" aria-hidden="true">◎</span>
           <span class="profile-chip-text">
             <span id="profile-chip-name" class="profile-chip-name">Guest</span>
-            <span class="profile-chip-kind">LOCAL DEMO PROFILE</span>
+            <span class="profile-chip-kind">ACCOUNT</span>
           </span>
         </button>
       </header>
@@ -780,6 +774,7 @@
                 id="register-password"
                 name="password"
                 type="password"
+                required
                 minlength="8"
                 autocomplete="new-password" /></label
             ><button class="primary-button" type="submit">
@@ -801,6 +796,7 @@
                 id="login-password"
                 name="password"
                 type="password"
+                required
                 autocomplete="current-password" /></label
             ><button class="primary-button" type="submit">
               Sign in
@@ -860,8 +856,9 @@
       </p>
       <div id="leaderboard-unavailable" hidden>
         <p class="leaderboard-note">
-          This device has no accounts server configured, so there is no
-          leaderboard to show — only local demo profiles.
+          This deployment has no Supabase configuration, so there is no
+          account system and no leaderboard to show. Your progress still
+          saves on this device as a guest.
         </p>
       </div>
       <div id="leaderboard-available">
@@ -912,7 +909,7 @@
           <span aria-hidden="true">?</span> How to play
         </button>
         <button id="account-button" type="button">
-          <span aria-hidden="true">◎</span> Local profile
+          <span aria-hidden="true">◎</span> Account
         </button>
         <button id="leaderboard-button" type="button" aria-haspopup="dialog">
           <span aria-hidden="true">☰</span> Leaderboard

@@ -5,9 +5,7 @@
 --
 -- Make the view security definer so it can serve the leaderboard on its own,
 -- and take the base-table access back. The application never needed it: the
--- only direct reads of either table are of the caller's own rows
--- (statsFor() filters round_scores by user_id, and the profile lookup
--- filters profiles by id).
+-- only direct reads of either table are of the caller's own rows.
 
 alter view public.leaderboard_entries set (security_invoker = false);
 
