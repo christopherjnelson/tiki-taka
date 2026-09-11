@@ -799,7 +799,9 @@ export class Renderer {
     // Active passing triangle visualization
     for (const e of this.effects) {
       if (e.triangle && e.triangle.length === 3) {
-        const t = Math.min(1, e.age / e.life);
+        const triangleDuration = (e.life || 1.25) * 0.5;
+        const t = Math.min(1, e.age / triangleDuration);
+        if (t >= 1) continue;
         const fade = Math.sin((1 - t) * Math.PI * 0.5);
         const [p1, p2, p3] = e.triangle;
         c.save();
@@ -808,17 +810,15 @@ export class Renderer {
         c.lineTo(p2.x, p2.y);
         c.lineTo(p3.x, p3.y);
         c.closePath();
-        c.fillStyle = `rgba(255, 211, 47, ${0.14 * fade})`;
-        c.shadowColor = "#ffd32f";
-        c.shadowBlur = 18 * fade;
-        c.fill();
-        c.strokeStyle = `rgba(255, 225, 75, ${0.9 * fade})`;
+        c.strokeStyle = `rgba(255, 225, 75, ${0.95 * fade})`;
         c.lineWidth = 2.5;
+        c.shadowColor = "#ffd32f";
+        c.shadowBlur = 10 * fade;
         c.stroke();
         c.shadowBlur = 0;
         if (!this.reducedMotion) {
           for (const pt of e.triangle) {
-            const ringRadius = 24 + (1 - fade) * 20;
+            const ringRadius = 24 + (1 - fade) * 16;
             c.strokeStyle = `rgba(255, 211, 47, ${0.65 * fade})`;
             c.lineWidth = 2 * fade;
             c.beginPath();
