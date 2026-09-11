@@ -319,6 +319,28 @@ export function createMusic({
       const reference = Math.max(level, 0.0001) * 0.25;
       return Math.min(1, rms / reference);
     },
+    // Audio visualizer hooks: fill provided Uint8Array buffers with live FFT
+    // frequencies and time-domain waveform data, returning true if live data was captured.
+    getFrequencyData(targetArray) {
+      if (!analyser || !source || !context || context.state !== "running" || !enabled || failed)
+        return false;
+      try {
+        analyser.getByteFrequencyData(targetArray);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    getTimeDomainData(targetArray) {
+      if (!analyser || !source || !context || context.state !== "running" || !enabled || failed)
+        return false;
+      try {
+        analyser.getByteTimeDomainData(targetArray);
+        return true;
+      } catch {
+        return false;
+      }
+    },
     get contextState() {
       return context?.state || "none";
     },

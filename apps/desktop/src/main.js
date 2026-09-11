@@ -491,6 +491,7 @@ function applyView(next, { updateHash = true } = {}) {
   syncProgress();
   syncSettingChrome();
   syncPauseMenu();
+  syncMusicRail();
   requestAnimationFrame(() => {
     if (anyDialogOpen() || menuOpen) return;
     if (view === "home") padFocus($("title-play"));
@@ -1446,12 +1447,12 @@ function paintAmbience(dt) {
   };
   // Cap the contrast hard: this is atmosphere at the edge of vision, and it
   // must never read as something happening on the court.
-  const strength = 0.05 + ambienceLevel * 0.09,
-    swell = 1 + ambienceLevel * 0.35;
+  const strength = 0.08 + ambienceLevel * 0.14,
+    swell = 1.1 + ambienceLevel * 0.4;
   if (box.left >= 2) {
-    const radius = Math.max(box.left, 90) * 2.1 * swell;
+    const radius = Math.max(box.left, 90) * 2.3 * swell;
     glow(box.left * 0.5, height * (0.36 + drift * 0.07), radius, strength);
-    glow(width - box.left * 0.5, height * (0.64 - drift * 0.07), radius, strength * 0.9);
+    glow(width - box.left * 0.5, height * (0.64 - drift * 0.07), radius, strength * 0.95);
   }
   if (box.top >= 2) {
     const radius = Math.max(box.top, 90) * 2.1 * swell;
@@ -1464,6 +1465,184 @@ function paintAmbience(dt) {
   c.lineWidth = 2;
   c.strokeRect(box.left - 1, box.top - 1, box.courtWidth + 2, box.courtHeight + 2);
   c.restore();
+}
+
+// --- Arena rail audio-reactive visualizers --------------------------------
+// Active in wide desktop viewports (window.innerWidth >= 1200) during play view.
+// Fills the letterbox background flanking the court with symmetrical spectrum analyzers.
+const railVizLeft = $("rail-viz-left"),
+  railVizRight = $("rail-viz-right"),
+  railCtxLeft = railVizLeft?.getContext("2d"),
+  railCtxRight = railVizRight?.getContext("2d");
+
+const VIZ_BARS = 10;
+const vizBarHeights = new Float32Array(VIZ_BARS);
+const vizBarPeaks = new Float32Array(VIZ_BARS);
+const vizFreqBuffer = new Uint8Array(64);
+let vizClock = 0;
+let vizElapsed = 0;
+
+const VIZ_BAND_RANGES = [
+  [0, 1],   // Sub-bass (~40-80 Hz)
+  [2, 3],   // Bass (~80-160 Hz)
+  [4, 6],   // Low-mid (~160-320 Hz)
+  [7, 10],  // Mid (~320-600 Hz)
+  [11, 15], // Mid-high (~600-1000 Hz)
+  [16, 21], // High-mid (~1-2 kHz)
+  [22, 28], // Presence (~2-3.5 kHz)
+  [29, 37], // Crisp (~3.5-5 kHz)
+  [38, 48], // Treble (~5-8 kHz)
+  [49, 63], // Air (~8-16 kHz)
+];
+
+function drawRoundedSegment(ctx, x, y, w, h, r) {
+  if (typeof ctx.roundRect === "function") {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.fill();
+  } else {
+    ctx.fillRect(x, y, w, h);
+  }
+}
+
+function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced) {
+  ctx.clearRect(0, 0, w, h);
+
+  const topPad = Math.round(58 * dpr);
+  const botPad = Math.round(90 * dpr);
+  const availH = h - topPad - botPad;
+  if (availH <= 40 || w <= 10) return;
+
+  const pad = Math.max(2, Math.round(3 * dpr));
+  const barWidth = Math.max(4, Math.floor((w - (VIZ_BARS + 1) * pad) / VIZ_BARS));
+  const totalW = VIZ_BARS * barWidth + (VIZ_BARS - 1) * pad;
+  const startX = Math.floor((w - totalW) / 2);
+
+  const numSegs = 36;
+  const segGap = Math.max(2, Math.round(2.5 * dpr));
+  const segH = Math.max(2, Math.floor((availH - (numSegs + 1) * segGap) / numSegs));
+  const rx = Math.max(1, Math.round(1.5 * dpr));
+
+  for (let c = 0; c < VIZ_BARS; c++) {
+    // Symmetrical frequency mapping: low bass on the outer edge (flanking the arena),
+    // high treble towards the court.
+    const bandIdx = isLeft ? c : (VIZ_BARS - 1 - c);
+    const bx = startX + c * (barWidth + pad);
+    const val = vizBarHeights[bandIdx];
+    const peak = vizBarPeaks[bandIdx];
+    const litCount = Math.round(val * numSegs);
+    const peakSeg = Math.min(numSegs - 1, Math.round(peak * numSegs));
+
+    // Subtle dark chassis channel behind each bar
+    ctx.fillStyle = "rgba(4, 9, 26, 0.35)";
+    drawRoundedSegment(ctx, bx - 1, topPad, barWidth + 2, availH, rx);
+
+    for (let s = 0; s < numSegs; s++) {
+      const sy = (h - botPad) - (s + 1) * (segH + segGap);
+      const frac = s / (numSegs - 1);
+      const isLit = s < litCount;
+      const isPeak = !reduced && s === peakSeg && peak > 0.05;
+
+      if (isPeak) {
+        ctx.fillStyle = "#ffffff";
+        ctx.shadowColor = "#ffffff";
+        ctx.shadowBlur = Math.round(6 * dpr);
+        drawRoundedSegment(ctx, bx, sy, barWidth, segH, rx);
+        ctx.shadowBlur = 0;
+      } else if (isLit) {
+        if (frac < 0.55) {
+          ctx.fillStyle = "#00f0ff";
+          ctx.shadowColor = "#00f0ff";
+        } else if (frac < 0.8) {
+          ctx.fillStyle = "#ffd64d";
+          ctx.shadowColor = "#ffd64d";
+        } else {
+          ctx.fillStyle = "#ff2a85";
+          ctx.shadowColor = "#ff2a85";
+        }
+        ctx.shadowBlur = (s >= litCount - 2) ? Math.round(5 * dpr) : 0;
+        drawRoundedSegment(ctx, bx, sy, barWidth, segH, rx);
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = "rgba(16, 32, 64, 0.35)";
+        drawRoundedSegment(ctx, bx, sy, barWidth, segH, rx);
+      }
+    }
+  }
+}
+
+function paintRailVisualizers(dt) {
+  if (
+    !railCtxLeft ||
+    !railCtxRight ||
+    !document.body.classList.contains("play-view") ||
+    window.innerWidth < 1200
+  )
+    return;
+
+  const reduced = renderer.reducedMotion;
+  const cadence = reduced ? 0.25 : 1 / 30;
+  vizElapsed += dt;
+  if (vizElapsed < cadence) return;
+  const elapsed = Math.min(0.2, vizElapsed);
+  vizElapsed = 0;
+  if (!reduced) vizClock += elapsed;
+
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const clientWL = railVizLeft.clientWidth,
+    clientHL = railVizLeft.clientHeight;
+  if (clientWL > 0 && clientHL > 0) {
+    const bwL = Math.round(clientWL * dpr),
+      bhL = Math.round(clientHL * dpr);
+    if (railVizLeft.width !== bwL || railVizLeft.height !== bhL) {
+      railVizLeft.width = bwL;
+      railVizLeft.height = bhL;
+    }
+  }
+  const clientWR = railVizRight.clientWidth,
+    clientHR = railVizRight.clientHeight;
+  if (clientWR > 0 && clientHR > 0) {
+    const bwR = Math.round(clientWR * dpr),
+      bhR = Math.round(clientHR * dpr);
+    if (railVizRight.width !== bwR || railVizRight.height !== bhR) {
+      railVizRight.width = bwR;
+      railVizRight.height = bhR;
+    }
+  }
+
+  const hasFreq = music.getFrequencyData(vizFreqBuffer);
+
+  for (let b = 0; b < VIZ_BARS; b++) {
+    if (reduced) {
+      vizBarHeights[b] = 0.35;
+      vizBarPeaks[b] = 0.35;
+    } else if (hasFreq) {
+      const [start, end] = VIZ_BAND_RANGES[b];
+      let sum = 0;
+      for (let k = start; k <= end; k++) sum += vizFreqBuffer[k];
+      const avg = sum / (end - start + 1);
+      const freqScale = 1.05 + b * 0.08;
+      const targetVal = Math.min(1, (avg / 255) * freqScale);
+      if (targetVal > vizBarHeights[b]) {
+        vizBarHeights[b] = targetVal;
+      } else {
+        vizBarHeights[b] = Math.max(0, vizBarHeights[b] - elapsed * 2.5);
+      }
+    } else {
+      vizBarHeights[b] = 0.22 + 0.16 * Math.sin(vizClock * 2.2 + b * 0.65);
+    }
+
+    if (!reduced) {
+      if (vizBarHeights[b] > vizBarPeaks[b]) {
+        vizBarPeaks[b] = vizBarHeights[b];
+      } else {
+        vizBarPeaks[b] = Math.max(0, vizBarPeaks[b] - elapsed * 0.75);
+      }
+    }
+  }
+
+  renderSpectrumCanvas(railCtxLeft, railVizLeft.width, railVizLeft.height, true, dpr, reduced);
+  renderSpectrumCanvas(railCtxRight, railVizRight.width, railVizRight.height, false, dpr, reduced);
 }
 
 // The scoreboard floats over the top of the court in play view and reflows
@@ -2975,6 +3154,7 @@ function frame(now) {
     syncHud();
     const jsDone = isPerfActive ? performance.now() : 0;
     paintAmbience(dt);
+    paintRailVisualizers(dt);
     const target =
       phase === "playing" && !awaitingResume ? queuedSmartTarget() : null;
     renderer.render(game, {

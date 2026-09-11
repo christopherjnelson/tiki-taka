@@ -3960,61 +3960,40 @@ body.play-view .arena-view .below-court {
 
 /* Rails are a reward for genuinely spare horizontal room. They use the
    letterbox formula rather than a grid column, so they can never reduce the
-   canvas width. */
+   canvas width. They fill the full background of each side view with
+   symmetrical audio-reactive spectrum analyzers. */
 @media (min-width: 1200px) {
   body.play-view .arena-rail {
     display: block;
     position: absolute;
-    z-index: 2;
-    top: 96px;
-    bottom: calc(var(--desktop-control-rail) + 14px);
-    width: clamp(78px, calc((100cqw - var(--arena-court-width)) / 2 - 18px), 166px);
-    min-height: 260px;
-    padding: clamp(12px, 1.3cqw, 20px) clamp(8px, 1cqw, 15px);
+    z-index: 1;
+    top: 0;
+    bottom: 0;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
     overflow: hidden;
-    color: #c5d6ef;
-    background:
-      radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--venue-accent), transparent 88%), transparent 42%),
-      #070d23;
-    border: 1px solid color-mix(in srgb, var(--venue-accent), #37557e 40%);
-    border-radius: 6px;
     pointer-events: none;
   }
   body.play-view .arena-rail-left {
-    left: max(8px, calc((100cqw - var(--arena-court-width)) / 4 - 83px));
+    left: 0;
+    width: calc((100cqw - var(--arena-court-width)) / 2 - 1px);
   }
   body.play-view .arena-rail-right {
-    right: max(8px, calc((100cqw - var(--arena-court-width)) / 4 - 83px));
-    border-color: color-mix(in srgb, var(--pink), #37557e 42%);
-    text-align: right;
+    right: 0;
+    width: calc((100cqw - var(--arena-court-width)) / 2 - 1px);
   }
-  .arena-rail strong {
-    display: block;
-    color: var(--pink);
-    font: italic 800 clamp(12px, 0.9vw, 16px) / 0.9 var(--display);
-    transform: none;
-  }
-  .arena-rail-rule {
-    display: block;
-    height: 1px;
-    margin: clamp(18px, 3.5cqh, 36px) 0 12px;
-    background: #536b8e;
-  }
-  .arena-rail p {
-    margin: 0 0 11px;
-    color: #cbdcf4;
-    font: 700 clamp(7px, 0.55vw, 9px) / 1.35 var(--sign);
-    letter-spacing: clamp(1.5px, 0.18vw, 3px);
-  }
-  .arena-rail-tour,
-  .arena-rail-coordinates {
+  .arena-rail-canvas {
     position: absolute;
-    right: clamp(8px, 1cqw, 15px);
-    bottom: clamp(12px, 2cqh, 22px);
-    left: clamp(8px, 1cqw, 15px);
-    color: var(--venue-accent);
-    font: 700 clamp(7px, 0.55vw, 9px) / 1.5 var(--sign);
-    letter-spacing: clamp(1px, 0.18vw, 3px);
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
   }
 }
 .settings-utilities {
