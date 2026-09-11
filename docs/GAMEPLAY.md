@@ -6,12 +6,12 @@ Move the ball carrier while three teammates find supporting positions. An interc
 
 - **Pass:** 12 points, or 6 when immediately returning to the previous carrier.
 - **Flow:** rises every four consecutive passes, up to x5, and resets after a turnover.
-- **One touch:** queue while the ball travels or release within 0.35 seconds without dribbling. Each completed one-touch pass adds 5 points; every ten adds another 50 points and 2 seconds of Focus (Olé milestone). Holding, dribbling, or losing possession breaks the streak.
-- **Triangle:** complete A → B → C → A with distinct players within 3.5 seconds (and without any player holding the ball longer than 1.2 seconds) for 35 points and 1.5 seconds of Focus.
-- **Wall pass:** bank off the boundary for 18 points. It does not earn Focus.
-- **Bonus zone:** receive inside the orange ring for 25 points and 1 second of Focus. It moves after a bonus or 12 seconds.
-- **Split the press:** thread a pass between two closing defenders for high bonus points and 2 seconds of Focus.
-- **Focus:** slows the court and clock. Successful normal-speed triangles, bonus-zone receptions, press splits, and Olé milestones fill its reserve. Rewards cannot be earned while Focus is active.
+- **One touch:** queue while the ball travels or release within 0.35 seconds without dribbling. Each completed one-touch pass adds 5 points; every ten adds another 50 points and 4 units of Energy (Olé milestone). Holding, dribbling, or losing possession breaks the streak.
+- **Triangle:** complete A → B → C → A with distinct players within 3.5 seconds (and without any player holding the ball longer than 1.2 seconds) for 35 points and 3 units of Energy.
+- **Wall pass:** bank off the boundary for 18 points. It does not earn Energy.
+- **Bonus zone:** receive inside the orange ring for 25 points and 2 units of Energy. It moves after a bonus or 12 seconds.
+- **Split the press:** thread a pass between two closing defenders for high bonus points and 4 units of Energy.
+- **Energy (Focus & Boost):** a shared tactical meter holding up to 10 units. Focus slows the court and clock (draining 1 unit/sec). Boost sprints the carrier (draining 2 units/sec, twice as fast as Focus). Successful normal-speed triangles, bonus-zone receptions, press splits, and Olé milestones refill Energy. Rewards cannot be earned while Focus or Boost is active.
 
 The flow multiplier applies to pass, triangle, wall, and zone points. One-touch bonuses are flat additions. The possession ring warns when the carrier has held the ball too long. Light dotted lanes indicate clearer passes; coral lanes indicate interception risk.
 
@@ -22,8 +22,9 @@ The flow multiplier applies to pass, triangle, wall, and zone points. One-touch 
 | Move | WASD / arrows; drag empty court | Left stick |
 | Aim | Point or move toward teammate | Right stick; left when right is idle |
 | Pass | Click teammate; 1–4; Space for suggestion | A / bottom face |
-| Wall pass | Hold Shift; B or Wall arms | X / left face sends immediately |
+| Wall pass | B or Wall arms | X / left face sends immediately |
 | Focus | Hold E; button toggles | Hold LT |
+| Boost | Hold Shift or click Boost | Hold RT |
 | Pause | Esc or Pause | Start; B also resumes |
 | Menus | Tab, Enter/Space, mouse | D-pad/stick; A selects |
 
@@ -51,9 +52,9 @@ Finished rounds grant XP, with a new level and rank title every 300 XP.
 
 | Tactic | Strength | Tradeoff |
 | --- | --- | --- |
-| Playmaker | Largest Focus reserve | Balanced movement and passing |
-| Mover | Fastest movement | Smaller reserve and slower passes |
-| Conductor | Fastest passes | Slowest movement and medium reserve |
+| Playmaker | Largest Energy reserve (10 units) | Balanced movement and passing |
+| Mover | Fastest movement | Smaller reserve (6 units) and slower passes |
+| Conductor | Fastest passes | Slowest movement and medium reserve (8 units) |
 
 ## Interface and offline behavior
 

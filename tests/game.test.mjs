@@ -64,7 +64,7 @@ test('all tactics start with empty focus at their advertised capacities and fall
   for (const key of Object.keys(TACTICS)) {
     const game = new Game(COURTS[0], key);
     assert.equal(game.focus, 0);
-    assert.equal({ balanced: 5, runner: 3, maestro: 4 }[key], TACTICS[key].focus);
+    assert.equal({ balanced: 10, runner: 6, maestro: 8 }[key], TACTICS[key].focus);
     assert.equal('regen' in TACTICS[key], false);
     assert.equal(game.players.length, 4);
     assert.equal(game.defenders.length, COURTS[0].defenders);
@@ -177,7 +177,7 @@ test('one-touch milestone adds its flat bonus exactly once every ten passes', ()
   assert.equal(events.at(-1).bonus, ONE_TOUCH.passBonus + ONE_TOUCH.milestoneBonus);
   assert.equal(events.at(-1).text, 'ONE TOUCH ×20 +55');
   assert.equal(game.focus, ONE_TOUCH.milestoneFocus * 2);
-  assert.ok(game.events.some(event => event.type === 'focus' && event.text.includes('+2.0s')));
+  assert.ok(game.events.some(event => event.type === 'focus' && event.text.includes('+4 ENERGY')));
 });
 
 test('turnovers and intercepted one-touch attempts reset the current streak but preserve the best', () => {
@@ -262,7 +262,7 @@ test('return passes score less while sustained possession builds a multiplier', 
   assert.equal(game.triangles, 0);
 });
 
-test('three-player triangles earn 1.5 seconds of focus without exceeding capacity', () => {
+test('three-player triangles earn 3 energy without exceeding capacity', () => {
   const game = openGame();
   game.focus = 0;
   completePass(game, 1);
@@ -272,7 +272,7 @@ test('three-player triangles earn 1.5 seconds of focus without exceeding capacit
   assert.equal(game.triangles, 1);
   assert.ok(game.score - before > 12);
   assert.equal(game.focus, focusBefore + FOCUS_REWARDS.triangle);
-  assert.ok(game.events.some(event => event.type === 'focus' && event.text === 'FOCUS +1.5s' && event.x === game.players[0].x));
+  assert.ok(game.events.some(event => event.type === 'focus' && event.text === '+3 ENERGY' && event.x === game.players[0].x));
   game.focus = game.tactic.focus;
   completePass(game, 1);
   assert.equal(game.focus, game.tactic.focus);
@@ -473,7 +473,7 @@ test('boost has a deterministic partial final frame, release gate, and Boost pri
   game.focus = 0.02;
   const start = { ...game.players[0] };
   game.update(0.05, { x: 1, boost: true });
-  assert.ok(Math.abs(distance(start, game.players[0]) - game.tactic.speed * (0.05 + 0.02 * (BOOST_SPEED_MULTIPLIER - 1))) < 1e-8);
+  assert.ok(Math.abs(distance(start, game.players[0]) - game.tactic.speed * (0.05 + (0.02 / BOOST_DRAIN_RATE) * (BOOST_SPEED_MULTIPLIER - 1))) < 1e-8);
   assert.equal(game.focus, 0);
   assert.equal(game.boostNeedsRelease, true);
 
@@ -530,7 +530,7 @@ test('plain passes earn no focus and combined skill rewards stack at tactic capa
   game.zone = { ...game.players[0], r: 92 };
   completePass(game, 0, true);
   assert.equal(game.focus, game.tactic.focus);
-  assert.ok(game.events.some(event => event.type === 'focus' && event.text === 'FOCUS +2.0s'));
+  assert.ok(game.events.some(event => event.type === 'focus' && event.text === '+4 ENERGY'));
 });
 
 test('skill passes completed with focus active keep bonuses but earn no focus', () => {
@@ -549,12 +549,12 @@ test('empty or exhausted focus must be released before earned charge can activat
   const game = openGame();
   game.zone = { ...game.players[1], r: 92 };
   completePassWithInput(game, 1, false, { focus: true });
-  assert.equal(game.focus, 1);
+  assert.equal(game.focus, FOCUS_REWARDS.zone);
   assert.equal(game.focusNeedsRelease, true);
   const beforeHeld = game.elapsed;
   advance(game, 0.25, { focus: true });
   assert.ok(Math.abs(game.elapsed - beforeHeld - 0.25) < 1e-8);
-  assert.equal(game.focus, 1);
+  assert.equal(game.focus, FOCUS_REWARDS.zone);
   game.update(STEP);
   assert.equal(game.focusNeedsRelease, false);
   const beforeFocus = game.elapsed;

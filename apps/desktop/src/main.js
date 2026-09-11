@@ -813,6 +813,7 @@ function prepare() {
   resetHudCache();
   renderer.effects.length = 0;
   game = new Game(config(), progress.tactic);
+  window.__game = game;
   const venue = getVenue(game.config);
   document.documentElement.dataset.venue = venue.id;
   document.documentElement.style.setProperty("--venue-accent", venue.accent);
@@ -1240,6 +1241,9 @@ function resetHudCache() {
   hudCache.isPlaying = null;
   hudCache.isRound = null;
   hudCache.courtTarget = null;
+  hudCache.focusTier = "";
+  hudCache.energyBoostActive = null;
+  hudCache.energyFocusActive = null;
 }
 
 function syncFocusButtons() {
@@ -1555,7 +1559,11 @@ function syncHud() {
 
   const focusCap = game.tactic.focus;
   const focusAmount = Math.max(0, game.focus);
-  const focusText = `${focusAmount.toFixed(1)} / ${focusCap}s`;
+  const displayVal =
+    focusAmount === 0 || focusAmount === focusCap || Number.isInteger(focusAmount)
+      ? String(Math.round(focusAmount))
+      : focusAmount.toFixed(1);
+  const focusText = `${displayVal} / ${focusCap}`;
   if (focusText !== hudCache.focusText) {
     $("energy-value").textContent = focusText;
     $("touch-focus-value").textContent = focusText;
@@ -1569,6 +1577,11 @@ function syncHud() {
     $("energy-fill").style.width = widthStr;
     $("touch-focus-fill").style.width = widthStr;
     hudCache.focusRatio = roundedRatio;
+    const tier = focusAmount >= 7.5 ? "high" : focusAmount >= 3.5 ? "mid" : "low";
+    if (tier !== hudCache.focusTier) {
+      $("energy-info").dataset.tier = tier;
+      hudCache.focusTier = tier;
+    }
   }
 
   const roundedFocus = focusAmount.toFixed(1);
@@ -1577,7 +1590,7 @@ function syncHud() {
     $("energy-meter").setAttribute("aria-valuenow", roundedFocus);
     $("energy-meter").setAttribute(
       "aria-valuetext",
-      `${roundedFocus} of ${focusCap} seconds`,
+      `${roundedFocus} of ${focusCap} energy`,
     );
     hudCache.focusValuenow = roundedFocus;
     hudCache.focusCap = focusCap;
@@ -1588,6 +1601,17 @@ function syncHud() {
     $("energy-info").classList.toggle("is-empty", focusEmpty);
     $("touch-focus").classList.toggle("is-empty", focusEmpty);
     hudCache.focusEmpty = focusEmpty;
+  }
+
+  const isBoost = Boolean(game.boostActive);
+  if (isBoost !== hudCache.energyBoostActive) {
+    $("energy-info").classList.toggle("boost-active", isBoost);
+    hudCache.energyBoostActive = isBoost;
+  }
+  const isFocus = Boolean(game.focusActive);
+  if (isFocus !== hudCache.energyFocusActive) {
+    $("energy-info").classList.toggle("focus-active", isFocus);
+    hudCache.energyFocusActive = isFocus;
   }
 
   const goalPercent = game.config.target

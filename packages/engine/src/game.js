@@ -1,7 +1,7 @@
 export const WIDTH = 1000,
   HEIGHT = 620;
 export const LIMITS = { left: 50, right: 950, top: 50, bottom: 570 };
-export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, ole: 2, wall: 0 };
+export const FOCUS_REWARDS = { split: 4, triangle: 3, zone: 2, ole: 4, wall: 0 };
 export const TRIANGLE_WINDOW = 3.5;
 export const TRIANGLE_MAX_HOLD = 1.2;
 export const SPLIT_PRESS = {
@@ -25,34 +25,33 @@ export const ONE_TOUCH = {
   passBonus: 5,
   milestoneEvery: 10,
   milestoneBonus: 50,
-  milestoneFocus: 2,
+  milestoneFocus: 4,
 };
-// Boost spends the same earned Focus seconds as slow motion, but applies only
-// to the carrier's movement. Keeping its tuning here makes it a simulation
-// concern rather than an input- or renderer-specific multiplier.
+// Boost spends the same earned Focus reserve as slow motion, but consumes energy
+// twice as fast (2 units/sec) while applying only to the carrier's movement.
 export const BOOST_SPEED_MULTIPLIER = 1.75;
-export const BOOST_DRAIN_RATE = 1;
+export const BOOST_DRAIN_RATE = 2;
 export const TACTICS = {
   balanced: {
     name: "Playmaker",
     label: "A little more time to see the pass.",
     speed: 155,
     ballSpeed: 690,
-    focus: 5,
+    focus: 10,
   },
   runner: {
     name: "Mover",
     label: "Quick feet. Less time in focus.",
     speed: 195,
     ballSpeed: 640,
-    focus: 3,
+    focus: 6,
   },
   maestro: {
     name: "Conductor",
     label: "Faster passes. A calmer first touch.",
     speed: 135,
     ballSpeed: 840,
-    focus: 4,
+    focus: 8,
   },
 };
 export const COURTS = [
@@ -513,7 +512,7 @@ export class Game {
       const gained = Math.min(focusReward, this.tactic.focus - this.focus);
       if (gained > 0) {
         this.focus += gained;
-        this.emit("focus", `FOCUS +${gained.toFixed(1)}s`, p.x, p.y);
+        this.emit("focus", `+${Math.round(gained)} ENERGY`, p.x, p.y);
       }
     }
     if (ball.oneTouch) {
