@@ -29,9 +29,16 @@ at the repository root explicitly. Without that, the values are silently
 dropped and the build ships with no sign-in — a missing optional configuration
 looks exactly like a deliberate one.
 
-`scripts/serve.mjs` is a plain static server with no Vite transform, so
-`npm start` never substitutes these variables and always runs guest-only. To
-exercise Supabase locally, serve the build:
+`npm start` (and `npm run dev`) runs Vite through `scripts/dev.mjs`, which
+substitutes these variables and prints on boot whether it found a Supabase
+project or is running guest-only. Its development Content-Security-Policy is
+deliberately looser than production's — Vite needs its own client and a
+websocket — and it replaces the document's meta policy only while serving.
+Neither the shipped meta tag nor `serve.mjs` is affected.
+
+`scripts/serve.mjs` is a plain static server with no Vite transform, so it
+never substitutes these variables. It is how a finished build is served, which
+is what the browser suites use:
 
 ```sh
 npm run build && SERVE_DIR=dist/desktop node --env-file=.env scripts/serve.mjs

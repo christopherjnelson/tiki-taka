@@ -11,6 +11,11 @@ npm start
 
 The game runs at <http://localhost:5173>. Use `HOST=0.0.0.0 npm start` only on a trusted network.
 
+`npm start` runs Vite, so a `.env` at the repository root supplies the Supabase
+configuration and the account UI appears; with no configuration the game runs
+guest-only and offers no sign-in. The server says which on boot. See
+[docs/supabase-browser-config.md](docs/supabase-browser-config.md).
+
 Every change should pass the unit tests and the production build:
 
 ```sh
