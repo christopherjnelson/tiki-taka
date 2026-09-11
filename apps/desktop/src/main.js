@@ -1207,6 +1207,10 @@ const ambienceRgb = (accent) => {
   if (full.length !== 6 || !Number.isFinite(value)) return [39, 234, 216];
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 };
+let lastAmbienceWidth = 0,
+  lastAmbienceHeight = 0,
+  lastAmbienceDpr = 0;
+
 function paintAmbience(dt) {
   const canvas = ambienceCanvas;
   if (
@@ -1216,18 +1220,7 @@ function paintAmbience(dt) {
     !document.body.classList.contains("play-view")
   )
     return;
-  const box = courtBox();
-  if (!box) return;
-  const width = Math.round(box.width),
-    height = Math.round(box.height),
-    dpr = Math.min(2, window.devicePixelRatio || 1);
-  const backingWidth = Math.round(width * dpr),
-    backingHeight = Math.round(height * dpr),
-    resized = canvas.width !== backingWidth || canvas.height !== backingHeight;
-  if (resized) {
-    canvas.width = backingWidth;
-    canvas.height = backingHeight;
-  }
+
   // The decorative wash used to rebuild four gradients and a clipping path
   // at display refresh rate. It is not gameplay feedback, so 30fps while
   // music is active and 12fps while idling retain the intended motion while
@@ -1236,6 +1229,31 @@ function paintAmbience(dt) {
     measured = music.energy,
     cadence = reduced ? 0.25 : measured === null ? 1 / 12 : 1 / 30;
   ambienceElapsed += dt;
+
+  // Fast path: if courtBox hasn't resized and cadence has not elapsed, exit immediately
+  // without touching DOM canvas properties or recomputing backing sizes.
+  if (!courtBoxDirty && ambienceElapsed < cadence) return;
+
+  const box = courtBox();
+  if (!box) return;
+  const width = Math.round(box.width),
+    height = Math.round(box.height),
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+  const backingWidth = Math.round(width * dpr),
+    backingHeight = Math.round(height * dpr),
+    resized =
+      backingWidth !== lastAmbienceWidth ||
+      backingHeight !== lastAmbienceHeight ||
+      dpr !== lastAmbienceDpr;
+
+  if (resized) {
+    canvas.width = backingWidth;
+    canvas.height = backingHeight;
+    lastAmbienceWidth = backingWidth;
+    lastAmbienceHeight = backingHeight;
+    lastAmbienceDpr = dpr;
+  }
+
   if (!resized && ambienceElapsed < cadence) return;
   const elapsed = Math.min(0.25, ambienceElapsed);
   ambienceElapsed = 0;
