@@ -636,32 +636,47 @@
                 >Find the open player</span
               >
               <div class="play-actions">
-                <button id="pass-button" title="Pass (Space)" disabled>
-                  Pass <kbd data-binding="smartPass">SPACE</kbd></button
-                ><button
+                <button id="pass-button" class="play-action-btn" data-action="smartPass" title="Pass (Space)" disabled>
+                  <span class="action-name">Pass</span>
+                  <kbd data-binding="smartPass">SPACE</kbd>
+                </button>
+                <button
                   id="bank-button"
+                  class="play-action-btn"
+                  data-action="wallToggle"
                   aria-pressed="false"
                   title="Toggle wall pass (B)"
                   disabled
                 >
-                  Wall pass <kbd data-binding="wallToggle">B</kbd></button
-                ><button id="shout-button" title="Shout target to bonus zone (F)" disabled>
-                  Shout <kbd data-binding="shout">F</kbd></button
-                ><button
+                  <span class="action-name">Wall Pass</span>
+                  <kbd data-binding="wallToggle">B</kbd>
+                </button>
+                <button id="shout-button" class="play-action-btn" data-action="shout" title="Shout target to bonus zone (F)" disabled>
+                  <span class="action-name">Shout</span>
+                  <kbd data-binding="shout">F</kbd>
+                </button>
+                <button
                   id="focus-button"
+                  class="play-action-btn"
+                  data-action="focusHold"
                   aria-pressed="false"
                   title="Earn Energy with wall passes, triangles, or bonus zones. Toggle here or hold E."
                   disabled
                 >
-                  Focus <kbd data-binding="focusHold">E</kbd></button
-                ><button
+                  <span class="action-name">Focus</span>
+                  <kbd data-binding="focusHold">E</kbd>
+                </button>
+                <button
                   id="boost-button"
+                  class="play-action-btn"
+                  data-action="boostHold"
                   aria-pressed="false"
                   title="Hold Boost (R). Boost uses Energy."
                   disabled
                 >
-                  Boost <kbd data-binding="boostHold">R</kbd></button
-                >
+                  <span class="action-name">Boost</span>
+                  <kbd data-binding="boostHold">R</kbd>
+                </button>
               </div>
             </div>
           </section>
