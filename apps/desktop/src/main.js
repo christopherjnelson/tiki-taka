@@ -176,6 +176,92 @@ let keys = new Set(),
   gamepadMove = { x: 0, y: 0 },
   gamepadFocus = false,
   gamepadBoost = false;
+const ACTION_BUTTON_MAP = {
+  smartPass: "pass-button",
+  wallToggle: "bank-button",
+  shout: "shout-button",
+  focusHold: "focus-button",
+  boostHold: "boost-button",
+};
+const ACTION_NAMES = Object.keys(ACTION_BUTTON_MAP);
+const actionHighlightUntil = {
+  smartPass: 0,
+  wallToggle: 0,
+  shout: 0,
+  focusHold: 0,
+  boostHold: 0,
+};
+const gamepadPressedActions = {
+  smartPass: false,
+  wallToggle: false,
+  shout: false,
+  focusHold: false,
+  boostHold: false,
+};
+const actionPressedCache = {
+  smartPass: false,
+  wallToggle: false,
+  shout: false,
+  focusHold: false,
+  boostHold: false,
+};
+let toolbarActionButtons = null;
+function getToolbarActionButton(action) {
+  if (!toolbarActionButtons) {
+    toolbarActionButtons = {
+      smartPass: $("pass-button"),
+      wallToggle: $("bank-button"),
+      shout: $("shout-button"),
+      focusHold: $("focus-button"),
+      boostHold: $("boost-button"),
+    };
+  }
+  return toolbarActionButtons[action];
+}
+function triggerActionHighlight(action, duration = 180) {
+  if (action in actionHighlightUntil) {
+    actionHighlightUntil[action] = performance.now() + duration;
+    const btn = getToolbarActionButton(action);
+    if (btn && !actionPressedCache[action]) {
+      actionPressedCache[action] = true;
+      btn.classList.add("action-pressed");
+    }
+  }
+}
+function syncActionHighlights(now) {
+  if (view !== "arena") return;
+  for (const action of ACTION_NAMES) {
+    const btn = getToolbarActionButton(action);
+    if (!btn) continue;
+    let held = gamepadPressedActions[action];
+    if (!held) {
+      if (action === "smartPass") {
+        held =
+          actionDown(settings.bindings, keys, "smartPass") ||
+          actionDown(settings.bindings, keys, "direct1") ||
+          actionDown(settings.bindings, keys, "direct2") ||
+          actionDown(settings.bindings, keys, "direct3") ||
+          actionDown(settings.bindings, keys, "direct4");
+      } else if (action === "wallToggle") {
+        held =
+          actionDown(settings.bindings, keys, "wallToggle") ||
+          actionDown(settings.bindings, keys, "wallHold");
+      } else if (action === "shout") {
+        held = actionDown(settings.bindings, keys, "shout");
+      } else if (action === "focusHold") {
+        held = actionDown(settings.bindings, keys, "focusHold");
+      } else if (action === "boostHold") {
+        held = actionDown(settings.bindings, keys, "boostHold");
+      }
+    }
+    const triggered = (actionHighlightUntil[action] || 0) > now;
+    const isPressed = Boolean(held || triggered);
+    if (isPressed !== actionPressedCache[action]) {
+      actionPressedCache[action] = isPressed;
+      btn.classList.toggle("action-pressed", isPressed);
+    }
+  }
+}
 let padPrevious = [],
   padConnected = false,
   // The toolbar's key chips track which input the player is actually using,
@@ -1055,6 +1141,15 @@ function clearInput() {
   gamepadBoost = false;
   pointerId = null;
   joystickId = null;
+  for (const action of ACTION_NAMES) {
+    gamepadPressedActions[action] = false;
+    actionHighlightUntil[action] = 0;
+    if (actionPressedCache[action]) {
+      actionPressedCache[action] = false;
+      const btn = getToolbarActionButton(action);
+      if (btn) btn.classList.remove("action-pressed");
+    }
+  }
   game?.clearQueuedPass?.();
   $("joystick-thumb").style.transform = "translate(0px, 0px)";
 }
@@ -1102,6 +1197,7 @@ function queuedSmartTarget() {
 }
 function doPass(id, forceBank = false) {
   if (phase !== "playing" || awaitingResume) return;
+  triggerActionHighlight("smartPass");
   unlockAudio();
   const target = id ?? queuedSmartTarget();
   const useBank =
@@ -1117,12 +1213,14 @@ function doPass(id, forceBank = false) {
 }
 function toggleBank() {
   if (phase !== "playing") return;
+  triggerActionHighlight("wallToggle");
   bank = !bank;
   $("bank-button").setAttribute("aria-pressed", String(bank));
   $("touch-bank").setAttribute("aria-pressed", String(bank));
 }
 function toggleFocus() {
   if (phase !== "playing") return;
+  triggerActionHighlight("focusHold");
   if (game.focus <= 0) {
     focusToggle = false;
     syncFocusButtons();
@@ -1136,6 +1234,7 @@ function toggleFocus() {
 }
 function toggleBoost() {
   if (phase !== "playing") return;
+  triggerActionHighlight("boostHold");
   if (game.focus <= 0) {
     boostToggle = false;
     syncBoostButtons();
@@ -1268,6 +1367,7 @@ function selectedPassTarget() {
 }
 function shoutTarget() {
   if (phase !== "playing" || awaitingResume) return;
+  triggerActionHighlight("shout");
   const target = selectedPassTarget();
   if (game.shout(target)) {
     toast(`Player ${target + 1} is moving to the bonus zone.`);
@@ -2738,10 +2838,24 @@ window.addEventListener("keydown", (e) => {
   if (action) e.preventDefault();
   keys.add(e.code);
   if (e.repeat) return;
-  if (action?.startsWith("direct")) doPass(Number(action.slice(-1)) - 1);
-  if (action === "smartPass") doPass();
-  if (action === "wallToggle") toggleBank();
-  if (action === "shout") shoutTarget();
+  if (action?.startsWith("direct")) {
+    triggerActionHighlight("smartPass");
+    doPass(Number(action.slice(-1)) - 1);
+  }
+  if (action === "smartPass") {
+    triggerActionHighlight("smartPass");
+    doPass();
+  }
+  if (action === "wallToggle") {
+    triggerActionHighlight("wallToggle");
+    toggleBank();
+  }
+  if (action === "shout") {
+    triggerActionHighlight("shout");
+    shoutTarget();
+  }
+  if (action === "focusHold") triggerActionHighlight("focusHold");
+  if (action === "boostHold") triggerActionHighlight("boostHold");
 });
 window.addEventListener("keyup", (e) => {
   keys.delete(e.code);
@@ -2942,6 +3056,9 @@ function pollGamepad(dt) {
     gamepadMove = { x: 0, y: 0 };
     gamepadFocus = false;
     gamepadBoost = false;
+    for (const action of ACTION_NAMES) {
+      gamepadPressedActions[action] = false;
+    }
     // A pad that is gone cannot be the input in use, so the chips go back to
     // keys rather than advertising buttons the player no longer has.
     setInputSource("keyboard");
@@ -2959,6 +3076,17 @@ function pollGamepad(dt) {
   const pressed = pad.buttons.map((b) => b.pressed || (b.value || 0) >= 0.25),
     tap = (i) => pressed[i] && !padPrevious[i],
     dead = (v) => (Math.abs(v || 0) > 0.18 ? v : 0);
+
+  gamepadPressedActions.smartPass = Boolean(pressed[0]);
+  gamepadPressedActions.wallToggle = Boolean(pressed[2]);
+  gamepadPressedActions.shout = Boolean(pressed[4]);
+  gamepadPressedActions.focusHold = Boolean(pressed[6]);
+  gamepadPressedActions.boostHold = Boolean(pressed[7]);
+  if (tap(0)) triggerActionHighlight("smartPass");
+  if (tap(2)) triggerActionHighlight("wallToggle");
+  if (tap(4)) triggerActionHighlight("shout");
+  if (tap(6)) triggerActionHighlight("focusHold");
+  if (tap(7)) triggerActionHighlight("boostHold");
   // A gamepad press is not a user activation gesture, so this will not unblock
   // a browser on its own. It costs nothing, it does unblock the packaged shell
   // and any browser whose policy is relaxed, and on the rest it keeps the
@@ -3120,6 +3248,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000 || 0);
   lastTime = now;
   pollGamepad(dt);
+  syncActionHighlights(now);
   if (awaitingResume) {
     holdElapsed += dt;
     // dt is clamped per frame, so the hold advances at a frame-rate-dependent
