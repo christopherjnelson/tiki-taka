@@ -2,6 +2,8 @@ export const WIDTH = 1000,
   HEIGHT = 620;
 export const LIMITS = { left: 50, right: 950, top: 50, bottom: 570 };
 export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, ole: 2, wall: 0 };
+export const TRIANGLE_WINDOW = 3.5;
+export const TRIANGLE_MAX_HOLD = 1.2;
 export const SPLIT_PRESS = {
   narrow: 70,
   wide: 200,
@@ -256,6 +258,7 @@ export class Game {
     this.passCooldown = 0;
     this.status = "playing";
     this.history = [0];
+    this.historyTimes = [0];
     this.events = [];
     this.zoneIndex = 0;
     this.zoneTimer = 12;
@@ -285,6 +288,7 @@ export class Game {
     this.ball = null;
     this.hold = 0;
     this.history = [0];
+    this.historyTimes = [this.elapsed || 0];
     this.grace = 1.5;
     this.passCooldown = 0;
     this.oneTouchStreak = 0;
@@ -336,6 +340,9 @@ export class Game {
       !this.players[id]
     )
       return false;
+    if (this.historyTimes?.length) {
+      this.historyTimes[this.historyTimes.length - 1] = this.elapsed;
+    }
     const oneTouch =
       this.oneTouchEligible &&
       this.oneTouchAge <= ONE_TOUCH.window &&
@@ -441,12 +448,21 @@ export class Game {
       focusReward += FOCUS_REWARDS.split;
     }
     this.history.push(this.carrier);
-    if (this.history.length > 4) this.history.shift();
+    this.historyTimes.push(this.elapsed);
+    if (this.history.length > 4) {
+      this.history.shift();
+      this.historyTimes.shift();
+    }
     let triangleCoords = null;
+    const triangleElapsed =
+      this.historyTimes.length >= 4
+        ? this.elapsed - this.historyTimes.at(-4)
+        : Infinity;
     if (
       this.history.length >= 4 &&
       this.history.at(-4) === this.carrier &&
-      new Set(this.history.slice(-3)).size === 3
+      new Set(this.history.slice(-3)).size === 3 &&
+      triangleElapsed <= TRIANGLE_WINDOW
     ) {
       points += 35 * multiplier;
       this.triangles++;
@@ -648,6 +664,10 @@ export class Game {
         }
       }
       this.hold += delta;
+      if (this.hold > TRIANGLE_MAX_HOLD && this.history.length > 1) {
+        this.history = [this.carrier];
+        this.historyTimes = [this.elapsed];
+      }
     }
     for (const teammate of this.players) {
       if (teammate.id === this.carrier || this.ball?.to === teammate.id)

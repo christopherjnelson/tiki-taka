@@ -31,7 +31,7 @@ This document outlines the core physics, scoring, timing, and deterministic simu
    - Multiplies pass points, triangle bonuses, wall play, and zone bonuses.
    - Resets to x1 immediately on a turnover.
 3. **Triangles (A → B → C → A)**:
-   - Completing a pass cycle across 3 distinct teammates awards **35 points** (scaled by flow) and **1.5 seconds of Focus**.
+   - Completing a pass cycle across 3 distinct teammates within **3.5 seconds** (and without any player holding the ball longer than **1.2 seconds**) awards **35 points** (scaled by flow) and **1.5 seconds of Focus**.
    - In Endless mode, triangles also grant +5 bonus seconds on the match clock.
 4. **Wall Pass**:
    - Banking a pass off an arena boundary awards **18 points** (scaled by flow). It does not award Focus.
