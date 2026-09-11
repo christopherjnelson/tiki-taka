@@ -1,4 +1,4 @@
-import { defaultSettings, freshProgress, normalizeSettings } from "../../engine/src/index.js";
+import { defaultSettings, normalizeProgress, normalizeSettings } from "../../engine/src/index.js";
 
 import {
   LocalDataError,
@@ -18,7 +18,12 @@ function normalizePreferences(value) {
 
 function normalizeData({ save, preferences, stats } = {}) {
   return {
-    progress: save?.progress ?? freshProgress(),
+    // A save row can be absent, empty, or written by an older build, and `??`
+    // only catches the absent case — an empty object passes straight through
+    // and reaches the game missing every field it relies on. Normalize rather
+    // than default, so a malformed row repairs itself on load instead of
+    // failing the same way on every reload.
+    progress: normalizeProgress(save?.progress),
     settings: normalizeSettings(save?.settings ?? defaultSettings()),
     stats: stats ?? DEFAULT_STATS(),
     preferences: normalizePreferences(preferences),
@@ -223,7 +228,14 @@ export function createSupabaseDataAdapter({
     async saveUserData(update = {}) {
       return signedInOrGuest(async (user) => {
         const existing = await maybeSingle(supabase.from("user_saves").select("progress, settings").eq("user_id", user.id), null);
-        const save = { user_id: user.id, progress: update.progress ?? existing?.progress ?? {}, settings: update.settings ?? existing?.settings ?? {} };
+        // Normalize on the way in too: a new account has no existing row, and
+        // writing `{}` for it is what put a broken save in the database in the
+        // first place.
+        const save = {
+          user_id: user.id,
+          progress: normalizeProgress(update.progress ?? existing?.progress),
+          settings: normalizeSettings(update.settings ?? existing?.settings ?? defaultSettings()),
+        };
         const written = await supabase.from("user_saves").upsert(save, { onConflict: "user_id" }).select("progress, settings").single();
         throwIfError(written.error, "Supabase could not save your game.");
         let preference = null;

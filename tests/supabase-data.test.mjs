@@ -95,3 +95,38 @@ test("runtime selection accepts an injected Supabase client without browser cred
   assert.equal(adapter.kind, "supabase");
   assert.equal(await adapter.getSession(), null);
 });
+
+test("a brand-new account never stores an empty save, and an empty row still loads", async () => {
+  // A fresh signup has no user_saves row. Writing `{}` for it produced a save
+  // whose progress had no tactic, which threw on the first render and then
+  // failed identically on every reload, because the broken row persisted.
+  const user = { id: "user-1", email: "player@example.com", user_metadata: { username: "player" } };
+  const writes = [];
+  const clientFor = (existingSave) => ({
+    auth: { getSession: async () => ({ data: { session: { user } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from(table) {
+      if (table === "user_saves") return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: existingSave, error: null }) }) }),
+        upsert: (row) => { writes.push(row); return { select: () => ({ single: async () => ({ data: row, error: null }) }) }; },
+      };
+      if (table === "profiles") return profileQuery();
+      if (table === "user_preferences") return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
+      return { select: () => ({ eq: () => thenable({ data: [], error: null }) }) };
+    },
+  });
+
+  const adapter = createSupabaseDataAdapter({ client: clientFor(null), storage: memoryStorage() });
+  const saved = await adapter.saveUserData({});
+  assert.equal(writes[0].progress.tactic, "balanced", "a new account must be written a complete progress object");
+  assert.equal(writes[0].progress.version, 1);
+  assert.ok(writes[0].settings.bindings, "settings must be written complete too");
+  assert.equal(saved.progress.tactic, "balanced");
+
+  // Rows already broken by the old behaviour must repair themselves on load
+  // rather than keep throwing.
+  const repaired = createSupabaseDataAdapter({ client: clientFor({ progress: {}, settings: {} }), storage: memoryStorage() });
+  const data = await repaired.loadUserData();
+  assert.equal(data.progress.tactic, "balanced");
+  assert.equal(data.progress.version, 1);
+  assert.ok(Number.isFinite(data.progress.unlocked));
+});
