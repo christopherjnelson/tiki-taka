@@ -382,6 +382,101 @@ function syncHome() {
   $("home-games").textContent = String(accountStats.games);
   $("home-total-passes").textContent = String(accountStats.totalPasses);
   $("home-best-one-touch").textContent = String(accountStats.bestOneTouch);
+  syncHomeLeaderboard();
+}
+
+const BENCHMARK_LEADERBOARD = [
+  { rank: 1, name: "CRUYFF", venue: "LISBON", score: 1480, medal: "🥇" },
+  { rank: 2, name: "XAVI", venue: "BARCELONA", score: 1210, medal: "🥈" },
+  { rank: 3, name: "INIESTA", venue: "TOKYO", score: 1050, medal: "🥉" },
+  { rank: 4, name: "PIRLO", venue: "MILAN", score: 920, medal: "4" },
+  { rank: 5, name: "BUSQUETS", venue: "LONDON", score: 840, medal: "5" },
+];
+
+function syncHomeLeaderboard() {
+  const list = $("home-leaderboard-list");
+  if (!list) return;
+
+  function renderEntries(entries) {
+    list.replaceChildren(
+      ...entries.map((entry) => {
+        const li = document.createElement("li");
+        li.className = `hl-row ${entry.rank <= 3 ? "hl-row-top" : ""}`;
+
+        const rank = document.createElement("span");
+        rank.className = "hl-cell-rank";
+        rank.textContent = entry.medal || String(entry.rank);
+
+        const pilot = document.createElement("span");
+        pilot.className = "hl-cell-pilot";
+        pilot.textContent = entry.name;
+
+        const venue = document.createElement("span");
+        venue.className = "hl-cell-venue";
+        venue.textContent = entry.venue.toUpperCase();
+
+        const score = document.createElement("span");
+        score.className = "hl-cell-score";
+        score.textContent = Number(entry.score).toLocaleString();
+
+        li.append(rank, pilot, venue, score);
+        return li;
+      }),
+    );
+  }
+
+  if (dataAdapter?.getLeaderboard) {
+    dataAdapter
+      .getLeaderboard({ mode: "world-tour", limit: 5 })
+      .then((board) => {
+        if (board?.entries?.length) {
+          renderEntries(
+            board.entries.map((e, idx) => ({
+              rank: idx + 1,
+              name: e.username,
+              venue: e.court ? (COURTS[e.court - 1]?.name || "CIRCUIT") : "CIRCUIT",
+              score: e.score,
+              medal: idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : String(idx + 1),
+            })),
+          );
+        } else {
+          renderEntries(BENCHMARK_LEADERBOARD);
+        }
+      })
+      .catch(() => renderEntries(BENCHMARK_LEADERBOARD));
+  } else {
+    renderEntries(BENCHMARK_LEADERBOARD);
+  }
+
+  let userBestScore = 0;
+  let userBestCourt = "LISBON";
+  if (progress?.records) {
+    for (const [courtId, score] of Object.entries(progress.records)) {
+      if (typeof score === "number" && score > userBestScore) {
+        userBestScore = score;
+        const courtObj = COURTS.find((c) => String(c.id) === String(courtId));
+        if (courtObj) userBestCourt = courtObj.name.toUpperCase();
+      }
+    }
+  }
+
+  const userRankEl = $("hl-user-rank");
+  const userPilotEl = $("hl-user-pilot");
+  const userVenueEl = $("hl-user-venue");
+  const userScoreEl = $("hl-user-score");
+
+  if (userPilotEl) userPilotEl.textContent = profile?.username || "GUEST PILOT";
+  if (userVenueEl) userVenueEl.textContent = userBestCourt;
+  if (userScoreEl) userScoreEl.textContent = userBestScore > 0 ? `${userBestScore.toLocaleString()}` : "—";
+  if (userRankEl) {
+    if (userBestScore === 0) userRankEl.textContent = "—";
+    else if (userBestScore >= 1480) userRankEl.textContent = "#1";
+    else if (userBestScore >= 1210) userRankEl.textContent = "#2";
+    else if (userBestScore >= 1050) userRankEl.textContent = "#3";
+    else if (userBestScore >= 920) userRankEl.textContent = "#4";
+    else if (userBestScore >= 840) userRankEl.textContent = "#5";
+    else userRankEl.textContent = "#6+";
+  }
 }
 function applyView(next, { updateHash = true } = {}) {
   view = next;
