@@ -911,8 +911,9 @@ function prepare() {
   );
   if ($("venue-vibe")) $("venue-vibe").textContent = venue.vibe;
   if ($("arena-venue-label"))
-    $("arena-venue-label").textContent =
-      `${venue.name} / ${venue.vibe}`.toUpperCase();
+    $("arena-venue-label").textContent = venue.name.toUpperCase();
+  if ($("arena-venue-sub"))
+    $("arena-venue-sub").textContent = venue.vibe.toUpperCase();
   phase = "ready";
   finished = false;
   roundCleared = false;

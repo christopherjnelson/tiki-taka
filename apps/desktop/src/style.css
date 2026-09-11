@@ -1344,10 +1344,9 @@ body.play-view .ambience {
 }
 .top-brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
   justify-self: center;
-  gap: 9px;
   margin: 0;
   min-width: 0;
   overflow: hidden;
@@ -3339,9 +3338,12 @@ body.play-view .arena-view .below-court {
 @media (min-width: 901px) {
   body.play-view {
     --desktop-control-rail: clamp(70px, 8.4cqh, 88px);
+    --desktop-hud-height: clamp(60px, 7.2cqh, 70px);
     /* Keep the renderer's established largest-fitting court calculation.
        The rails are paint in the leftover space, never a layout column. */
     --arena-court-width: min(100cqw, 161.2903cqh);
+    --hud-score-width: clamp(210px, 20cqw, 290px);
+    --hud-match-width: clamp(270px, 25cqw, 360px);
   }
 
   body.play-view .game-panel {
@@ -3370,15 +3372,20 @@ body.play-view .arena-view .below-court {
     transform: translateX(-50%);
   }
 
-  /* Top is one continuous sequence: score pod, venue/clock crown, match pod.
-     Forming a unified, monolithic arcade crown locked flush to the top edge. */
+  /* Top is one continuous broadcast crown across the court width,
+     flush with the court left and right edges like the bottom toolbar. */
   body.play-view .scoreboard {
     top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: var(--arena-court-width);
+    height: var(--desktop-hud-height);
+    min-height: var(--desktop-hud-height);
+    display: flex;
     align-items: stretch;
+    justify-content: space-between;
     flex-wrap: nowrap;
     gap: 0;
-    width: var(--arena-court-width);
-    min-height: 56px;
     padding: 0;
     background: none;
     pointer-events: none;
@@ -3387,22 +3394,10 @@ body.play-view .arena-view .below-court {
     pointer-events: auto;
   }
   body.play-view .hud-group {
-    min-height: 56px;
-    height: 56px;
+    min-height: var(--desktop-hud-height);
+    height: var(--desktop-hud-height);
     box-sizing: border-box;
-    padding: 6px 16px;
-    border: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
-    border-top: none;
-    border-radius: 0;
-    background: linear-gradient(180deg, #0c1432 0%, #060b20 100%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 4px 14px rgba(0, 0, 0, 0.4);
-    clip-path: none;
-  }
-  body.play-view .hud-group {
-    min-height: 56px;
-    height: 56px;
-    box-sizing: border-box;
-    padding: 7px 12px;
+    padding: 7px 14px;
     border: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
     border-top: none;
     border-radius: 0;
@@ -3411,13 +3406,14 @@ body.play-view .arena-view .below-court {
     clip-path: none;
   }
   body.play-view .hud-group-score {
-    width: clamp(190px, 18cqw, 260px);
+    width: var(--hud-score-width);
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 0;
-    padding: 7px 12px;
+    padding: 7px 14px;
     border-radius: 0 0 0 4px;
+    border-right: none;
     background:
       linear-gradient(90deg, color-mix(in srgb, var(--venue-accent), transparent 88%), transparent 70%),
       linear-gradient(180deg, #0c1432 0%, #060b20 100%);
@@ -3445,7 +3441,7 @@ body.play-view .arena-view .below-court {
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 11px;
+    height: 12px;
     margin: 0 0 3px 0;
     color: #b9cae7;
     font: 700 9px/1 var(--sign);
@@ -3460,9 +3456,9 @@ body.play-view .arena-view .below-court {
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 28px;
+    height: 30px;
     color: var(--venue-accent);
-    font: italic 800 clamp(22px, 2.2vw, 30px)/1 var(--display);
+    font: italic 800 clamp(22px, 2.2vw, 32px)/1 var(--display);
     line-height: 1;
     text-align: center;
     text-shadow: 0 0 16px color-mix(in srgb, var(--venue-accent), transparent 60%);
@@ -3473,7 +3469,7 @@ body.play-view .arena-view .below-court {
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 28px;
+    height: 30px;
     color: var(--pink);
     font: italic 800 clamp(18px, 1.8vw, 26px)/1 var(--display);
     line-height: 1;
@@ -3483,12 +3479,13 @@ body.play-view .arena-view .below-court {
     white-space: nowrap;
   }
   body.play-view .hud-group-match {
-    width: clamp(235px, 23cqw, 325px);
+    width: var(--hud-match-width);
     display: flex;
     align-items: center;
     margin-left: auto;
-    padding: 7px 10px;
+    padding: 7px 12px;
     border-radius: 0 0 4px 0;
+    border-left: none;
     border-right: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
     background:
       linear-gradient(270deg, color-mix(in srgb, var(--pink), transparent 90%), transparent 70%),
@@ -3514,7 +3511,7 @@ body.play-view .arena-view .below-court {
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 28px;
+    height: 30px;
     color: #fff7ff;
     font: italic 800 clamp(20px, 2.0vw, 28px)/1 var(--display);
     font-variant-numeric: tabular-nums;
@@ -3533,7 +3530,7 @@ body.play-view .arena-view .below-court {
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 28px;
+    height: 30px;
     color: #fff7ff;
     font: italic 800 clamp(18px, 1.8vw, 26px)/1 var(--display);
     line-height: 1;
@@ -3545,7 +3542,7 @@ body.play-view .arena-view .below-court {
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 28px;
+    height: 30px;
     color: var(--pink);
     font: 700 clamp(15px, 1.5vw, 22px)/1 var(--sign);
     font-style: normal;
@@ -3560,28 +3557,30 @@ body.play-view .arena-view .below-court {
     position: absolute;
     z-index: 4;
     top: 0;
-    left: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: clamp(280px, 32cqw, 520px);
-    height: 56px;
+    left: calc(50% - (var(--arena-court-width) / 2) + var(--hud-score-width));
+    right: calc(50% - (var(--arena-court-width) / 2) + var(--hud-match-width));
+    width: auto;
+    min-height: var(--desktop-hud-height);
+    height: var(--desktop-hud-height);
     box-sizing: border-box;
     padding: 0;
     color: #d7e4f8;
     background: linear-gradient(180deg, #0d1636 0%, #070c24 100%);
     border: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
     border-top: none;
-    border-radius: 0 0 4px 4px;
+    border-radius: 0;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 4px 14px rgba(0, 0, 0, 0.4);
     clip-path: none;
-    transform: translateX(-50%);
+    transform: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     pointer-events: none;
   }
   body.play-view .arena-venue-banner::before {
     content: "";
-    flex: 0 0 76px;
-    width: 76px;
+    flex: 0 0 clamp(76px, 6cqw, 88px);
+    width: clamp(76px, 6cqw, 88px);
   }
   .arena-venue-crest {
     display: flex;
@@ -3597,8 +3596,8 @@ body.play-view .arena-view .below-court {
     display: block;
     width: 100%;
     color: var(--venue-accent);
-    font: italic 800 clamp(15px, 1.45vw, 22px) / 1.1 var(--display);
-    letter-spacing: 0.8px;
+    font: italic 800 clamp(16px, 1.55vw, 24px) / 1.1 var(--display);
+    letter-spacing: 1.2px;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
@@ -3609,7 +3608,7 @@ body.play-view .arena-view .below-court {
     width: 100%;
     margin-top: 3px;
     color: #9cb2d6;
-    font: 700 clamp(8px, 0.6vw, 9.5px) / 1 var(--sign);
+    font: 700 clamp(8.5px, 0.65vw, 10.5px) / 1 var(--sign);
     letter-spacing: clamp(1.8px, 0.2vw, 2.8px);
     text-align: center;
     white-space: nowrap;
@@ -3617,9 +3616,9 @@ body.play-view .arena-view .below-court {
     text-overflow: ellipsis;
   }
   body.play-view .arena-pause-button {
-    flex: 0 0 76px;
+    flex: 0 0 clamp(76px, 6cqw, 88px);
     align-self: stretch;
-    width: 76px;
+    width: clamp(76px, 6cqw, 88px);
     height: 100%;
     margin: 0;
     padding: 0 12px;
@@ -3631,7 +3630,7 @@ body.play-view .arena-view .below-court {
     background: transparent;
     border: none;
     border-left: 1px solid #23395b;
-    border-radius: 0 0 4px 0;
+    border-radius: 0;
     box-shadow: none;
     cursor: pointer;
     pointer-events: auto;
