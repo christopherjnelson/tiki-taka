@@ -3315,7 +3315,8 @@ body.play-view .arena-view .below-court {
     transform: none;
     left: auto;
   }
-  body.play-view .arena-venue-crest {
+  body.play-view .arena-venue-crest,
+  body.play-view .arena-venue-banner::before {
     display: none;
   }
   body.play-view .arena-pause-button {
@@ -3397,13 +3398,25 @@ body.play-view .arena-view .below-court {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 4px 14px rgba(0, 0, 0, 0.4);
     clip-path: none;
   }
+  body.play-view .hud-group {
+    min-height: 56px;
+    height: 56px;
+    box-sizing: border-box;
+    padding: 7px 12px;
+    border: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
+    border-top: none;
+    border-radius: 0;
+    background: linear-gradient(180deg, #0c1432 0%, #060b20 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 4px 14px rgba(0, 0, 0, 0.4);
+    clip-path: none;
+  }
   body.play-view .hud-group-score {
     width: clamp(190px, 18cqw, 260px);
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 0;
-    padding: 6px 14px;
+    padding: 7px 12px;
     border-radius: 0 0 0 4px;
     background:
       linear-gradient(90deg, color-mix(in srgb, var(--venue-accent), transparent 88%), transparent 70%),
@@ -3412,50 +3425,69 @@ body.play-view .arena-view .below-court {
   body.play-view .hud-group-score .stat {
     display: flex;
     flex-direction: column;
+    align-items: center;
     justify-content: center;
+    text-align: center;
+    min-width: 0;
+    height: 100%;
   }
   body.play-view .hud-group-score .score-stat {
-    flex: 1 1 auto;
-    min-width: 0;
+    flex: 1.2 1 0;
+    padding-right: clamp(6px, 0.8cqw, 10px);
   }
   body.play-view .hud-group-score .best-stat {
-    flex: 0 0 auto;
-    padding-left: clamp(8px, 1cqw, 14px);
+    flex: 1 1 0;
+    padding-left: clamp(6px, 0.8cqw, 10px);
     border-left: 1px solid #23395b;
   }
-  body.play-view .scoreboard .hud-group-score .score-stat strong {
-    color: var(--venue-accent);
-    font-size: clamp(24px, 2.5vw, 38px);
-    line-height: 1;
-    text-shadow: 0 0 16px color-mix(in srgb, var(--venue-accent), transparent 60%);
-  }
   body.play-view .scoreboard .stat-label {
-    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 11px;
+    margin: 0 0 3px 0;
     color: #b9cae7;
-    font-size: 9px;
+    font: 700 9px/1 var(--sign);
     letter-spacing: 1.2px;
     line-height: 1;
     text-transform: uppercase;
+    text-align: center;
+    white-space: nowrap;
   }
-  body.play-view .scoreboard .hud-group-score .stat-label {
-    font-size: 9px;
+  body.play-view .scoreboard .hud-group-score .score-stat strong {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 28px;
+    color: var(--venue-accent);
+    font: italic 800 clamp(22px, 2.2vw, 30px)/1 var(--display);
+    line-height: 1;
+    text-align: center;
+    text-shadow: 0 0 16px color-mix(in srgb, var(--venue-accent), transparent 60%);
+    white-space: nowrap;
   }
   body.play-view .scoreboard .best-stat .best-chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 28px;
     color: var(--pink);
-    font-family: var(--display);
-    font-style: italic;
-    font-weight: 800;
-    font-size: clamp(16px, 1.6vw, 24px);
+    font: italic 800 clamp(18px, 1.8vw, 26px)/1 var(--display);
     line-height: 1;
     letter-spacing: 0.5px;
+    text-align: center;
     text-shadow: 0 0 10px color-mix(in srgb, var(--pink), transparent 60%);
+    white-space: nowrap;
   }
   body.play-view .hud-group-match {
     width: clamp(235px, 23cqw, 325px);
     display: flex;
     align-items: center;
     margin-left: auto;
-    padding: 6px 12px;
+    padding: 7px 10px;
     border-radius: 0 0 4px 0;
     border-right: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
     background:
@@ -3465,22 +3497,29 @@ body.play-view .arena-view .below-court {
   body.play-view .scoreboard .hud-group-match .stat {
     flex: 1 1 0;
     min-width: 0;
+    height: 100%;
     display: flex;
     flex-direction: column;
+    align-items: center;
     justify-content: center;
-    padding-left: clamp(6px, 0.8cqw, 12px);
+    text-align: center;
+    padding: 0 clamp(4px, 0.6cqw, 8px);
     border-left: 1px solid #23395b;
   }
   body.play-view .scoreboard .hud-group-match .stat:first-child {
     border-left: none;
-    padding-left: 0;
   }
   body.play-view .scoreboard .hud-group-match .clock-stat .clock-value {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 28px;
     color: #fff7ff;
-    font-family: var(--mono);
-    font-size: clamp(17px, 1.7vw, 25px);
-    font-weight: 800;
+    font: 800 clamp(18px, 1.8vw, 25px)/1 var(--mono);
     line-height: 1;
+    text-align: center;
+    white-space: nowrap;
   }
   body.play-view .scoreboard .hud-group-match .clock-stat .clock-value.urgent {
     color: var(--pink);
@@ -3488,20 +3527,31 @@ body.play-view .arena-view .below-court {
     animation: urgent-pulse 1s ease-in-out infinite;
   }
   body.play-view .scoreboard .hud-group-match .stat strong {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 28px;
     color: #fff7ff;
-    font-size: clamp(18px, 1.8vw, 26px);
+    font: italic 800 clamp(18px, 1.8vw, 26px)/1 var(--display);
     line-height: 1;
+    text-align: center;
+    white-space: nowrap;
   }
   body.play-view .scoreboard .lives-stat strong {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 28px;
     color: var(--pink);
-    font-family: var(--sign);
+    font: 700 clamp(15px, 1.5vw, 22px)/1 var(--sign);
     font-style: normal;
-    font-weight: 700;
-    font-size: clamp(15px, 1.5vw, 22px);
-    line-height: 1.1;
+    line-height: 1;
     letter-spacing: 1.5px;
+    text-align: center;
     text-shadow: 0 0 10px color-mix(in srgb, var(--pink), transparent 60%);
-    display: inline-block;
+    white-space: nowrap;
   }
 
   body.play-view .arena-venue-banner {
@@ -3515,7 +3565,7 @@ body.play-view .arena-view .below-court {
     width: clamp(280px, 32cqw, 520px);
     height: 56px;
     box-sizing: border-box;
-    padding: 6px 0 6px 18px;
+    padding: 0;
     color: #d7e4f8;
     background: linear-gradient(180deg, #0d1636 0%, #070c24 100%);
     border: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
@@ -3526,39 +3576,51 @@ body.play-view .arena-view .below-court {
     transform: translateX(-50%);
     pointer-events: none;
   }
+  body.play-view .arena-venue-banner::before {
+    content: "";
+    flex: 0 0 76px;
+    width: 76px;
+  }
   .arena-venue-crest {
     display: flex;
     flex-direction: column;
+    align-items: center;
     justify-content: center;
+    text-align: center;
     min-width: 0;
     flex: 1 1 auto;
-    padding-right: 14px;
+    padding: 6px 12px;
   }
   .arena-venue-crest strong {
+    display: block;
+    width: 100%;
     color: var(--venue-accent);
     font: italic 800 clamp(15px, 1.45vw, 22px) / 1.1 var(--display);
     letter-spacing: 0.8px;
+    text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .arena-venue-crest span {
+    display: block;
+    width: 100%;
     margin-top: 3px;
     color: #9cb2d6;
-    font: 700 clamp(8.5px, 0.65vw, 10px) var(--sign);
+    font: 700 clamp(8px, 0.6vw, 9.5px) / 1 var(--sign);
     letter-spacing: clamp(1.8px, 0.2vw, 2.8px);
+    text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   body.play-view .arena-pause-button {
-    flex: 0 0 auto;
+    flex: 0 0 76px;
     align-self: stretch;
-    width: auto;
-    min-width: 76px;
+    width: 76px;
     height: 100%;
     margin: 0;
-    padding: 0 16px;
+    padding: 0 12px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -3585,7 +3647,7 @@ body.play-view .arena-view .below-court {
     color: var(--pink);
   }
   .arena-pause-label {
-    font: 700 10.5px/1 var(--sign);
+    font: 700 10px/1 var(--sign);
     letter-spacing: 1.5px;
     text-transform: uppercase;
     white-space: nowrap;
