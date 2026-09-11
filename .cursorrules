@@ -1,0 +1,21 @@
+# Tiki Taka - Cursor Rules
+
+## Architecture
+- `apps/desktop/`: Browser interface, DOM views (#home-view, #arena-view), controls, CSS.
+- `packages/engine/`: Pure headless simulation, mechanics, scoring, tactics, progress.
+  - RULE: ZERO DOM/browser globals (`window`, `document`, `localStorage`, `AudioContext`).
+- `packages/presentation/`: Canvas 2D renderer and Web Audio sound synthesis.
+- `packages/data/`: Data persistence (local storage guest adapter + optional Supabase adapter).
+- `src/`: Compatibility re-exports for engine/presentation. Keep exports intact.
+
+## Key Commands
+- Run unit tests: `npm test`
+- Build production bundle: `npm run build`
+- Run dev server: `npm start`
+- Run desktop browser tests: `npm run test:web` (or single: `npm run test:interface`, `npm run test:one-touch`)
+
+## Guidelines
+- Vanilla JavaScript (ES Modules), Canvas 2D, Web Audio. No heavy framework dependencies.
+- 2 spaces indentation, LF line endings.
+- Keep simulation deterministic (seeded PRNG).
+- Never commit `dist/`, `test-results/`, `.tooling/`, or `.env`.

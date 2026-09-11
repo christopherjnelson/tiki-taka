@@ -715,6 +715,7 @@ function clearAnnouncement() {
   $("game-announcement").textContent = "";
 }
 function prepare() {
+  resetHudCache();
   renderer.effects.length = 0;
   game = new Game(config(), progress.tactic);
   const venue = getVenue(game.config);
@@ -1048,13 +1049,118 @@ function toggleBoost() {
   syncBoostButtons();
   syncFocusButtons();
 }
+let perfOverlay = null,
+  perfEnabled = false,
+  perfLastSample = 0,
+  perfFrames = 0,
+  perfJsTotal = 0,
+  perfPaintTotal = 0;
+
+try {
+  perfEnabled =
+    location.search.includes("perf") ||
+    location.search.includes("fps") ||
+    localStorage.getItem("tiki-taka.perf-overlay") === "1";
+} catch {
+  perfEnabled = false;
+}
+
+function ensurePerfOverlay() {
+  if (perfOverlay) return perfOverlay;
+  perfOverlay = document.createElement("aside");
+  perfOverlay.id = "perf-overlay";
+  perfOverlay.className = "perf-overlay";
+  perfOverlay.setAttribute("aria-hidden", "true");
+  perfOverlay.hidden = !perfEnabled;
+  perfOverlay.innerHTML = `
+    <div class="perf-title"><span>PERF</span><span id="perf-fps">-- FPS</span></div>
+    <div class="perf-row"><span>Frame:</span><span id="perf-frame" class="perf-val">-- ms</span></div>
+    <div class="perf-row"><span>JS:</span><span id="perf-js" class="perf-val">-- ms</span></div>
+    <div class="perf-row"><span>Paint:</span><span id="perf-paint" class="perf-val">-- ms</span></div>
+  `;
+  document.body.appendChild(perfOverlay);
+  return perfOverlay;
+}
+
+function togglePerfOverlay() {
+  perfEnabled = !perfEnabled;
+  try {
+    localStorage.setItem("tiki-taka.perf-overlay", perfEnabled ? "1" : "0");
+  } catch {}
+  const el = ensurePerfOverlay();
+  el.hidden = !perfEnabled;
+  if (perfEnabled) {
+    perfFrames = 0;
+    perfJsTotal = 0;
+    perfPaintTotal = 0;
+    perfLastSample = performance.now();
+  }
+}
+
+if (perfEnabled) ensurePerfOverlay();
+
+const hudCache = {
+  oneTouchStreak: -1,
+  oneTouchMilestone: null,
+  oneTouchProgress: -1,
+  score: -1,
+  timeString: "",
+  timeUrgent: null,
+  combo: -1,
+  lives: "",
+  focusToggle: null,
+  boostActive: null,
+  focusText: "",
+  focusRatio: -1,
+  focusValuenow: "",
+  focusCap: -1,
+  focusEmpty: null,
+  goalWidth: "",
+  bestText: "",
+  targetText: "",
+  isPlaying: null,
+  isRound: null,
+  courtTarget: null,
+};
+
+function resetHudCache() {
+  hudCache.oneTouchStreak = -1;
+  hudCache.oneTouchMilestone = null;
+  hudCache.oneTouchProgress = -1;
+  hudCache.score = -1;
+  hudCache.timeString = "";
+  hudCache.timeUrgent = null;
+  hudCache.combo = -1;
+  hudCache.lives = "";
+  hudCache.focusToggle = null;
+  hudCache.boostActive = null;
+  hudCache.focusText = "";
+  hudCache.focusRatio = -1;
+  hudCache.focusValuenow = "";
+  hudCache.focusCap = -1;
+  hudCache.focusEmpty = null;
+  hudCache.goalWidth = "";
+  hudCache.bestText = "";
+  hudCache.targetText = "";
+  hudCache.isPlaying = null;
+  hudCache.isRound = null;
+  hudCache.courtTarget = null;
+}
+
 function syncFocusButtons() {
-  $("focus-button").setAttribute("aria-pressed", String(focusToggle));
-  $("touch-focus").setAttribute("aria-pressed", String(focusToggle));
+  if (focusToggle !== hudCache.focusToggle) {
+    const pressed = String(focusToggle);
+    $("focus-button").setAttribute("aria-pressed", pressed);
+    $("touch-focus").setAttribute("aria-pressed", pressed);
+    hudCache.focusToggle = focusToggle;
+  }
 }
 function syncBoostButtons() {
-  const active = boostToggle || game?.boostActive;
-  $("boost-button").setAttribute("aria-pressed", String(active));
+  const active = Boolean(boostToggle || game?.boostActive);
+  if (active !== hudCache.boostActive) {
+    $("boost-button").setAttribute("aria-pressed", String(active));
+    hudCache.boostActive = active;
+  }
 }
 function selectedPassTarget() {
   return game.queuedPass?.id ?? queuedSmartTarget();
@@ -1151,6 +1257,10 @@ const ambienceRgb = (accent) => {
   if (full.length !== 6 || !Number.isFinite(value)) return [39, 234, 216];
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 };
+let lastAmbienceWidth = 0,
+  lastAmbienceHeight = 0,
+  lastAmbienceDpr = 0;
+
 function paintAmbience(dt) {
   const canvas = ambienceCanvas;
   if (
@@ -1160,18 +1270,7 @@ function paintAmbience(dt) {
     !document.body.classList.contains("play-view")
   )
     return;
-  const box = courtBox();
-  if (!box) return;
-  const width = Math.round(box.width),
-    height = Math.round(box.height),
-    dpr = Math.min(2, window.devicePixelRatio || 1);
-  const backingWidth = Math.round(width * dpr),
-    backingHeight = Math.round(height * dpr),
-    resized = canvas.width !== backingWidth || canvas.height !== backingHeight;
-  if (resized) {
-    canvas.width = backingWidth;
-    canvas.height = backingHeight;
-  }
+
   // The decorative wash used to rebuild four gradients and a clipping path
   // at display refresh rate. It is not gameplay feedback, so 30fps while
   // music is active and 12fps while idling retain the intended motion while
@@ -1180,6 +1279,31 @@ function paintAmbience(dt) {
     measured = music.energy,
     cadence = reduced ? 0.25 : measured === null ? 1 / 12 : 1 / 30;
   ambienceElapsed += dt;
+
+  // Fast path: if courtBox hasn't resized and cadence has not elapsed, exit immediately
+  // without touching DOM canvas properties or recomputing backing sizes.
+  if (!courtBoxDirty && ambienceElapsed < cadence) return;
+
+  const box = courtBox();
+  if (!box) return;
+  const width = Math.round(box.width),
+    height = Math.round(box.height),
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+  const backingWidth = Math.round(width * dpr),
+    backingHeight = Math.round(height * dpr),
+    resized =
+      backingWidth !== lastAmbienceWidth ||
+      backingHeight !== lastAmbienceHeight ||
+      dpr !== lastAmbienceDpr;
+
+  if (resized) {
+    canvas.width = backingWidth;
+    canvas.height = backingHeight;
+    lastAmbienceWidth = backingWidth;
+    lastAmbienceHeight = backingHeight;
+    lastAmbienceDpr = dpr;
+  }
+
   if (!resized && ambienceElapsed < cadence) return;
   const elapsed = Math.min(0.25, ambienceElapsed);
   ambienceElapsed = 0;
@@ -1271,24 +1395,60 @@ function syncOneTouchReadout() {
   const streak = game?.oneTouchStreak || 0,
     readout = $("one-touch-readout");
   if (!readout) return;
-  readout.hidden = !streak;
+  if (streak === 0 && hudCache.oneTouchStreak === 0) return;
+  if (streak !== hudCache.oneTouchStreak) {
+    readout.hidden = !streak;
+    hudCache.oneTouchStreak = streak;
+    if (!streak) return;
+    $("one-touch-label").textContent = `ONE TOUCH ×${streak}`;
+  }
   if (!streak) return;
+  const isMilestone = streak >= 10;
+  if (isMilestone !== hudCache.oneTouchMilestone) {
+    readout.classList.toggle("is-milestone", isMilestone);
+    hudCache.oneTouchMilestone = isMilestone;
+  }
   const step = streak % 10,
     progress = step === 0 ? 1 : step / 10;
-  readout.classList.toggle("is-milestone", streak >= 10);
-  $("one-touch-label").textContent = `ONE TOUCH ×${streak}`;
-  $("one-touch-fill").style.width = `${progress * 100}%`;
+  if (progress !== hudCache.oneTouchProgress) {
+    $("one-touch-fill").style.width = `${progress * 100}%`;
+    hudCache.oneTouchProgress = progress;
+  }
 }
 function syncHud() {
   syncOneTouchReadout();
-  $("score-value").textContent = String(game.score).padStart(3, "0");
-  $("time-value").textContent =
-    `${Math.floor(Math.ceil(game.time) / 60)}:${String(Math.max(0, Math.ceil(game.time) % 60)).padStart(2, "0")}`;
-  $("combo-value").textContent =
-    `×${1 + Math.min(4, Math.floor(game.combo / 4))}`;
-  $("lives-value").textContent = game.config.practice
+
+  if (game.score !== hudCache.score) {
+    $("score-value").textContent = String(game.score).padStart(3, "0");
+    hudCache.score = game.score;
+  }
+
+  const timeCeil = Math.ceil(game.time);
+  const timeString = `${Math.floor(timeCeil / 60)}:${String(Math.max(0, timeCeil % 60)).padStart(2, "0")}`;
+  if (timeString !== hudCache.timeString) {
+    $("time-value").textContent = timeString;
+    hudCache.timeString = timeString;
+  }
+  const isUrgent = game.time < 15;
+  if (isUrgent !== hudCache.timeUrgent) {
+    $("time-value").classList.toggle("urgent", isUrgent);
+    hudCache.timeUrgent = isUrgent;
+  }
+
+  const comboTier = 1 + Math.min(4, Math.floor(game.combo / 4));
+  if (comboTier !== hudCache.combo) {
+    $("combo-value").textContent = `×${comboTier}`;
+    hudCache.combo = comboTier;
+  }
+
+  const livesText = game.config.practice
     ? "∞"
     : `${Math.max(0, 3 - game.turnovers)} / 3`;
+  if (livesText !== hudCache.lives) {
+    $("lives-value").textContent = livesText;
+    hudCache.lives = livesText;
+  }
+
   if (focusToggle && game.focus <= 0) focusToggle = false;
   if (boostToggle && game.focus <= 0) boostToggle = false;
   // The engine gives Boost priority for simultaneously held physical inputs.
@@ -1297,31 +1457,60 @@ function syncHud() {
   if (game.boostActive) focusToggle = false;
   syncFocusButtons();
   syncBoostButtons();
+
   const focusCap = game.tactic.focus;
   const focusAmount = Math.max(0, game.focus);
-  const focusRatio = focusCap ? focusAmount / focusCap : 0;
   const focusText = `${focusAmount.toFixed(1)} / ${focusCap}s`;
+  if (focusText !== hudCache.focusText) {
+    $("energy-value").textContent = focusText;
+    $("touch-focus-value").textContent = focusText;
+    hudCache.focusText = focusText;
+  }
+
+  const focusRatio = focusCap ? focusAmount / focusCap : 0;
+  const roundedRatio = Math.round(focusRatio * 1000) / 10;
+  if (roundedRatio !== hudCache.focusRatio) {
+    const widthStr = `${roundedRatio}%`;
+    $("energy-fill").style.width = widthStr;
+    $("touch-focus-fill").style.width = widthStr;
+    hudCache.focusRatio = roundedRatio;
+  }
+
+  const roundedFocus = focusAmount.toFixed(1);
+  if (roundedFocus !== hudCache.focusValuenow || focusCap !== hudCache.focusCap) {
+    $("energy-meter").setAttribute("aria-valuemax", String(focusCap));
+    $("energy-meter").setAttribute("aria-valuenow", roundedFocus);
+    $("energy-meter").setAttribute(
+      "aria-valuetext",
+      `${roundedFocus} of ${focusCap} seconds`,
+    );
+    hudCache.focusValuenow = roundedFocus;
+    hudCache.focusCap = focusCap;
+  }
+
   const focusEmpty = focusAmount <= 0;
-  // Focus and Boost both spend the same hidden engine reserve (game.focus);
-  // the toolbar shows it once, as the Energy readout, rather than duplicating
-  // the same numbers behind each ability's chip.
-  $("energy-value").textContent = focusText;
-  $("touch-focus-value").textContent = focusText;
-  $("energy-fill").style.width = `${focusRatio * 100}%`;
-  $("touch-focus-fill").style.width = `${focusRatio * 100}%`;
-  $("energy-meter").setAttribute("aria-valuemax", String(focusCap));
-  $("energy-meter").setAttribute("aria-valuenow", focusAmount.toFixed(1));
-  $("energy-meter").setAttribute(
-    "aria-valuetext",
-    `${focusAmount.toFixed(1)} of ${focusCap} seconds`,
-  );
-  $("energy-info").classList.toggle("is-empty", focusEmpty);
-  $("touch-focus").classList.toggle("is-empty", focusEmpty);
-  $("goal-fill").style.width =
-    `${game.config.target ? Math.min(100, (game.score / game.config.target) * 100) : Math.min(100, (game.time / 60) * 100)}%`;
-  $("best-label").textContent =
-    `PERSONAL BEST ${progress.records[recordKey()] || "—"}`;
-  $("target-label").textContent =
+  if (focusEmpty !== hudCache.focusEmpty) {
+    $("energy-info").classList.toggle("is-empty", focusEmpty);
+    $("touch-focus").classList.toggle("is-empty", focusEmpty);
+    hudCache.focusEmpty = focusEmpty;
+  }
+
+  const goalPercent = game.config.target
+    ? Math.min(100, (game.score / game.config.target) * 100)
+    : Math.min(100, (game.time / 60) * 100);
+  const goalWidth = `${Math.round(goalPercent * 10) / 10}%`;
+  if (goalWidth !== hudCache.goalWidth) {
+    $("goal-fill").style.width = goalWidth;
+    hudCache.goalWidth = goalWidth;
+  }
+
+  const bestText = `PERSONAL BEST ${progress.records[recordKey()] || "—"}`;
+  if (bestText !== hudCache.bestText) {
+    $("best-label").textContent = bestText;
+    hudCache.bestText = bestText;
+  }
+
+  const targetText =
     phase === "playing"
       ? game.queuedPass
         ? `QUEUED → ${game.queuedPass.id + 1} · RELEASE ON ARRIVAL`
@@ -1329,9 +1518,22 @@ function syncHud() {
           ? `NEXT PASS → ${game.bestQueuedTarget(aim) + 1} · QUEUE IT NOW`
           : `${bank ? "WALL PASS" : "PASS"} → ${game.bestTarget(aim) + 1}`
       : "FIND THE SPACE. MAKE THE PASS.";
-  $("time-value").classList.toggle("urgent", game.time < 15);
-  $("court-wrap").classList.toggle("is-playing", phase === "playing");
-  $("court-wrap").classList.toggle("is-round", phase !== "ready");
+  if (targetText !== hudCache.targetText) {
+    $("target-label").textContent = targetText;
+    hudCache.targetText = targetText;
+  }
+
+  const isPlaying = phase === "playing";
+  if (isPlaying !== hudCache.isPlaying) {
+    $("court-wrap").classList.toggle("is-playing", isPlaying);
+    hudCache.isPlaying = isPlaying;
+  }
+
+  const isRound = phase !== "ready";
+  if (isRound !== hudCache.isRound) {
+    $("court-wrap").classList.toggle("is-round", isRound);
+    hudCache.isRound = isRound;
+  }
 }
 function finish() {
   if (finished) return;
@@ -2126,6 +2328,11 @@ window.addEventListener("keydown", (e) => {
     syncSettingChrome();
     return;
   }
+  if (e.code === "F3" || (e.shiftKey && e.code === "KeyP" && !capture)) {
+    e.preventDefault();
+    togglePerfOverlay();
+    return;
+  }
   if (anyDialogOpen()) return;
   if (menuOpen) {
     const action = actionForCode(settings.bindings, e.code);
@@ -2516,10 +2723,7 @@ function drawTargetHighlight(target) {
   const player = game?.players?.[target];
   if (!player || target === (game.ball?.to ?? game.carrier)) return;
   const pulse = 1 + Math.sin(performance.now() / 150) * 0.06;
-  const accent =
-    getComputedStyle(document.documentElement)
-      .getPropertyValue("--venue-accent")
-      .trim() || "#27ead8";
+  const accent = renderer.venue?.accent || "#27ead8";
   c.save();
   c.globalAlpha = 0.9;
   c.strokeStyle = accent;
@@ -2562,6 +2766,8 @@ function drawTargetHighlight(target) {
   c.restore();
 }
 function frame(now) {
+  const isPerfActive = perfEnabled;
+  const frameStart = isPerfActive ? performance.now() : 0;
   const dt = Math.min(0.05, (now - lastTime) / 1000 || 0);
   lastTime = now;
   pollGamepad(dt);
@@ -2668,6 +2874,7 @@ function frame(now) {
   if (view === "home") updateAttract(dt);
   if (view === "arena") {
     syncHud();
+    const jsDone = isPerfActive ? performance.now() : 0;
     paintAmbience(dt);
     const target =
       phase === "playing" && !awaitingResume ? queuedSmartTarget() : null;
@@ -2679,9 +2886,39 @@ function frame(now) {
       paused: phase === "paused" || phase === "finished" || awaitingResume,
     });
     drawTargetHighlight(target);
-    $("court-wrap").dataset.target = Number.isInteger(target)
-      ? String(target)
-      : "";
+    const courtTargetStr = Number.isInteger(target) ? String(target) : "";
+    if (courtTargetStr !== hudCache.courtTarget) {
+      $("court-wrap").dataset.target = courtTargetStr;
+      hudCache.courtTarget = courtTargetStr;
+    }
+    if (isPerfActive) {
+      const paintDone = performance.now();
+      const jsTime = jsDone - frameStart;
+      const paintTime = paintDone - jsDone;
+      perfFrames++;
+      perfJsTotal += jsTime;
+      perfPaintTotal += paintTime;
+      const sinceLastSample = now - perfLastSample;
+      if (sinceLastSample >= 250) {
+        const fps = ((perfFrames * 1000) / sinceLastSample).toFixed(1);
+        const avgFrame = (sinceLastSample / perfFrames).toFixed(1);
+        const avgJs = (perfJsTotal / perfFrames).toFixed(2);
+        const avgPaint = (perfPaintTotal / perfFrames).toFixed(2);
+        ensurePerfOverlay();
+        const fpsEl = $("perf-fps");
+        const frameEl = $("perf-frame");
+        const jsEl = $("perf-js");
+        const paintEl = $("perf-paint");
+        if (fpsEl) fpsEl.textContent = `${fps} FPS`;
+        if (frameEl) frameEl.textContent = `${avgFrame} ms`;
+        if (jsEl) jsEl.textContent = `${avgJs} ms`;
+        if (paintEl) paintEl.textContent = `${avgPaint} ms`;
+        perfFrames = 0;
+        perfJsTotal = 0;
+        perfPaintTotal = 0;
+        perfLastSample = now;
+      }
+    }
   }
   requestAnimationFrame(frame);
 }

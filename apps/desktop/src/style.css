@@ -3474,3 +3474,50 @@ body.play-view .arena-view .below-court {
     flex-wrap: wrap;
   }
 }
+
+/* ── Performance HUD overlay (Shift+P or F3) ────────────────────────── */
+.perf-overlay {
+  position: fixed;
+  top: 56px;
+  right: 14px;
+  z-index: 10000;
+  pointer-events: none;
+  background: rgba(13, 10, 29, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #e3e0f2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  user-select: none;
+  min-width: 145px;
+}
+.perf-overlay[hidden] {
+  display: none !important;
+}
+.perf-overlay .perf-title {
+  font-weight: 700;
+  color: var(--accent, #21f3df);
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 2px;
+}
+.perf-overlay .perf-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.perf-overlay .perf-val {
+  font-weight: 600;
+  color: #fff;
+  text-align: right;
+}
+
