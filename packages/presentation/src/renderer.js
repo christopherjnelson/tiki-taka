@@ -41,6 +41,34 @@ function stackOffsetFor(effects, e) {
   }
   return 0;
 }
+function getScoreEventColor(e) {
+  if (!e) return "#ffffff";
+  const bonuses = e.bonuses || [];
+  const best = e.bestBonus || "";
+  const text = e.text || "";
+  if (
+    bonuses.includes("triangle") ||
+    bonuses.includes("zone") ||
+    bonuses.includes("split") ||
+    best === "triangle" ||
+    best === "zone" ||
+    best === "split" ||
+    /TRIANGLE|ZONE|SPLIT/i.test(text)
+  ) {
+    return "#ffd32f";
+  }
+  if (bonuses.includes("wall") || best === "wall" || /WALL/i.test(text)) {
+    return "#38f5e5";
+  }
+  if (
+    bonuses.includes("one-touch") ||
+    best === "one-touch" ||
+    /ONE TOUCH|ONE-TOUCH/i.test(text)
+  ) {
+    return "#ff589f";
+  }
+  return "#ffffff";
+}
 const circle = (c, x, y, r) => {
   c.beginPath();
   c.arc(x, y, r, 0, Math.PI * 2);
@@ -519,7 +547,13 @@ export class Renderer {
     c.globalAlpha = 1;
   }
   addEvent(e) {
-    if (!e || e.type === "end") return;
+    if (
+      !e ||
+      e.type === "end" ||
+      e.type === "focus" ||
+      (e.type === "one-touch" && !e.milestone)
+    )
+      return;
     this.effects.push({
       ...e,
       stackOffset: stackOffsetFor(this.effects, e),
@@ -1112,6 +1146,14 @@ export class Renderer {
       else drawBadge();
     } else if (e.type === "score" || e.type === "focus") {
       const focus = e.type === "focus",
+        displayText = focus
+          ? e.text
+          : e.points != null
+            ? `+${e.points}`
+            : e.text?.match(/\+\d+/)
+              ? e.text.match(/\+\d+/)[0]
+              : e.text,
+        badgeColor = focus ? "#ffd32f" : getScoreEventColor(e),
         worldY = Math.max(
           40,
           e.y -
@@ -1120,8 +1162,9 @@ export class Renderer {
             (focus ? 27 : 0) -
             (e.stackOffset || 0),
         );
-      c.font = `800 ${focus ? 12 : 15}px ${FONT}`;
-      const w = c.measureText(e.text).width + 28,
+      c.font = `900 ${focus ? 12 : 15}px ${FONT}`;
+      const textW = c.measureText(displayText).width,
+        w = Math.max(textW + 24, focus ? 50 : 44),
         worldX = Math.max(55 + w / 2, Math.min(945 - w / 2, e.x)),
         screenX = Math.max(
           5 + w / 2,
@@ -1131,18 +1174,22 @@ export class Renderer {
         badgeX = c._tikiPortrait ? screenY : worldX,
         badgeY = c._tikiPortrait ? HEIGHT - screenX : worldY,
         drawBadge = () => {
-          rounded(c, badgeX - w / 2, badgeY - 15, w, 30, 15);
-          c.fillStyle = "rgba(8,12,31,.94)";
+          rounded(c, badgeX - w / 2, badgeY - 14, w, 28, 14);
+          c.fillStyle = "rgba(8,12,31,.92)";
           c.fill();
-          c.strokeStyle = focus ? this.venue.accent : "#ffd32f";
+          c.strokeStyle = badgeColor;
+          c.lineWidth = this.crisp(c, 2);
+          c.shadowColor = badgeColor;
+          c.shadowBlur = 6;
           c.stroke();
+          c.shadowBlur = 0;
           label(
             c,
-            e.text,
+            displayText,
             badgeX,
             badgeY,
             focus ? 12 : 15,
-            "#fff",
+            badgeColor,
             "center",
             900,
           );
@@ -1158,12 +1205,12 @@ export class Renderer {
             e.y + Math.sin(a) * t * 38,
             2.5 * (1 - t),
           );
-          c.fillStyle = i % 2 ? this.venue.accent : "#ffd32f";
+          c.fillStyle = badgeColor;
           c.fill();
         }
     } else if (!this.reducedMotion) {
       circle(c, e.x, e.y, 8 + t * 29);
-      c.strokeStyle = e.type === "wall" ? "#ffd32f" : "#fff";
+      c.strokeStyle = e.type === "wall" ? "#38f5e5" : "#fff";
       c.lineWidth = 2 * (1 - t);
       c.stroke();
     }

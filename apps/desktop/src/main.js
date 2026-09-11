@@ -1028,7 +1028,7 @@ function toggleFocus() {
   if (game.focus <= 0) {
     focusToggle = false;
     syncFocusButtons();
-    toast("Earn Energy with wall passes, triangles, or bonus zones.");
+    toast("Earn Energy with triangles, bonus zones, or split passes.");
     return;
   }
   focusToggle = !focusToggle;
@@ -1041,7 +1041,7 @@ function toggleBoost() {
   if (game.focus <= 0) {
     boostToggle = false;
     syncBoostButtons();
-    toast("Earn Energy with wall passes, triangles, or bonus zones.");
+    toast("Earn Energy with triangles, bonus zones, or split passes.");
     return;
   }
   boostToggle = !boostToggle;
@@ -2847,16 +2847,6 @@ function frame(now) {
       }
       if (event.type === "one-touch" && event.milestone) {
         announce(event.text || `${event.streak} ONE-TOUCH PASSES`);
-        announcementTime = now;
-      }
-      // The engine resumes on its own timer; the interface holds the round on
-      // top of that instead of changing packages/engine.
-      if (
-        event.type === "score" &&
-        !turnoverEvent &&
-        now - announcementTime > 3500
-      ) {
-        announce(event.text);
         announcementTime = now;
       }
       if (event.type === "end") finish();
