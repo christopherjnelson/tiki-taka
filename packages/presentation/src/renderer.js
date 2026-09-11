@@ -742,7 +742,6 @@ export class Renderer {
         if (waypoint) c.lineTo(waypoint.x, waypoint.y);
         c.lineTo(queued.x, queued.y);
         c.stroke();
-        label(c, "NEXT", queued.x, queued.y - 40, 9, "#fff", "center", 900);
         c.restore();
       }
     }
