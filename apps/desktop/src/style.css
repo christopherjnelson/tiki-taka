@@ -2666,42 +2666,42 @@ body.play-view .arena-view .below-court {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 12px;
+    padding: 7px 14px;
     background: linear-gradient(
       180deg,
       color-mix(in srgb, var(--surface), #fff 5%),
       var(--panel)
     );
     border-bottom: 1px solid var(--line);
-    min-height: 28px;
+    min-height: 34px;
   }
   .hl-header-title {
     display: flex;
     align-items: center;
-    gap: 7px;
-    font: 800 10px/1 var(--sign);
+    gap: 8px;
+    font: 800 13px/1 var(--sign);
     letter-spacing: 1.5px;
     color: var(--accent);
     text-transform: uppercase;
   }
   .hl-icon {
-    font-size: 12px;
+    font-size: 15px;
   }
   .hl-badge {
-    font: 700 8px/1 var(--sign);
+    font: 700 9.5px/1 var(--sign);
     letter-spacing: 1px;
     color: var(--ink);
     background: color-mix(in srgb, var(--line), transparent 40%);
-    padding: 3px 7px;
+    padding: 3px 8px;
     border-radius: 2px;
     border: 1px solid var(--line);
   }
   /* ── Court selection tabs ─────────────────────────────────────────── */
   .hl-tabs {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 3px;
-    padding: 6px 8px;
+    padding: 6px;
     background: color-mix(in srgb, var(--surface), #000 45%);
     border-bottom: 1px solid var(--line);
   }
@@ -2711,8 +2711,8 @@ body.play-view .arena-view .below-court {
     border: 1px solid transparent;
     border-radius: 3px;
     color: var(--muted);
-    font: 700 8px/1.2 var(--sign);
-    letter-spacing: 0.8px;
+    font: 700 clamp(9px, 0.72cqw, 10.5px)/1.2 var(--sign);
+    letter-spacing: 0.3px;
     padding: 6px 2px;
     text-align: center;
     cursor: pointer;
@@ -2740,9 +2740,14 @@ body.play-view .arena-view .below-court {
   }
   .hl-tab-num {
     font-family: var(--mono);
-    font-size: 7.5px;
+    font-size: 0.85em;
     opacity: 0.7;
     margin-right: 2px;
+  }
+  @media (max-width: 1350px) {
+    .hl-tab-num {
+      display: none;
+    }
   }
   /* ── Leaderboard Table & Rows ──────────────────────────────────────── */
   .hl-table {
@@ -2755,18 +2760,18 @@ body.play-view .arena-view .below-court {
   }
   .hl-head {
     display: grid;
-    grid-template-columns: 36px 1fr 70px 80px;
+    grid-template-columns: 36px 1fr 85px 85px;
     gap: 8px;
-    padding: 5px 8px;
-    font: 700 8px/1 var(--sign);
-    letter-spacing: 1.2px;
+    padding: 7px 10px;
+    font: 700 10.5px/1 var(--sign);
+    letter-spacing: 1.5px;
     color: var(--muted);
     border-bottom: 1px solid color-mix(in srgb, var(--line), transparent 50%);
   }
   .hl-status {
-    margin: 12px 0;
+    margin: 16px 0;
     text-align: center;
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: 1px;
     color: var(--muted);
   }
@@ -2779,18 +2784,18 @@ body.play-view .arena-view .below-court {
     padding: 2px 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
     flex: 1 1 auto;
     min-height: 0;
   }
   .hl-row {
     display: grid;
-    grid-template-columns: 36px 1fr 70px 80px;
+    grid-template-columns: 36px 1fr 85px 85px;
     gap: 8px;
     align-items: center;
-    padding: 6px 8px;
-    font-size: 9.5px;
-    line-height: 1.2;
+    padding: 7px 10px;
+    font-size: 13px;
+    line-height: 1.25;
     border-radius: 3px;
     transition: background 0.15s ease;
   }
@@ -2809,23 +2814,25 @@ body.play-view .arena-view .below-court {
   }
   .hl-cell-rank {
     font-family: var(--mono);
-    font-size: 9px;
+    font-size: 12px;
+    font-weight: 700;
     color: var(--muted);
   }
   .hl-row:nth-child(1) .hl-cell-rank {
     color: #ffd700;
-    font-size: 11px;
+    font-size: 15px;
   }
   .hl-row:nth-child(2) .hl-cell-rank {
     color: #c0c0c0;
-    font-size: 11px;
+    font-size: 15px;
   }
   .hl-row:nth-child(3) .hl-cell-rank {
     color: #cd7f32;
-    font-size: 11px;
+    font-size: 15px;
   }
   .hl-cell-player,
   .hl-cell-pilot {
+    font-size: 13.5px;
     font-weight: 700;
     letter-spacing: 0.5px;
     white-space: nowrap;
@@ -2835,13 +2842,13 @@ body.play-view .arena-view .below-court {
   }
   .hl-cell-passes {
     font-family: var(--mono);
-    font-size: 9px;
+    font-size: 12px;
     letter-spacing: 0.5px;
     color: var(--muted);
     text-align: right;
   }
   .hl-cell-venue {
-    font-size: 7.5px;
+    font-size: 10px;
     letter-spacing: 0.5px;
     color: var(--muted);
     white-space: nowrap;
@@ -2850,7 +2857,8 @@ body.play-view .arena-view .below-court {
   }
   .hl-cell-score {
     font-family: var(--mono);
-    font-weight: 700;
+    font-size: 14px;
+    font-weight: 800;
     text-align: right;
     color: var(--accent);
     letter-spacing: 0.5px;
@@ -2858,32 +2866,36 @@ body.play-view .arena-view .below-court {
   /* ── User Best Footer ──────────────────────────────────────────────── */
   .hl-user-row {
     display: grid;
-    grid-template-columns: 65px 28px 1fr 80px 80px;
+    grid-template-columns: auto auto 1fr auto auto;
     gap: 8px;
     align-items: center;
-    padding: 7px 10px;
+    padding: 8px 12px;
     background: linear-gradient(
       90deg,
       color-mix(in srgb, var(--accent), transparent 82%),
       color-mix(in srgb, var(--panel), #000 20%)
     );
     border-top: 1px solid color-mix(in srgb, var(--accent), transparent 50%);
-    font-size: 9px;
-    min-height: 28px;
+    font-size: 12.5px;
+    min-height: 34px;
   }
   .hl-user-tag {
-    font: 800 8px/1 var(--sign);
+    font: 800 10.5px/1 var(--sign);
     letter-spacing: 1.2px;
     color: var(--accent);
     text-transform: uppercase;
+    white-space: nowrap;
   }
   .hl-user-rank {
     font-family: var(--mono);
     color: var(--ink);
+    font-size: 12.5px;
     font-weight: 700;
+    white-space: nowrap;
   }
   .hl-user-player,
   .hl-user-pilot {
+    font-size: 13.5px;
     font-weight: 700;
     color: var(--ink);
     white-space: nowrap;
@@ -2891,16 +2903,20 @@ body.play-view .arena-view .below-court {
     text-overflow: ellipsis;
   }
   .hl-user-venue {
-    font-size: 7.5px;
+    font-size: 11px;
     color: var(--muted);
     letter-spacing: 0.5px;
     text-align: right;
+    white-space: nowrap;
   }
   .hl-user-score {
     font-family: var(--mono);
-    font-weight: 700;
+    font-size: 14px;
+    font-weight: 800;
     color: var(--accent);
     text-align: right;
+    white-space: nowrap;
+    min-width: 50px;
   }
   /* ── Court panel bands ─────────────────────────────────────────────────
      Header band: LIVE DEMO / BOTS IN POSSESSION pinned left, the venue name
