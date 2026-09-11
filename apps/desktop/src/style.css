@@ -3963,21 +3963,26 @@ body.play-view .arena-view .below-court {
    canvas width. */
 @media (min-width: 1200px) {
   body.play-view .arena-rail {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
     position: absolute;
     z-index: 2;
     top: 96px;
     bottom: calc(var(--desktop-control-rail) + 14px);
-    width: clamp(78px, calc((100cqw - var(--arena-court-width)) / 2 - 18px), 166px);
-    min-height: 260px;
-    padding: clamp(12px, 1.3cqw, 20px) clamp(8px, 1cqw, 15px);
+    width: clamp(84px, calc((100cqw - var(--arena-court-width)) / 2 - 18px), 168px);
+    min-height: 280px;
+    padding: clamp(14px, 1.4cqw, 20px) clamp(10px, 1.1cqw, 15px);
     overflow: hidden;
     color: #c5d6ef;
     background:
-      radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--venue-accent), transparent 88%), transparent 42%),
-      #070d23;
-    border: 1px solid color-mix(in srgb, var(--venue-accent), #37557e 40%);
+      linear-gradient(180deg, rgba(13, 22, 54, 0.45) 0%, rgba(7, 12, 34, 0.55) 100%),
+      radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--venue-accent), transparent 84%), transparent 60%);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid color-mix(in srgb, var(--venue-accent), #37557e 45%);
     border-radius: 6px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     pointer-events: none;
   }
   body.play-view .arena-rail-left {
@@ -3985,36 +3990,130 @@ body.play-view .arena-view .below-court {
   }
   body.play-view .arena-rail-right {
     right: max(8px, calc((100cqw - var(--arena-court-width)) / 4 - 83px));
-    border-color: color-mix(in srgb, var(--pink), #37557e 42%);
+    border-color: color-mix(in srgb, var(--pink), #37557e 45%);
     text-align: right;
+  }
+  .arena-rail-section {
+    flex: 0 0 auto;
   }
   .arena-rail strong {
     display: block;
     color: var(--pink);
-    font: italic 800 clamp(12px, 0.9vw, 16px) / 0.9 var(--display);
+    font: italic 800 clamp(12px, 0.9vw, 16px) / 0.95 var(--display);
     transform: none;
+    letter-spacing: 0.5px;
   }
   .arena-rail-rule {
     display: block;
     height: 1px;
-    margin: clamp(18px, 3.5cqh, 36px) 0 12px;
-    background: #536b8e;
+    margin: clamp(10px, 1.8cqh, 16px) 0;
+    background: linear-gradient(90deg, #324765 0%, transparent 100%);
+  }
+  .arena-rail-right .arena-rail-rule {
+    background: linear-gradient(270deg, #324765 0%, transparent 100%);
   }
   .arena-rail p {
-    margin: 0 0 11px;
+    margin: 0 0 7px;
     color: #cbdcf4;
     font: 700 clamp(7px, 0.55vw, 9px) / 1.35 var(--sign);
-    letter-spacing: clamp(1.5px, 0.18vw, 3px);
+    letter-spacing: clamp(1.2px, 0.15vw, 2.5px);
+  }
+  .arena-rail p:last-child {
+    margin-bottom: 0;
+  }
+  .arena-rail-viz-card {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: stretch;
+    margin: clamp(8px, 1.2cqh, 16px) 0;
+    padding: clamp(8px, 1cqw, 12px);
+    background: rgba(4, 8, 24, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.5);
+    min-height: 160px;
+  }
+  .arena-rail-viz-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    flex: 0 0 auto;
+  }
+  .arena-rail-right .arena-rail-viz-header {
+    justify-content: flex-end;
+  }
+  .arena-rail-viz-led {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--venue-accent);
+    box-shadow: 0 0 8px var(--venue-accent);
+  }
+  .arena-rail-right .arena-rail-viz-led {
+    background: var(--pink);
+    box-shadow: 0 0 8px var(--pink);
+  }
+  .arena-rail-viz-led.pulse {
+    animation: led-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes led-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.85); }
+  }
+  .arena-rail-viz-title {
+    font: 700 8.5px/1 var(--sign);
+    letter-spacing: 1.5px;
+    color: #9cb2d6;
+    text-transform: uppercase;
+  }
+  .arena-rail-track-name {
+    flex: 0 0 auto;
+    font: italic 800 clamp(9px, 0.72vw, 11.5px)/1.15 var(--display);
+    color: #fff7ff;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    text-align: right;
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: normal;
+    text-shadow: 0 0 10px rgba(255, 58, 167, 0.5);
+  }
+  .arena-rail-canvas-wrap {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 100px;
+    position: relative;
+  }
+  .arena-rail-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    border-radius: 2px;
+  }
+  .arena-rail-viz-foot {
+    flex: 0 0 auto;
+    font: 700 7.5px/1 var(--sign);
+    letter-spacing: 1.2px;
+    color: #627b9e;
+    text-transform: uppercase;
+    display: block;
+    margin-top: 5px;
+  }
+  .arena-rail-right .arena-rail-viz-foot {
+    text-align: right;
   }
   .arena-rail-tour,
   .arena-rail-coordinates {
-    position: absolute;
-    right: clamp(8px, 1cqw, 15px);
-    bottom: clamp(12px, 2cqh, 22px);
-    left: clamp(8px, 1cqw, 15px);
+    display: block;
+    position: static;
     color: var(--venue-accent);
-    font: 700 clamp(7px, 0.55vw, 9px) / 1.5 var(--sign);
-    letter-spacing: clamp(1px, 0.18vw, 3px);
+    font: 700 clamp(7px, 0.55vw, 9px) / 1.4 var(--sign);
+    letter-spacing: clamp(1px, 0.15vw, 2.2px);
   }
 }
 .settings-utilities {
