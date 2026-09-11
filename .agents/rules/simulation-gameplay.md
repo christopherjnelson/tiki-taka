@@ -42,7 +42,7 @@ This document outlines the core physics, scoring, timing, and deterministic simu
    - Threading a pass between two defenders crossing the passing segment awards points and **2.0 seconds of Focus**. Narrower gaps award higher bonuses (`SPLIT_PRESS` ladder).
 7. **One-Touch Passes**:
    - Queued while ball is in flight, or executed within **0.35 seconds** of reception with **≤8 court units** of carrier movement.
-   - Adds **5 flat points** per pass, and a milestone bonus of **50 points** every 10 consecutive one-touch passes.
+   - Adds **5 flat points** per pass, and an Olé milestone bonus of **50 points** and **2.0 seconds of Focus** every 10 consecutive one-touch passes.
 
 ---
 

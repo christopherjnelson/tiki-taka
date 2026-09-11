@@ -176,6 +176,8 @@ test('one-touch milestone adds its flat bonus exactly once every ten passes', ()
   assert.equal(events.filter(event => event.milestone).length, 2);
   assert.equal(events.at(-1).bonus, ONE_TOUCH.passBonus + ONE_TOUCH.milestoneBonus);
   assert.equal(events.at(-1).text, 'ONE TOUCH ×20 +55');
+  assert.equal(game.focus, ONE_TOUCH.milestoneFocus * 2);
+  assert.ok(game.events.some(event => event.type === 'focus' && event.text.includes('+2.0s')));
 });
 
 test('turnovers and intercepted one-touch attempts reset the current streak but preserve the best', () => {

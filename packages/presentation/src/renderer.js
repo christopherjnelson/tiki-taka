@@ -50,10 +50,12 @@ function getScoreEventColor(e) {
     bonuses.includes("triangle") ||
     bonuses.includes("zone") ||
     bonuses.includes("split") ||
+    bonuses.includes("ole") ||
     best === "triangle" ||
     best === "zone" ||
     best === "split" ||
-    /TRIANGLE|ZONE|SPLIT/i.test(text)
+    best === "ole" ||
+    /TRIANGLE|ZONE|SPLIT|OL[EÉ]/i.test(text)
   ) {
     return "#ffd32f";
   }

@@ -1,7 +1,7 @@
 export const WIDTH = 1000,
   HEIGHT = 620;
 export const LIMITS = { left: 50, right: 950, top: 50, bottom: 570 };
-export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, wall: 0 };
+export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, ole: 2, wall: 0 };
 export const SPLIT_PRESS = {
   narrow: 70,
   wide: 200,
@@ -14,6 +14,7 @@ export const BONUS_LABELS = {
   split: "SPLIT THE PRESS",
   triangle: "TRIANGLE",
   zone: "ZONE BONUS",
+  ole: "OLÉ!",
   wall: "WALL PLAY",
 };
 export const ONE_TOUCH = {
@@ -22,6 +23,7 @@ export const ONE_TOUCH = {
   passBonus: 5,
   milestoneEvery: 10,
   milestoneBonus: 50,
+  milestoneFocus: 2,
 };
 // Boost spends the same earned Focus seconds as slow motion, but applies only
 // to the carrier's movement. Keeping its tuning here makes it a simulation
@@ -474,6 +476,11 @@ export class Game {
       oneTouchBonus =
         ONE_TOUCH.passBonus + (milestone ? ONE_TOUCH.milestoneBonus : 0);
       points += oneTouchBonus;
+      bonuses.push("one-touch");
+      if (milestone) {
+        bonuses.push("ole");
+        focusReward += ONE_TOUCH.milestoneFocus;
+      }
     }
     this.score += points;
     // Several bonuses can land on one pass; the label shows the best of them
