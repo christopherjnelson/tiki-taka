@@ -351,9 +351,12 @@ await check(
     await settle(page, passes);
     assert.equal(
       await page.evaluate(() => window.__interfaceGame.game.focus),
-      0.5,
-      "actual wall pass earns Focus",
+      0,
+      "wall pass does not earn Focus",
     );
+    await page.evaluate(() => {
+      window.__interfaceGame.game.focus = 1.5;
+    });
     const focusBefore = await page.evaluate(
       () => window.__interfaceGame.game.focus,
     );

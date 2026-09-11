@@ -1,7 +1,7 @@
 export const WIDTH = 1000,
   HEIGHT = 620;
 export const LIMITS = { left: 50, right: 950, top: 50, bottom: 570 };
-export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, wall: 0.5 };
+export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, wall: 0 };
 export const SPLIT_PRESS = {
   narrow: 70,
   wide: 200,
@@ -424,7 +424,6 @@ export class Game {
       this.banks++;
       points += 18 * multiplier;
       bonuses.push("wall");
-      focusReward += FOCUS_REWARDS.wall;
     }
     if (ball.split !== null) {
       // Splitting two of three is far harder than two of two, so the reward
@@ -441,6 +440,7 @@ export class Game {
     }
     this.history.push(this.carrier);
     if (this.history.length > 4) this.history.shift();
+    let triangleCoords = null;
     if (
       this.history.length >= 4 &&
       this.history.at(-4) === this.carrier &&
@@ -451,6 +451,12 @@ export class Game {
       bonuses.push("triangle");
       focusReward += FOCUS_REWARDS.triangle;
       if (this.config.endless) this.time += 5;
+      const ids = Array.from(new Set(this.history.slice(-4)));
+      triangleCoords = ids.map((id) => ({
+        id,
+        x: this.players[id].x,
+        y: this.players[id].y,
+      }));
     }
     if (distance(p, this.zone) < this.zone.r) {
       points += 25 * multiplier;
@@ -478,7 +484,7 @@ export class Game {
       `${best ? BONUS_LABELS[best] : "PASS"} +${points}`,
       p.x,
       p.y - 25,
-      { bonuses },
+      { bonuses, points, bestBonus: best || null, triangle: triangleCoords },
     );
     if (!ball.focusUsed && focusReward > 0) {
       const gained = Math.min(focusReward, this.tactic.focus - this.focus);

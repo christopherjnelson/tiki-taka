@@ -261,7 +261,8 @@ await check('desktop gameplay, controls, progression, help, and full run', async
   await page.locator('#court').focus();
   await page.keyboard.press('Space');
   await waitForPassToSettle(page, passesBeforeWall);
-  assert.equal(await focusSeconds(page), 0.5, 'a completed wall pass should earn 0.5 seconds of focus');
+  assert.equal(await focusSeconds(page), 0, 'a completed wall pass should not earn focus');
+  await page.evaluate(() => { window.__observedGame.game.focus = 1.5; });
 
   const focusBefore = await focusSeconds(page);
   await page.keyboard.down('KeyE');
@@ -521,9 +522,10 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   await pressUntilAccepted(page, 0);
   await waitForPassToSettle(page, gamepadPasses, 20000);
   assert.equal(await page.locator('#bank-button').getAttribute('aria-pressed'), 'false', 'playing the armed wall pass should disarm it');
-  assert.equal(await focusSeconds(page), 0.5, 'gamepad wall pass should earn focus');
+  assert.equal(await focusSeconds(page), 0, 'gamepad wall pass should not earn focus');
+  await page.evaluate(() => { window.__observedGame.game.focus = 1.5; });
   await page.waitForTimeout(150);
-  assert.equal(await focusSeconds(page), 0.5, 'focus held while empty should require release before using later earnings');
+  assert.equal(await focusSeconds(page), 1.5, 'focus held while empty should require release before using later earnings');
   await page.evaluate(() => window.__setTestPad({ button: 6, pressed: false }));
   await page.waitForTimeout(80);
   const focusBefore = await focusSeconds(page);

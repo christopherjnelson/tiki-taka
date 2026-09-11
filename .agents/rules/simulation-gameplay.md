@@ -34,7 +34,7 @@ This document outlines the core physics, scoring, timing, and deterministic simu
    - Completing a pass cycle across 3 distinct teammates awards **35 points** (scaled by flow) and **1.5 seconds of Focus**.
    - In Endless mode, triangles also grant +5 bonus seconds on the match clock.
 4. **Wall Pass**:
-   - Banking a pass off an arena boundary awards **18 points** and **0.5 seconds of Focus**.
+   - Banking a pass off an arena boundary awards **18 points** (scaled by flow). It does not award Focus.
 5. **Bonus Zones**:
    - Receiving a pass inside the active bonus circle awards **25 points** and **1.0 second of Focus**.
    - Bonus zones move after a collection or after 12 seconds of inactivity.
