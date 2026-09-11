@@ -1468,21 +1468,108 @@ function paintAmbience(dt) {
 }
 
 // --- Arena rail audio-reactive visualizers --------------------------------
-// Active only in wide desktop viewports (window.innerWidth >= 1200) during play view.
-// Left rail: 8-band frequency equalizer with peak hold.
-// Right rail: real-time oscilloscope waveform.
+// Active in wide desktop viewports (window.innerWidth >= 1200) during play view.
+// Fills the letterbox background flanking the court with symmetrical spectrum analyzers.
 const railVizLeft = $("rail-viz-left"),
   railVizRight = $("rail-viz-right"),
   railCtxLeft = railVizLeft?.getContext("2d"),
   railCtxRight = railVizRight?.getContext("2d");
 
-const VIZ_BARS = 8;
+const VIZ_BARS = 10;
 const vizBarHeights = new Float32Array(VIZ_BARS);
 const vizBarPeaks = new Float32Array(VIZ_BARS);
 const vizFreqBuffer = new Uint8Array(64);
-const vizTimeBuffer = new Uint8Array(64);
 let vizClock = 0;
 let vizElapsed = 0;
+
+const VIZ_BAND_RANGES = [
+  [0, 1],   // Sub-bass (~40-80 Hz)
+  [2, 3],   // Bass (~80-160 Hz)
+  [4, 6],   // Low-mid (~160-320 Hz)
+  [7, 10],  // Mid (~320-600 Hz)
+  [11, 15], // Mid-high (~600-1000 Hz)
+  [16, 21], // High-mid (~1-2 kHz)
+  [22, 28], // Presence (~2-3.5 kHz)
+  [29, 37], // Crisp (~3.5-5 kHz)
+  [38, 48], // Treble (~5-8 kHz)
+  [49, 63], // Air (~8-16 kHz)
+];
+
+function drawRoundedSegment(ctx, x, y, w, h, r) {
+  if (typeof ctx.roundRect === "function") {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.fill();
+  } else {
+    ctx.fillRect(x, y, w, h);
+  }
+}
+
+function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced) {
+  ctx.clearRect(0, 0, w, h);
+
+  const topPad = Math.round(58 * dpr);
+  const botPad = Math.round(90 * dpr);
+  const availH = h - topPad - botPad;
+  if (availH <= 40 || w <= 10) return;
+
+  const pad = Math.max(2, Math.round(3 * dpr));
+  const barWidth = Math.max(4, Math.floor((w - (VIZ_BARS + 1) * pad) / VIZ_BARS));
+  const totalW = VIZ_BARS * barWidth + (VIZ_BARS - 1) * pad;
+  const startX = Math.floor((w - totalW) / 2);
+
+  const numSegs = 36;
+  const segGap = Math.max(2, Math.round(2.5 * dpr));
+  const segH = Math.max(2, Math.floor((availH - (numSegs + 1) * segGap) / numSegs));
+  const rx = Math.max(1, Math.round(1.5 * dpr));
+
+  for (let c = 0; c < VIZ_BARS; c++) {
+    // Symmetrical frequency mapping: low bass on the outer edge (flanking the arena),
+    // high treble towards the court.
+    const bandIdx = isLeft ? c : (VIZ_BARS - 1 - c);
+    const bx = startX + c * (barWidth + pad);
+    const val = vizBarHeights[bandIdx];
+    const peak = vizBarPeaks[bandIdx];
+    const litCount = Math.round(val * numSegs);
+    const peakSeg = Math.min(numSegs - 1, Math.round(peak * numSegs));
+
+    // Subtle dark chassis channel behind each bar
+    ctx.fillStyle = "rgba(4, 9, 26, 0.35)";
+    drawRoundedSegment(ctx, bx - 1, topPad, barWidth + 2, availH, rx);
+
+    for (let s = 0; s < numSegs; s++) {
+      const sy = (h - botPad) - (s + 1) * (segH + segGap);
+      const frac = s / (numSegs - 1);
+      const isLit = s < litCount;
+      const isPeak = !reduced && s === peakSeg && peak > 0.05;
+
+      if (isPeak) {
+        ctx.fillStyle = "#ffffff";
+        ctx.shadowColor = "#ffffff";
+        ctx.shadowBlur = Math.round(6 * dpr);
+        drawRoundedSegment(ctx, bx, sy, barWidth, segH, rx);
+        ctx.shadowBlur = 0;
+      } else if (isLit) {
+        if (frac < 0.55) {
+          ctx.fillStyle = "#00f0ff";
+          ctx.shadowColor = "#00f0ff";
+        } else if (frac < 0.8) {
+          ctx.fillStyle = "#ffd64d";
+          ctx.shadowColor = "#ffd64d";
+        } else {
+          ctx.fillStyle = "#ff2a85";
+          ctx.shadowColor = "#ff2a85";
+        }
+        ctx.shadowBlur = (s >= litCount - 2) ? Math.round(5 * dpr) : 0;
+        drawRoundedSegment(ctx, bx, sy, barWidth, segH, rx);
+        ctx.shadowBlur = 0;
+      } else {
+        ctx.fillStyle = "rgba(16, 32, 64, 0.35)";
+        drawRoundedSegment(ctx, bx, sy, barWidth, segH, rx);
+      }
+    }
+  }
+}
 
 function paintRailVisualizers(dt) {
   if (
@@ -1523,213 +1610,39 @@ function paintRailVisualizers(dt) {
     }
   }
 
-  // 1. Left canvas: 8-band rhythm spectrum EQ with segmented LEDs
-  const wL = railVizLeft.width,
-    hL = railVizLeft.height,
-    cL = railCtxLeft;
-  cL.clearRect(0, 0, wL, hL);
-
   const hasFreq = music.getFrequencyData(vizFreqBuffer);
-  const bandRanges = [
-    [0, 2], [2, 5], [5, 9], [9, 15],
-    [15, 23], [23, 33], [33, 46], [46, 63],
-  ];
 
-  const pad = Math.max(2, Math.round(2.5 * dpr));
-  const barWidth = Math.max(4, Math.floor((wL - (VIZ_BARS + 1) * pad) / VIZ_BARS));
-  const totalW = VIZ_BARS * barWidth + (VIZ_BARS - 1) * pad;
-  const startX = Math.floor((wL - totalW) / 2);
-  const numSegs = 16;
-  const segGap = Math.max(1, Math.round(2 * dpr));
-  const segH = Math.max(2, Math.floor((hL - (numSegs + 1) * segGap) / numSegs));
-
-  for (let i = 0; i < VIZ_BARS; i++) {
+  for (let b = 0; b < VIZ_BARS; b++) {
     if (reduced) {
-      vizBarHeights[i] = 0.35;
-      vizBarPeaks[i] = 0.35;
+      vizBarHeights[b] = 0.35;
+      vizBarPeaks[b] = 0.35;
     } else if (hasFreq) {
-      const [start, end] = bandRanges[i];
+      const [start, end] = VIZ_BAND_RANGES[b];
       let sum = 0;
-      for (let b = start; b <= end; b++) sum += vizFreqBuffer[b];
+      for (let k = start; k <= end; k++) sum += vizFreqBuffer[k];
       const avg = sum / (end - start + 1);
-      const freqScale = 1 + i * 0.12;
+      const freqScale = 1.05 + b * 0.08;
       const targetVal = Math.min(1, (avg / 255) * freqScale);
-      if (targetVal > vizBarHeights[i]) {
-        vizBarHeights[i] = targetVal;
+      if (targetVal > vizBarHeights[b]) {
+        vizBarHeights[b] = targetVal;
       } else {
-        vizBarHeights[i] = Math.max(0, vizBarHeights[i] - elapsed * 2.4);
+        vizBarHeights[b] = Math.max(0, vizBarHeights[b] - elapsed * 2.5);
       }
     } else {
-      vizBarHeights[i] = 0.3 + 0.22 * Math.sin(vizClock * 2.2 + i * 0.65);
+      vizBarHeights[b] = 0.22 + 0.16 * Math.sin(vizClock * 2.2 + b * 0.65);
     }
 
     if (!reduced) {
-      if (vizBarHeights[i] > vizBarPeaks[i]) {
-        vizBarPeaks[i] = vizBarHeights[i];
+      if (vizBarHeights[b] > vizBarPeaks[b]) {
+        vizBarPeaks[b] = vizBarHeights[b];
       } else {
-        vizBarPeaks[i] = Math.max(0, vizBarPeaks[i] - elapsed * 0.85);
-      }
-    }
-
-    const bx = startX + i * (barWidth + pad);
-    const litCount = Math.round(vizBarHeights[i] * numSegs);
-    const peakSeg = Math.min(numSegs - 1, Math.round(vizBarPeaks[i] * numSegs));
-
-    for (let s = 0; s < numSegs; s++) {
-      const sy = hL - (s + 1) * (segH + segGap);
-      const isLit = s < litCount;
-      const isPeak = !reduced && s === peakSeg && vizBarPeaks[i] > 0.08;
-
-      if (isPeak) {
-        cL.fillStyle = "#ffffff";
-        cL.fillRect(bx, sy, barWidth, segH);
-      } else if (isLit) {
-        const frac = s / (numSegs - 1);
-        if (frac < 0.6) {
-          cL.fillStyle = "#27ead8";
-        } else if (frac < 0.82) {
-          cL.fillStyle = "#ffd64d";
-        } else {
-          cL.fillStyle = "#ff3aa7";
-        }
-        cL.fillRect(bx, sy, barWidth, segH);
-      } else {
-        cL.fillStyle = "rgba(255, 255, 255, 0.05)";
-        cL.fillRect(bx, sy, barWidth, segH);
+        vizBarPeaks[b] = Math.max(0, vizBarPeaks[b] - elapsed * 0.75);
       }
     }
   }
 
-  // 2. Right canvas: live waveform oscilloscope + stereo telemetry meters
-  const wR = railVizRight.width,
-    hR = railVizRight.height,
-    cR = railCtxRight;
-  cR.clearRect(0, 0, wR, hR);
-
-  // Divide canvas: upper area for oscilloscope, bottom for dual stereo meters
-  const meterH = Math.max(3, Math.round(3.5 * dpr));
-  const meterGap = Math.max(3, Math.round(4 * dpr));
-  const meterAreaH = meterH * 2 + meterGap + Math.round(12 * dpr);
-  const hWave = hR - meterAreaH;
-  const midY = Math.round(hWave * 0.5);
-
-  // Background reticle grid for oscilloscope
-  cR.strokeStyle = "rgba(255, 58, 167, 0.08)";
-  cR.lineWidth = 1;
-  cR.beginPath();
-  cR.moveTo(0, midY);
-  cR.lineTo(wR, midY);
-  cR.moveTo(0, Math.round(midY * 0.4));
-  cR.lineTo(wR, Math.round(midY * 0.4));
-  cR.moveTo(0, Math.round(midY * 1.6));
-  cR.lineTo(wR, Math.round(midY * 1.6));
-  cR.moveTo(Math.round(wR * 0.5), 2);
-  cR.lineTo(Math.round(wR * 0.5), hWave - 2);
-  cR.moveTo(Math.round(wR * 0.25), 4);
-  cR.lineTo(Math.round(wR * 0.25), hWave - 4);
-  cR.moveTo(Math.round(wR * 0.75), 4);
-  cR.lineTo(Math.round(wR * 0.75), hWave - 4);
-  cR.stroke();
-
-  const hasTime = music.getTimeDomainData(vizTimeBuffer);
-  let mean = 128;
-  let maxDev = 1;
-  let hasRealSignal = false;
-  if (hasTime) {
-    let sum = 0;
-    for (let i = 0; i < vizTimeBuffer.length; i++) sum += vizTimeBuffer[i];
-    mean = sum / vizTimeBuffer.length;
-    for (let i = 0; i < vizTimeBuffer.length; i++) {
-      const dev = Math.abs(vizTimeBuffer[i] - mean);
-      if (dev > maxDev) maxDev = dev;
-    }
-    hasRealSignal = maxDev > 2;
-  }
-
-  // Automatic gain control for visualizer so waveform always has high dramatic presence
-  const ampScale = Math.max(2, Math.min(14, 42 / Math.max(1, maxDev)));
-  const step = wR / (vizTimeBuffer.length - 1);
-
-  // 2a. Echo / phase shadow trace in cyan
-  if (!reduced && hasRealSignal) {
-    cR.lineWidth = Math.max(1, Math.round(1.2 * dpr));
-    cR.strokeStyle = "rgba(39, 234, 216, 0.4)";
-    cR.beginPath();
-    for (let i = 0; i < vizTimeBuffer.length; i++) {
-      const idx = (i + 4) % vizTimeBuffer.length;
-      const norm = ((vizTimeBuffer[idx] - mean) / 64) * ampScale;
-      const y = midY + Math.max(-midY * 0.82, Math.min(midY * 0.82, norm * (midY * 0.75)));
-      const x = i * step;
-      if (i === 0) cR.moveTo(x, y);
-      else cR.lineTo(x, y);
-    }
-    cR.stroke();
-  }
-
-  // 2b. Primary waveform with neon pink glow
-  cR.lineWidth = Math.max(1.5, Math.round(2 * dpr));
-  cR.lineCap = "round";
-  cR.lineJoin = "round";
-  cR.strokeStyle = "rgba(255, 58, 167, 0.95)";
-  cR.shadowColor = "rgba(255, 58, 167, 0.75)";
-  cR.shadowBlur = Math.round(8 * dpr);
-  cR.beginPath();
-
-  if (reduced) {
-    cR.moveTo(0, midY);
-    cR.lineTo(wR, midY);
-  } else if (hasRealSignal) {
-    for (let i = 0; i < vizTimeBuffer.length; i++) {
-      const norm = ((vizTimeBuffer[i] - mean) / 64) * ampScale;
-      const y = midY + Math.max(-midY * 0.82, Math.min(midY * 0.82, norm * (midY * 0.78)));
-      const x = i * step;
-      if (i === 0) cR.moveTo(x, y);
-      else cR.lineTo(x, y);
-    }
-  } else {
-    const pts = 36;
-    const idleStep = wR / (pts - 1);
-    for (let i = 0; i < pts; i++) {
-      const x = i * idleStep;
-      const progress = i / (pts - 1);
-      const env = Math.sin(progress * Math.PI);
-      const wave = Math.sin(vizClock * 3.2 + i * 0.3) * Math.cos(vizClock * 1.6 + i * 0.15);
-      const y = midY + wave * (midY * 0.7) * env;
-      if (i === 0) cR.moveTo(x, y);
-      else cR.lineTo(x, y);
-    }
-  }
-  cR.stroke();
-  cR.shadowBlur = 0;
-
-  // Dual stereo channel meters in bottom partition
-  const meterY = hWave + Math.round(5 * dpr);
-  const labelW = Math.round(14 * dpr);
-  const barW = wR - labelW - Math.round(4 * dpr);
-
-  const energy = music.energy !== null ? music.energy : (reduced ? 0.35 : 0.3 + 0.15 * Math.sin(vizClock * 2.5));
-  const leftLevel = Math.min(1, energy * (reduced ? 1 : 1 + 0.1 * Math.sin(vizClock * 3.5)));
-  const rightLevel = Math.min(1, energy * (reduced ? 1 : 1 - 0.1 * Math.sin(vizClock * 3.5)));
-
-  // Channel L
-  cR.fillStyle = "rgba(255, 255, 255, 0.3)";
-  cR.font = `700 ${Math.round(7 * dpr)}px "Tiki Signage", "Arial Narrow", sans-serif`;
-  cR.textAlign = "left";
-  cR.textBaseline = "middle";
-  cR.fillText("L", 0, meterY + meterH * 0.5);
-  cR.fillStyle = "rgba(255, 255, 255, 0.05)";
-  cR.fillRect(labelW, meterY, barW, meterH);
-  cR.fillStyle = "#27ead8";
-  cR.fillRect(labelW, meterY, Math.round(barW * leftLevel), meterH);
-
-  // Channel R
-  const rY = meterY + meterH + meterGap;
-  cR.fillStyle = "rgba(255, 255, 255, 0.3)";
-  cR.fillText("R", 0, rY + meterH * 0.5);
-  cR.fillStyle = "rgba(255, 255, 255, 0.05)";
-  cR.fillRect(labelW, rY, barW, meterH);
-  cR.fillStyle = "#ff3aa7";
-  cR.fillRect(labelW, rY, Math.round(barW * rightLevel), meterH);
+  renderSpectrumCanvas(railCtxLeft, railVizLeft.width, railVizLeft.height, true, dpr, reduced);
+  renderSpectrumCanvas(railCtxRight, railVizRight.width, railVizRight.height, false, dpr, reduced);
 }
 
 // The scoreboard floats over the top of the court in play view and reflows
@@ -2155,11 +2068,6 @@ function syncMusicRail() {
   $("music-track").title = title
     ? `${title} · track ${music.trackIndex + 1} of ${music.trackCount}`
     : "";
-  const railTrackTitle = $("rail-track-title");
-  if (railTrackTitle) {
-    railTrackTitle.textContent = title || "—";
-    railTrackTitle.title = title || "";
-  }
 }
 // A bar button is a real button, so activating it takes DOM focus off the
 // court — and then Space would press the button again instead of making a
