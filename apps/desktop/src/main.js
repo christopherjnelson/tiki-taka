@@ -1049,6 +1049,56 @@ function toggleBoost() {
   syncBoostButtons();
   syncFocusButtons();
 }
+let perfOverlay = null,
+  perfEnabled = false,
+  perfLastSample = 0,
+  perfFrames = 0,
+  perfJsTotal = 0,
+  perfPaintTotal = 0;
+
+try {
+  perfEnabled =
+    location.search.includes("perf") ||
+    location.search.includes("fps") ||
+    localStorage.getItem("tiki-taka.perf-overlay") === "1";
+} catch {
+  perfEnabled = false;
+}
+
+function ensurePerfOverlay() {
+  if (perfOverlay) return perfOverlay;
+  perfOverlay = document.createElement("aside");
+  perfOverlay.id = "perf-overlay";
+  perfOverlay.className = "perf-overlay";
+  perfOverlay.setAttribute("aria-hidden", "true");
+  perfOverlay.hidden = !perfEnabled;
+  perfOverlay.innerHTML = `
+    <div class="perf-title"><span>PERF</span><span id="perf-fps">-- FPS</span></div>
+    <div class="perf-row"><span>Frame:</span><span id="perf-frame" class="perf-val">-- ms</span></div>
+    <div class="perf-row"><span>JS:</span><span id="perf-js" class="perf-val">-- ms</span></div>
+    <div class="perf-row"><span>Paint:</span><span id="perf-paint" class="perf-val">-- ms</span></div>
+  `;
+  document.body.appendChild(perfOverlay);
+  return perfOverlay;
+}
+
+function togglePerfOverlay() {
+  perfEnabled = !perfEnabled;
+  try {
+    localStorage.setItem("tiki-taka.perf-overlay", perfEnabled ? "1" : "0");
+  } catch {}
+  const el = ensurePerfOverlay();
+  el.hidden = !perfEnabled;
+  if (perfEnabled) {
+    perfFrames = 0;
+    perfJsTotal = 0;
+    perfPaintTotal = 0;
+    perfLastSample = performance.now();
+  }
+}
+
+if (perfEnabled) ensurePerfOverlay();
+
 const hudCache = {
   oneTouchStreak: -1,
   oneTouchMilestone: null,
@@ -2278,6 +2328,11 @@ window.addEventListener("keydown", (e) => {
     syncSettingChrome();
     return;
   }
+  if (e.code === "F3" || (e.shiftKey && e.code === "KeyP" && !capture)) {
+    e.preventDefault();
+    togglePerfOverlay();
+    return;
+  }
   if (anyDialogOpen()) return;
   if (menuOpen) {
     const action = actionForCode(settings.bindings, e.code);
@@ -2711,6 +2766,8 @@ function drawTargetHighlight(target) {
   c.restore();
 }
 function frame(now) {
+  const isPerfActive = perfEnabled;
+  const frameStart = isPerfActive ? performance.now() : 0;
   const dt = Math.min(0.05, (now - lastTime) / 1000 || 0);
   lastTime = now;
   pollGamepad(dt);
@@ -2817,6 +2874,7 @@ function frame(now) {
   if (view === "home") updateAttract(dt);
   if (view === "arena") {
     syncHud();
+    const jsDone = isPerfActive ? performance.now() : 0;
     paintAmbience(dt);
     const target =
       phase === "playing" && !awaitingResume ? queuedSmartTarget() : null;
@@ -2832,6 +2890,34 @@ function frame(now) {
     if (courtTargetStr !== hudCache.courtTarget) {
       $("court-wrap").dataset.target = courtTargetStr;
       hudCache.courtTarget = courtTargetStr;
+    }
+    if (isPerfActive) {
+      const paintDone = performance.now();
+      const jsTime = jsDone - frameStart;
+      const paintTime = paintDone - jsDone;
+      perfFrames++;
+      perfJsTotal += jsTime;
+      perfPaintTotal += paintTime;
+      const sinceLastSample = now - perfLastSample;
+      if (sinceLastSample >= 250) {
+        const fps = ((perfFrames * 1000) / sinceLastSample).toFixed(1);
+        const avgFrame = (sinceLastSample / perfFrames).toFixed(1);
+        const avgJs = (perfJsTotal / perfFrames).toFixed(2);
+        const avgPaint = (perfPaintTotal / perfFrames).toFixed(2);
+        ensurePerfOverlay();
+        const fpsEl = $("perf-fps");
+        const frameEl = $("perf-frame");
+        const jsEl = $("perf-js");
+        const paintEl = $("perf-paint");
+        if (fpsEl) fpsEl.textContent = `${fps} FPS`;
+        if (frameEl) frameEl.textContent = `${avgFrame} ms`;
+        if (jsEl) jsEl.textContent = `${avgJs} ms`;
+        if (paintEl) paintEl.textContent = `${avgPaint} ms`;
+        perfFrames = 0;
+        perfJsTotal = 0;
+        perfPaintTotal = 0;
+        perfLastSample = now;
+      }
     }
   }
   requestAnimationFrame(frame);
