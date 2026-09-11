@@ -8,9 +8,10 @@ Move the ball carrier while three teammates find supporting positions. An interc
 - **Flow:** rises every four consecutive passes, up to x5, and resets after a turnover.
 - **One touch:** queue while the ball travels or release within 0.35 seconds without dribbling. Each completed one-touch pass adds 5 points; every ten adds another 50. Holding, dribbling, or losing possession breaks the streak.
 - **Triangle:** complete A → B → C → A with distinct players for 35 points and 1.5 seconds of Focus.
-- **Wall pass:** bank off the boundary for 18 points and 0.5 seconds of Focus.
+- **Wall pass:** bank off the boundary for 18 points. It does not earn Focus.
 - **Bonus zone:** receive inside the orange ring for 25 points and 1 second of Focus. It moves after a bonus or 12 seconds.
-- **Focus:** slows the court and clock. Successful normal-speed triangles, wall passes, and bonus-zone receptions fill its reserve. Rewards cannot be earned while Focus is active.
+- **Split the press:** thread a pass between two closing defenders for high bonus points and 2 seconds of Focus.
+- **Focus:** slows the court and clock. Successful normal-speed triangles, bonus-zone receptions, and press splits fill its reserve. Rewards cannot be earned while Focus is active.
 
 The flow multiplier applies to pass, triangle, wall, and zone points. One-touch bonuses are flat additions. The possession ring warns when the carrier has held the ball too long. Light dotted lanes indicate clearer passes; coral lanes indicate interception risk.
 

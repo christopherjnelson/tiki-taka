@@ -324,7 +324,7 @@ test('wall passes bounce, remain boxed in, reach their receiver and earn extra p
   assert.equal(game.banks, 1);
   assert.equal(game.events.filter(event => event.type === 'wall').length, 1);
   assert.ok(game.score > 12);
-  assert.equal(game.focus, FOCUS_REWARDS.wall);
+  assert.equal(game.focus, 0);
 });
 
 test('segment collision catches defenders between ball frames, preventing tunneling', () => {
@@ -498,11 +498,11 @@ test('plain passes earn no focus and combined skill rewards stack at tactic capa
   assert.equal(game.focus, 0);
   game.zone = { ...game.players[2], r: 92 };
   completePass(game, 2, true);
-  assert.equal(game.focus, FOCUS_REWARDS.wall + FOCUS_REWARDS.zone);
+  assert.equal(game.focus, FOCUS_REWARDS.zone);
   game.zone = { ...game.players[0], r: 92 };
   completePass(game, 0, true);
   assert.equal(game.focus, game.tactic.focus);
-  assert.ok(game.events.some(event => event.type === 'focus' && event.text === 'FOCUS +1.5s'));
+  assert.ok(game.events.some(event => event.type === 'focus' && event.text === 'FOCUS +2.0s'));
 });
 
 test('skill passes completed with focus active keep bonuses but earn no focus', () => {
@@ -791,7 +791,7 @@ test('a bank pass can split on its second segment, after the wall', () => {
   assert.equal(second.turnovers, 0);
   assert.equal(second.banks, 1);
   assert.equal(second.splits, 1);
-  assert.equal(second.focus, FOCUS_REWARDS.wall + FOCUS_REWARDS.split);
+  assert.equal(second.focus, FOCUS_REWARDS.split);
   assert.ok(second.events.some(event => event.type === 'score' && event.text.startsWith('SPLIT THE PRESS')));
   // A pair that both legs merely pass close to, on the same side of each: no split.
   const beside = bankGame([{ x: 430, y: 300 }, { x: 480, y: 320 }]);
