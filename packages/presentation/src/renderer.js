@@ -714,14 +714,85 @@ export class Renderer {
     }
     if (game.ball?.trail?.length) {
       const tr = game.ball.trail;
+      const isSplit = game.ball.split !== null;
+      const splitTightness = isSplit ? game.ball.split : 0;
+      c.save();
+      if (isSplit) {
+        c.shadowColor = "#ffd32f";
+        c.shadowBlur = 12 + splitTightness * 14;
+      }
       for (let i = 1; i < tr.length; i++) {
-        c.strokeStyle = `rgba(255,255,255,${0.18 + (i / tr.length) * 0.72})`;
-        c.lineWidth = 2 + (i / tr.length) * 4;
+        const ratio = i / tr.length;
+        if (isSplit) {
+          c.strokeStyle = `rgba(255, 211, 47, ${0.3 + ratio * 0.7})`;
+          c.lineWidth = 3 + ratio * (6 + splitTightness * 4);
+        } else {
+          c.strokeStyle = `rgba(255, 255, 255, ${0.18 + ratio * 0.72})`;
+          c.lineWidth = 2 + ratio * 4;
+        }
         c.lineCap = "round";
         c.beginPath();
         c.moveTo(tr[i - 1].x, tr[i - 1].y);
         c.lineTo(tr[i].x, tr[i].y);
         c.stroke();
+      }
+      if (isSplit) {
+        c.shadowBlur = 0;
+        for (let i = 1; i < tr.length; i++) {
+          const ratio = i / tr.length;
+          c.strokeStyle = `rgba(255, 255, 255, ${0.45 + ratio * 0.55})`;
+          c.lineWidth = 1.5 + ratio * 2.5;
+          c.beginPath();
+          c.moveTo(tr[i - 1].x, tr[i - 1].y);
+          c.lineTo(tr[i].x, tr[i].y);
+          c.stroke();
+        }
+        if (!this.reducedMotion && tr.length >= 3) {
+          const head = tr.at(-1);
+          const time = performance.now() * 0.01;
+          for (let s = 0; s < 3; s++) {
+            const angle = time + s * 2.1;
+            const dist = 6 + (s * 5) % 12;
+            c.fillStyle = s % 2 === 0 ? "#ffd32f" : "#fff";
+            c.beginPath();
+            c.arc(head.x + Math.cos(angle) * dist, head.y + Math.sin(angle) * dist, 1.5 + (s % 2), 0, Math.PI * 2);
+            c.fill();
+          }
+        }
+      }
+      c.restore();
+    }
+    // Active passing triangle visualization
+    for (const e of this.effects) {
+      if (e.triangle && e.triangle.length === 3) {
+        const t = Math.min(1, e.age / e.life);
+        const fade = Math.sin((1 - t) * Math.PI * 0.5);
+        const [p1, p2, p3] = e.triangle;
+        c.save();
+        c.beginPath();
+        c.moveTo(p1.x, p1.y);
+        c.lineTo(p2.x, p2.y);
+        c.lineTo(p3.x, p3.y);
+        c.closePath();
+        c.fillStyle = `rgba(255, 211, 47, ${0.14 * fade})`;
+        c.shadowColor = "#ffd32f";
+        c.shadowBlur = 18 * fade;
+        c.fill();
+        c.strokeStyle = `rgba(255, 225, 75, ${0.9 * fade})`;
+        c.lineWidth = 2.5;
+        c.stroke();
+        c.shadowBlur = 0;
+        if (!this.reducedMotion) {
+          for (const pt of e.triangle) {
+            const ringRadius = 24 + (1 - fade) * 20;
+            c.strokeStyle = `rgba(255, 211, 47, ${0.65 * fade})`;
+            c.lineWidth = 2 * fade;
+            c.beginPath();
+            c.arc(pt.x, pt.y, ringRadius, 0, Math.PI * 2);
+            c.stroke();
+          }
+        }
+        c.restore();
       }
     }
     for (const e of this.effects) {
