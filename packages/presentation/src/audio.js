@@ -334,6 +334,11 @@ export class Sound {
       this.kick(start);
       return;
     }
+    // A one-touch keeps no tone of its own: it rides on a pass that already
+    // sounded its kick, so chaining them beeped all the way down the chain.
+    // The olé above still marks a ten-pass run, and a registered one-touch
+    // sample would still have played by now.
+    if (type === "one-touch") return;
     const notes =
       type === "score"
         ? [440, 660]
