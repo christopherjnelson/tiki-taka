@@ -446,11 +446,16 @@
               </button>
             </div>
             <!-- Desktop's match identifier lives in the clear span between the
-            score and match pods. It is decorative: the accessible, live court
-            title remains the arena heading above this panel. -->
-            <div class="arena-venue-banner" aria-hidden="true">
-              <strong id="arena-venue-label">LISBON / AZULEJO COAST</strong>
-              <span>POSSESSION IS A WEAPON</span>
+            score and match pods. It houses the venue crest and match clock. -->
+            <div class="arena-venue-banner" role="group" aria-label="Match venue and clock">
+              <div class="arena-venue-crest" aria-hidden="true">
+                <strong id="arena-venue-label">LISBON / AZULEJO COAST</strong>
+                <span>POSSESSION IS A WEAPON</span>
+              </div>
+              <div class="arena-clock-badge">
+                <span class="arena-clock-label">TIME</span>
+                <strong id="time-value" class="clock-value">1:15</strong>
+              </div>
             </div>
             <!-- These occupy only the unused letterbox around a height-bound
             court. They are deliberately not gameplay readouts: the canvas
@@ -660,14 +665,6 @@
                 >
                   Boost <kbd data-binding="boostHold">R</kbd></button
                 >
-              </div>
-              <!-- The clock takes the slot Boost's meter used to occupy,
-              mirroring the Energy readout on the opposite end of the rail —
-              same panel, right-aligned so its numerals land flush with the
-              court edge. -->
-              <div id="clock-info" class="target-info clock-info">
-                <span class="clock-label">On the clock</span>
-                <strong id="time-value" class="clock-value">1:15</strong>
               </div>
             </div>
           </section>

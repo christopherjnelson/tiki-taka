@@ -3307,9 +3307,8 @@ body.play-view .arena-view .below-court {
     transform: translateX(-50%);
   }
 
-  /* Top is one continuous sequence: score pod, venue identifier, match pod.
-     The middle has a different silhouette but shares the same baseline,
-     stroke and opaque navy material as its neighbours. */
+  /* Top is one continuous sequence: score pod, venue/clock crown, match pod.
+     Forming a unified, monolithic arcade crown locked to the court frame. */
   body.play-view .scoreboard {
     top: 14px;
     align-items: stretch;
@@ -3318,63 +3317,73 @@ body.play-view .arena-view .below-court {
     width: var(--arena-court-width);
     padding: 0;
     background: none;
+    pointer-events: none;
+  }
+  body.play-view .scoreboard > * {
+    pointer-events: auto;
   }
   body.play-view .hud-group {
     min-height: 66px;
-    padding: 8px 17px;
-    border: 1px solid var(--venue-accent);
+    padding: 8px 16px;
+    border: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
     border-radius: 0;
-    background: #080d25;
-    box-shadow: none;
-    clip-path: polygon(0 0, calc(100% - 15px) 0, 100% 50%, calc(100% - 15px) 100%, 0 100%, 10px 50%);
+    background: linear-gradient(180deg, #0c1432 0%, #060b20 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 4px 14px rgba(0, 0, 0, 0.4);
+    clip-path: none;
   }
   body.play-view .hud-group-score {
-    /* Narrower than while it held the clock too: score alone doesn't need
-       as much width, and the freed room goes into the number itself. */
-    width: clamp(190px, 17cqw, 270px);
+    width: clamp(200px, 18cqw, 270px);
     gap: 3px;
-    padding-left: 20px;
+    padding-left: 18px;
+    border-radius: 4px 0 0 4px;
     background:
-      linear-gradient(90deg, color-mix(in srgb, var(--venue-accent), transparent 87%), transparent 60%),
-      #080d25;
+      linear-gradient(90deg, color-mix(in srgb, var(--venue-accent), transparent 88%), transparent 70%),
+      linear-gradient(180deg, #0c1432 0%, #060b20 100%);
   }
   body.play-view .hud-group-match {
-    width: clamp(244px, 23cqw, 345px);
+    width: clamp(235px, 22cqw, 330px);
     margin-left: auto;
-    padding-left: 24px;
-    border-color: var(--pink);
+    padding: 8px 16px;
+    border-right: none;
+    border-radius: 0;
     background:
-      linear-gradient(270deg, color-mix(in srgb, var(--pink), transparent 88%), transparent 60%),
-      #080d25;
+      linear-gradient(270deg, color-mix(in srgb, var(--pink), transparent 90%), transparent 70%),
+      linear-gradient(180deg, #0c1432 0%, #060b20 100%);
   }
-  /* The score is score-only in this card now, so it can claim the room the
-     clock used to share with it. */
   body.play-view .scoreboard .hud-group-score .score-stat strong {
     color: var(--venue-accent);
-    font-size: clamp(36px, 3.8vw, 56px);
-    line-height: 0.82;
-    text-shadow: none;
+    font-size: clamp(34px, 3.6vw, 52px);
+    line-height: 0.85;
+    text-shadow: 0 0 16px color-mix(in srgb, var(--venue-accent), transparent 60%);
   }
   body.play-view .scoreboard .stat-label {
     margin-bottom: 4px;
     color: #b9cae7;
+    font-size: 10px;
+    letter-spacing: 1.2px;
   }
   body.play-view .scoreboard .hud-group-score .stat-label {
-    font-size: 11px;
+    font-size: 10.5px;
   }
   body.play-view .scoreboard .hud-group-match .stat {
     min-width: 0;
-    padding-left: clamp(10px, 1.2cqw, 20px);
-    border-left-color: #314568;
+    padding-left: clamp(8px, 1cqw, 16px);
+    border-left: 1px solid #23395b;
+  }
+  body.play-view .scoreboard .hud-group-match .stat:first-child {
+    border-left: none;
+    padding-left: 0;
   }
   body.play-view .scoreboard .hud-group-match .stat strong {
     color: #fff7ff;
-    font-size: clamp(23px, 2.4vw, 38px);
+    font-size: clamp(22px, 2.2vw, 36px);
     line-height: 0.85;
   }
   body.play-view .scoreboard .lives-stat strong {
     color: var(--pink);
-    font-size: clamp(16px, 1.8vw, 27px);
+    font-size: clamp(16px, 1.8vw, 26px);
+    letter-spacing: 2px;
+    text-shadow: 0 0 10px color-mix(in srgb, var(--pink), transparent 60%);
   }
   body.play-view .hud-group-score-foot {
     width: 100%;
@@ -3382,19 +3391,28 @@ body.play-view .arena-view .below-court {
   }
   body.play-view .best-chip {
     color: var(--pink);
-    font-size: 11px;
+    font-size: 10.5px;
+    letter-spacing: 0.8px;
   }
   body.play-view .pause-button {
     align-self: stretch;
-    width: 54px;
+    width: 52px;
     height: auto;
-    margin: 0 0 0 -1px;
+    margin: 0;
     color: var(--pink);
-    background: #080d25;
-    border: 1px solid var(--pink);
-    border-radius: 0;
-    box-shadow: none;
-    clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);
+    background: linear-gradient(180deg, #10193d 0%, #070c24 100%);
+    border: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
+    border-left: 1px solid #23395b;
+    border-radius: 0 4px 4px 0;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 4px 14px rgba(0, 0, 0, 0.4);
+    clip-path: none;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  body.play-view .pause-button:hover,
+  body.play-view .pause-button:focus-visible {
+    background: var(--pink);
+    color: #060b20;
   }
 
   body.play-view .arena-venue-banner {
@@ -3402,30 +3420,76 @@ body.play-view .arena-view .below-court {
     z-index: 4;
     top: 14px;
     left: 50%;
-    display: grid;
-    align-content: center;
-    justify-items: center;
-    width: clamp(252px, 31cqw, 490px);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: clamp(240px, 28cqw, 420px);
     height: 66px;
-    padding: 7px 28px;
+    padding: 6px 18px;
     color: #d7e4f8;
-    background: #0a1028;
-    border-top: 1px solid var(--pink);
-    border-bottom: 1px solid var(--venue-accent);
-    clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%);
+    background: linear-gradient(180deg, #0d1636 0%, #070c24 100%);
+    border: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
+    border-radius: 4px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09), 0 4px 14px rgba(0, 0, 0, 0.4);
+    clip-path: none;
     transform: translateX(-50%);
     pointer-events: none;
   }
-  .arena-venue-banner strong {
-    color: var(--venue-accent);
-    font: italic 800 clamp(17px, 1.6vw, 26px) / 0.9 var(--display);
-    letter-spacing: 0.5px;
+  .arena-venue-crest {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    flex: 1 1 auto;
   }
-  .arena-venue-banner span {
-    margin-top: 5px;
-    color: #d7e4f8;
-    font: 700 clamp(7px, 0.55vw, 9px) var(--sign);
-    letter-spacing: clamp(2px, 0.35vw, 5px);
+  .arena-venue-crest strong {
+    color: var(--venue-accent);
+    font: italic 800 clamp(15px, 1.4vw, 22px) / 1 var(--display);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .arena-venue-crest span {
+    margin-top: 3px;
+    color: #9cb2d6;
+    font: 700 clamp(7px, 0.5vw, 8.5px) var(--sign);
+    letter-spacing: clamp(1.5px, 0.25vw, 3px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .arena-clock-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    padding-left: 12px;
+    border-left: 1px solid #23395b;
+    flex: 0 0 auto;
+  }
+  .arena-clock-label {
+    font: 700 7.5px/1 var(--sign);
+    letter-spacing: 1.5px;
+    color: #9cb2d6;
+    text-transform: uppercase;
+  }
+  .arena-clock-badge .clock-value {
+    font-family: var(--mono);
+    font-size: clamp(20px, 1.9vw, 28px);
+    font-weight: 800;
+    line-height: 1;
+    color: #ffffff;
+    margin-top: 2px;
+  }
+  .arena-clock-badge .clock-value.urgent {
+    color: var(--pink);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--pink), transparent 40%);
+    animation: urgent-pulse 1s ease-in-out infinite;
+  }
+  @keyframes urgent-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
   }
 
   /* The lower rail is a deliberate court-edge frame rather than a floating
