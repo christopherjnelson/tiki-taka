@@ -621,17 +621,19 @@
                 <!-- Pure readout: Focus and Boost both spend this one hidden
                 reserve (engine field `game.focus`); the UI calls it Energy so
                 the two abilities below can keep their own names. -->
-                <span class="energy-label">Energy</span>
-                <span id="energy-value" class="energy-value">0.0 / 5s</span>
+                <div class="energy-row">
+                  <span class="energy-label">BOOST</span>
+                  <span id="energy-value" class="energy-value">0 / 10</span>
+                </div>
                 <span
                   id="energy-meter"
                   class="energy-track"
                   role="meter"
                   aria-label="Energy reserve"
                   aria-valuemin="0"
-                  aria-valuemax="5"
+                  aria-valuemax="10"
                   aria-valuenow="0"
-                  aria-valuetext="0.0 of 5 seconds"
+                  aria-valuetext="0 of 10 energy"
                   ><span id="energy-fill"></span
                 ></span>
               </div>
@@ -692,7 +694,7 @@
               >
                 <span>Focus</span
                 ><span id="touch-focus-value" class="touch-focus-value"
-                  >0.0 / 5s</span
+                  >0 / 10</span
                 ><span class="touch-focus-track" aria-hidden="true"
                   ><span id="touch-focus-fill"></span
                 ></span></button
@@ -1041,15 +1043,15 @@
             </li>
             <li>
               <strong>Triangle:</strong> A → B → C → A adds 35 points and earns
-              1.5 seconds of Energy.
+              3 Energy.
             </li>
             <li>
               <strong>Zone:</strong> receive in the highlighted circle for 25
-              extra points and 1 second of Energy.
+              extra points and 2 Energy.
             </li>
             <li>
               <strong>Wall pass:</strong> bank off the boundary for 18 extra
-              points and 0.5 seconds of Energy.
+              points.
             </li>
           </ul>
           <p>
@@ -1123,17 +1125,17 @@
           <p>
             <strong>Focus slows the action</strong> and gives you time to find
             the next pass. Each round starts with an empty Energy reserve.
-            Successful normal-speed wall passes earn 0.5 seconds, bonus zones
-            earn 1 second, and triangles earn 1.5 seconds. Rewards stack up to
-            your tactic’s reserve (5 / 3 / 4 seconds); plain passes and passes
-            slowed by Focus earn none. You cannot earn while Focus is active.
-            After it runs out, release E or LT before using newly earned
-            Energy.
+            Bonus zones earn 2 Energy, triangles earn 3 Energy, and split passes
+            or Olé streaks earn 4 Energy. Rewards stack up to your tactic’s
+            reserve (10 / 6 / 8 Energy); plain passes and passes slowed by Focus
+            earn none. You cannot earn while Focus is active. After it runs out,
+            release E or LT before using newly earned Energy.
           </p>
           <p>
             <strong>Boost uses the same Energy reserve</strong> to make the
-            ball carrier faster while you hold it. Use it to escape pressure,
-            but it cannot run alongside Focus.
+            ball carrier faster while you hold it, consuming Energy twice as
+            fast as Focus. Use it to escape pressure, but it cannot run
+            alongside Focus.
           </p>
           <p>
             <strong>Gamepad:</strong> left stick moves, right stick aims and

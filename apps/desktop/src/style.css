@@ -859,6 +859,12 @@ kbd {
   box-sizing: content-box;
   text-align: center;
 }
+.energy-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
 .energy-label {
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -2021,9 +2027,9 @@ body.play-view #bank-button {
   background: repeating-linear-gradient(
     90deg,
     var(--line) 0,
-    var(--line) calc(20% - 3px),
-    transparent calc(20% - 3px),
-    transparent 20%
+    var(--line) calc(10% - 2px),
+    transparent calc(10% - 2px),
+    transparent 10%
   );
 }
 .energy-track span {
@@ -3538,33 +3544,186 @@ body.play-view .arena-view .below-court {
   }
   body.play-view .court-toolbar .energy-info {
     border-right: 1px solid #1c2e4a;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    position: relative;
+  }
+  body.play-view .court-toolbar .energy-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 2px;
   }
   body.play-view .court-toolbar .energy-label {
-    font: 700 8.5px/1 var(--sign);
-    letter-spacing: 1.5px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font: 800 9.5px/1 var(--display);
+    letter-spacing: 1.6px;
     color: #8aa4c8;
     text-transform: uppercase;
+    transition: color 0.2s ease, text-shadow 0.2s ease;
+  }
+  body.play-view .court-toolbar .energy-label::before {
+    content: "";
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-top: 3.5px solid transparent;
+    border-bottom: 3.5px solid transparent;
+    border-left: 5px solid #ffd32f;
+    filter: drop-shadow(0 0 4px #ffd32f);
+    transition: border-left-color 0.2s ease, filter 0.2s ease;
   }
   body.play-view .court-toolbar .energy-value {
-    font-family: var(--mono);
-    font-size: clamp(16px, 1.4vw, 20px);
-    font-weight: 800;
-    color: var(--venue-accent);
-    text-shadow: 0 0 10px color-mix(in srgb, var(--venue-accent), transparent 50%);
+    font: italic 900 clamp(16px, 1.4vw, 20px)/1 var(--display);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+    color: #ffd32f;
+    text-shadow: 0 0 10px rgba(255, 211, 47, 0.55);
+    transition: color 0.15s ease, text-shadow 0.15s ease, opacity 0.2s ease;
   }
   body.play-view .court-toolbar .energy-track {
-    height: 7px;
-    background: rgba(8, 16, 38, 0.8);
-    border: 1px solid #1a2f4c;
+    display: block;
+    width: calc(100% - 8px);
+    box-sizing: border-box;
+    height: 10px;
+    background: #060b18;
+    border: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 3px;
     position: relative;
     overflow: hidden;
-    margin-top: 2px;
+    margin: 4px 4px 0 4px;
+    transform: skewX(-12deg);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.4);
+  }
+  /* 10-segment mask creates crisp Rocket League boost cells */
+  body.play-view .court-toolbar .energy-track::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent calc(10% - 2px),
+      #060b18 calc(10% - 2px),
+      #060b18 10%
+    );
+    pointer-events: none;
+    z-index: 2;
   }
   body.play-view .court-toolbar .energy-track span {
-    background: linear-gradient(90deg, color-mix(in srgb, var(--venue-accent), #fff 20%), var(--venue-accent));
-    box-shadow: 0 0 8px color-mix(in srgb, var(--venue-accent), transparent 40%);
-    border-radius: 2px;
+    position: relative;
+    z-index: 1;
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #ff7b00 0%, #ffb703 60%, #ffd166 100%);
+    box-shadow: 0 0 10px rgba(255, 183, 3, 0.65);
+    border-radius: 1px;
+    transition: width 0.08s ease-out;
+  }
+
+  /* Dynamic Boost Gauge Tiers */
+  body.play-view .court-toolbar .energy-info[data-tier="low"] .energy-value {
+    color: #ff6b6b;
+    text-shadow: 0 0 10px rgba(255, 107, 107, 0.6);
+  }
+  body.play-view .court-toolbar .energy-info[data-tier="low"] .energy-label::before {
+    border-left-color: #ff6b6b;
+    filter: drop-shadow(0 0 4px #ff6b6b);
+  }
+  body.play-view .court-toolbar .energy-info[data-tier="low"] .energy-track span {
+    background: linear-gradient(90deg, #d90429 0%, #ef233c 50%, #ff5a36 100%);
+    box-shadow: 0 0 10px rgba(239, 35, 60, 0.75);
+  }
+
+  body.play-view .court-toolbar .energy-info[data-tier="mid"] .energy-value {
+    color: #fcbf49;
+    text-shadow: 0 0 10px rgba(252, 191, 73, 0.6);
+  }
+  body.play-view .court-toolbar .energy-info[data-tier="mid"] .energy-label::before {
+    border-left-color: #ffd32f;
+    filter: drop-shadow(0 0 4px #ffd32f);
+  }
+  body.play-view .court-toolbar .energy-info[data-tier="mid"] .energy-track span {
+    background: linear-gradient(90deg, #f77f00 0%, #fcbf49 60%, #ffd166 100%);
+    box-shadow: 0 0 12px rgba(252, 191, 73, 0.7);
+  }
+
+  body.play-view .court-toolbar .energy-info[data-tier="high"] .energy-value {
+    color: #00f5d4;
+    text-shadow: 0 0 12px rgba(0, 245, 212, 0.8), 0 0 20px rgba(0, 180, 216, 0.5);
+  }
+  body.play-view .court-toolbar .energy-info[data-tier="high"] .energy-label::before {
+    border-left-color: #00f5d4;
+    filter: drop-shadow(0 0 6px #00f5d4);
+  }
+  body.play-view .court-toolbar .energy-info[data-tier="high"] .energy-track span {
+    background: linear-gradient(90deg, #00b4d8 0%, #00f5d4 50%, #ffffff 100%);
+    box-shadow: 0 0 14px rgba(0, 245, 212, 0.85);
+  }
+
+  /* Empty state */
+  body.play-view .court-toolbar .energy-info.is-empty .energy-value {
+    opacity: 0.45;
+    color: #7a8fa6;
+    text-shadow: none;
+  }
+  body.play-view .court-toolbar .energy-info.is-empty .energy-label {
+    opacity: 0.6;
+  }
+  body.play-view .court-toolbar .energy-info.is-empty .energy-track {
+    opacity: 0.55;
+  }
+
+  /* Thruster Ignition: Boost Active */
+  body.play-view .court-toolbar .energy-info.boost-active {
+    box-shadow: inset 0 0 16px rgba(255, 110, 0, 0.35);
+    border-right-color: #ff6a00;
+  }
+  body.play-view .court-toolbar .energy-info.boost-active .energy-label {
+    color: #ff9e00;
+    text-shadow: 0 0 8px rgba(255, 158, 0, 0.8);
+  }
+  body.play-view .court-toolbar .energy-info.boost-active .energy-label::before {
+    border-left-color: #ff7b00;
+    filter: drop-shadow(0 0 6px #ff7b00);
+  }
+  body.play-view .court-toolbar .energy-info.boost-active .energy-value {
+    animation: thruster-pulse 0.18s infinite alternate ease-in-out;
+    color: #ffffff;
+    text-shadow: 0 0 10px #ff7b00, 0 0 20px #ff3b00;
+  }
+  body.play-view .court-toolbar .energy-info.boost-active .energy-track {
+    border-color: rgba(255, 123, 0, 0.6);
+  }
+  body.play-view .court-toolbar .energy-info.boost-active .energy-track span {
+    filter: brightness(1.25) saturate(1.3);
+    box-shadow: 0 0 16px rgba(255, 140, 0, 0.9);
+  }
+
+  /* Field Aura: Focus Active */
+  body.play-view .court-toolbar .energy-info.focus-active {
+    box-shadow: inset 0 0 16px rgba(0, 245, 212, 0.3);
+    border-right-color: #00f5d4;
+  }
+  body.play-view .court-toolbar .energy-info.focus-active .energy-label {
+    color: #00f5d4;
+    text-shadow: 0 0 8px rgba(0, 245, 212, 0.8);
+  }
+  body.play-view .court-toolbar .energy-info.focus-active .energy-track span {
+    box-shadow: 0 0 16px rgba(0, 245, 212, 0.9);
+  }
+
+  @keyframes thruster-pulse {
+    from {
+      text-shadow: 0 0 8px #ff7b00, 0 0 16px #ff3b00;
+      transform: scale(1);
+    }
+    to {
+      text-shadow: 0 0 14px #ffaa00, 0 0 24px #ff5500;
+      transform: scale(1.02);
+    }
   }
   /* Five action switches share the right portion of the baseline */
   body.play-view .court-toolbar .play-actions {
