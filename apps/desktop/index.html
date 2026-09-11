@@ -38,10 +38,6 @@
       never overlap the court, and it is walked by the d-pad alongside whatever
       menu is open. -->
       <header id="top-bar" class="top-bar">
-        <p class="top-brand">
-          <span class="top-brand-mark">tiki<span>-</span>taka</span>
-          <span class="top-brand-sub" aria-hidden="true">NO GOALS · ALL FLOW</span>
-        </p>
         <div
           id="music-player"
           class="music-player"
@@ -69,25 +65,31 @@
             <span aria-hidden="true">▶▶</span>
           </button>
         </div>
-        <!-- Item 3's answer to "a mouse cannot leave a round": a labelled
-        control that is always in the same off-court place, only during play,
-        far from the passing buttons at the foot of the canvas. Esc and Start
-        still do exactly what they did. -->
-        <button id="top-pause" type="button" class="bar-button top-pause">
-          <span aria-hidden="true">Ⅱ</span> Menu
-        </button>
-        <button
-          id="profile-button"
-          type="button"
-          class="profile-chip"
-          aria-haspopup="dialog"
-        >
-          <span class="profile-avatar" aria-hidden="true">◎</span>
-          <span class="profile-chip-text">
-            <span id="profile-chip-name" class="profile-chip-name">Guest</span>
-            <span class="profile-chip-kind">ACCOUNT</span>
-          </span>
-        </button>
+        <p class="top-brand">
+          <span class="top-brand-mark">tiki<span>-</span>taka</span>
+          <span class="top-brand-sub" aria-hidden="true">NO GOALS · ALL FLOW</span>
+        </p>
+        <div class="top-bar-right">
+          <!-- Item 3's answer to "a mouse cannot leave a round": a labelled
+          control that is always in the same off-court place, only during play,
+          far from the passing buttons at the foot of the canvas. Esc and Start
+          still do exactly what they did. -->
+          <button id="top-pause" type="button" class="bar-button top-pause">
+            <span aria-hidden="true">Ⅱ</span> Menu
+          </button>
+          <button
+            id="profile-button"
+            type="button"
+            class="profile-chip"
+            aria-haspopup="dialog"
+          >
+            <span class="profile-avatar" aria-hidden="true">◎</span>
+            <span class="profile-chip-text">
+              <span id="profile-chip-name" class="profile-chip-name">Guest</span>
+              <span class="profile-chip-kind">ACCOUNT</span>
+            </span>
+          </button>
+        </div>
       </header>
       <main id="main" class="main" tabindex="-1">
         <!-- Home. One screen, not two: the live demo, the menu, the six
