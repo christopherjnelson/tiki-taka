@@ -11,9 +11,13 @@ export function freshProgress() {
     lastCourt: 0,
   };
 }
-export function readProgress(storage) {
+// Progress arrives from storage, from a save row written by an older build,
+// and from a remote account whose row may be empty or half-written. Every one
+// of those paths has to end at a complete object: a missing `tactic` alone is
+// enough to break the first render, and a bad row persists, so the same round
+// trip fails on every reload until the value is repaired.
+export function normalizeProgress(value) {
   try {
-    const value = JSON.parse(storage.getItem("tiki-taka.progress.v1"));
     if (!value || value.version !== 1) return freshProgress();
     const progress = freshProgress();
     progress.xp = Number.isFinite(value.xp) ? Math.max(0, value.xp) : 0;
@@ -54,6 +58,13 @@ export function readProgress(storage) {
       ? value.tactic
       : "balanced";
     return progress;
+  } catch {
+    return freshProgress();
+  }
+}
+export function readProgress(storage) {
+  try {
+    return normalizeProgress(JSON.parse(storage.getItem("tiki-taka.progress.v1")));
   } catch {
     return freshProgress();
   }
