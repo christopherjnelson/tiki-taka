@@ -416,48 +416,50 @@
             .game-panel in style.css for where that space went instead. -->
             <div id="scoreboard" class="scoreboard" aria-label="Match statistics">
               <div class="hud-group hud-group-score">
-                <!-- The clock moved down to the court toolbar, where it now
-                mirrors the Energy readout across the chip row. The score is
-                the only thing this card carries, so it and the personal
-                best underneath it both get to grow into the freed space. -->
                 <div class="stat score-stat">
-                  <span id="score-label" class="stat-label">FLOW SCORE</span
-                  ><strong id="score-value">000</strong>
+                  <span id="score-label" class="stat-label">FLOW SCORE</span>
+                  <strong id="score-value">000</strong>
                 </div>
-                <div class="hud-group-score-foot">
-                  <span id="best-label" class="best-chip">PERSONAL BEST —</span>
+                <div class="stat best-stat">
+                  <span class="stat-label">BEST</span>
+                  <strong id="best-label" class="best-chip">—</strong>
                 </div>
               </div>
               <div class="hud-group hud-group-match">
+                <div class="stat clock-stat">
+                  <span class="stat-label">TIME</span>
+                  <strong id="time-value" class="clock-value">1:15</strong>
+                </div>
                 <div class="stat">
-                  <span class="stat-label">MULTIPLIER</span
-                  ><strong id="combo-value">×1</strong>
+                  <span class="stat-label">MULTIPLIER</span>
+                  <strong id="combo-value">×1</strong>
                 </div>
                 <div class="stat lives-stat">
-                  <span class="stat-label">POSSESSIONS</span
-                  ><strong id="lives-value">● ● ●</strong>
+                  <span class="stat-label">POSSESSIONS</span>
+                  <strong id="lives-value">3 / 3</strong>
                 </div>
               </div>
-              <button
-                id="pause-button"
-                class="pause-button"
-                aria-label="Pause game"
-                title="Pause (Esc)"
-              >
-                <span aria-hidden="true">Ⅱ</span>
-              </button>
             </div>
             <!-- Desktop's match identifier lives in the clear span between the
-            score and match pods. It houses the venue crest and match clock. -->
-            <div class="arena-venue-banner" role="group" aria-label="Match venue and clock">
+            score and match pods. It houses the venue crest and pause control. -->
+            <div class="arena-venue-banner" role="group" aria-label="Match venue and controls">
               <div class="arena-venue-crest" aria-hidden="true">
                 <strong id="arena-venue-label">LISBON / AZULEJO COAST</strong>
                 <span>POSSESSION IS A WEAPON</span>
               </div>
-              <div class="arena-clock-badge">
-                <span class="arena-clock-label">TIME</span>
-                <strong id="time-value" class="clock-value">1:15</strong>
-              </div>
+              <button
+                id="pause-button"
+                class="pause-button arena-pause-button"
+                type="button"
+                aria-label="Pause game"
+                title="Pause (Esc)"
+              >
+                <svg class="pause-symbol" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+                  <rect x="3" y="2.5" width="3.5" height="11" rx="1" fill="currentColor" />
+                  <rect x="9.5" y="2.5" width="3.5" height="11" rx="1" fill="currentColor" />
+                </svg>
+                <span class="arena-pause-label">PAUSE</span>
+              </button>
             </div>
             <!-- These occupy only the unused letterbox around a height-bound
             court. They are deliberately not gameplay readouts: the canvas

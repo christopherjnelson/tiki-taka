@@ -776,8 +776,9 @@ function setControlsEnabled(enabled) {
   $("joystick").setAttribute("aria-disabled", String(!enabled));
 }
 function setPauseState(paused) {
-  $("pause-button").innerHTML =
-    `<span aria-hidden="true">${paused ? "▶" : "Ⅱ"}</span>`;
+  $("pause-button").innerHTML = paused
+    ? `<svg class="pause-symbol" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><polygon points="4,2.5 13.5,8 4,13.5" fill="currentColor"/></svg><span class="arena-pause-label">RESUME</span>`
+    : `<svg class="pause-symbol" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><rect x="3" y="2.5" width="3.5" height="11" rx="1" fill="currentColor"/><rect x="9.5" y="2.5" width="3.5" height="11" rx="1" fill="currentColor"/></svg><span class="arena-pause-label">PAUSE</span>`;
   $("pause-button").setAttribute(
     "aria-label",
     paused ? "Resume game" : "Pause game",
@@ -1623,7 +1624,8 @@ function syncHud() {
     hudCache.goalWidth = goalWidth;
   }
 
-  const bestText = `PERSONAL BEST ${progress.records[recordKey()] || "—"}`;
+  const record = progress.records[recordKey()];
+  const bestText = record ? String(record) : "—";
   if (bestText !== hudCache.bestText) {
     $("best-label").textContent = bestText;
     hudCache.bestText = bestText;
