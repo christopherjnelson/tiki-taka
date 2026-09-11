@@ -742,7 +742,6 @@ export class Renderer {
         if (waypoint) c.lineTo(waypoint.x, waypoint.y);
         c.lineTo(queued.x, queued.y);
         c.stroke();
-        label(c, "NEXT", queued.x, queued.y - 40, 9, "#fff", "center", 900);
         c.restore();
       }
     }
@@ -799,7 +798,9 @@ export class Renderer {
     // Active passing triangle visualization
     for (const e of this.effects) {
       if (e.triangle && e.triangle.length === 3) {
-        const t = Math.min(1, e.age / e.life);
+        const triangleDuration = (e.life || 1.25) * 0.5;
+        const t = Math.min(1, e.age / triangleDuration);
+        if (t >= 1) continue;
         const fade = Math.sin((1 - t) * Math.PI * 0.5);
         const [p1, p2, p3] = e.triangle;
         c.save();
@@ -808,17 +809,15 @@ export class Renderer {
         c.lineTo(p2.x, p2.y);
         c.lineTo(p3.x, p3.y);
         c.closePath();
-        c.fillStyle = `rgba(255, 211, 47, ${0.14 * fade})`;
-        c.shadowColor = "#ffd32f";
-        c.shadowBlur = 18 * fade;
-        c.fill();
-        c.strokeStyle = `rgba(255, 225, 75, ${0.9 * fade})`;
+        c.strokeStyle = `rgba(255, 225, 75, ${0.95 * fade})`;
         c.lineWidth = 2.5;
+        c.shadowColor = "#ffd32f";
+        c.shadowBlur = 10 * fade;
         c.stroke();
         c.shadowBlur = 0;
         if (!this.reducedMotion) {
           for (const pt of e.triangle) {
-            const ringRadius = 24 + (1 - fade) * 20;
+            const ringRadius = 24 + (1 - fade) * 16;
             c.strokeStyle = `rgba(255, 211, 47, ${0.65 * fade})`;
             c.lineWidth = 2 * fade;
             c.beginPath();
@@ -933,30 +932,44 @@ export class Renderer {
         this.drawPlayer(p, carrier, selected, hold, preview),
       );
     const c = this.ctx;
+    const pulse = this.reducedMotion ? 1 : 1 + Math.sin(this.clock * 5) * 0.06;
+
+    // Carrier Ground Aura & Shadow
     c.fillStyle = "rgba(0,5,18,.42)";
     c.beginPath();
-    c.ellipse(p.x, p.y + 10, 25, 19, 0, 0, Math.PI * 2);
+    c.ellipse(
+      p.x,
+      p.y + 10,
+      carrier ? 30 * pulse : 25,
+      carrier ? 22 * pulse : 19,
+      0,
+      0,
+      Math.PI * 2,
+    );
     c.fill();
-    if (selected) {
-      circle(c, p.x, p.y, 35);
-      c.strokeStyle = "#fff";
-      c.lineWidth = this.crisp(c, 2);
-      c.stroke();
-    }
+
     if (carrier) {
-      circle(c, p.x, p.y, 33);
-      c.strokeStyle = "#fff";
-      c.lineWidth = this.crisp(c, 3);
+      // Outer breathing hero halo with venue accent
+      circle(c, p.x, p.y, 38 * pulse);
+      c.strokeStyle = this.venue.accent;
+      c.lineWidth = this.crisp(c, 2);
       c.shadowColor = this.venue.accent;
-      c.shadowBlur = 8;
+      c.shadowBlur = 12;
       c.stroke();
       c.shadowBlur = 0;
+
+      // Inner crisp white hero ring
+      circle(c, p.x, p.y, 31);
+      c.strokeStyle = "#fff";
+      c.lineWidth = this.crisp(c, 2.5);
+      c.stroke();
+
       if (hold > 2 && !preview) {
         c.beginPath();
         c.arc(
           p.x,
           p.y,
-          38,
+          44,
           -Math.PI / 2,
           -Math.PI / 2 + Math.PI * 2 * Math.min(1, (hold - 2) / 4),
         );
@@ -964,7 +977,13 @@ export class Renderer {
         c.lineWidth = 4;
         c.stroke();
       }
+    } else if (selected && preview) {
+      circle(c, p.x, p.y, 35);
+      c.strokeStyle = "rgba(255,255,255,0.5)";
+      c.lineWidth = this.crisp(c, 1.5);
+      c.stroke();
     }
+
     circle(c, p.x, p.y, 24);
     const g = c.createLinearGradient(p.x - 20, p.y - 20, p.x + 20, p.y + 20);
     g.addColorStop(0, "#71fff0");
@@ -975,9 +994,28 @@ export class Renderer {
     c.lineWidth = this.crisp(c, 2);
     c.stroke();
     label(c, String(p.id + 1), p.x, p.y + 1, 22, "#062332", "center", 900);
+
     if (carrier) {
+      c.save();
+      c.shadowColor = "#fff";
+      c.shadowBlur = 6;
       this.drawBall(p.x + 25, p.y + 18, 0.3);
-      label(c, "YOU", p.x, p.y - 48, 11, "#fff", "center", 900);
+      c.restore();
+
+      // Player Indicator: downward accent chevron (no text)
+      const chevronY =
+        p.y - 38 - (this.reducedMotion ? 0 : Math.sin(this.clock * 6) * 3);
+      c.save();
+      c.fillStyle = this.venue.accent;
+      c.shadowColor = this.venue.accent;
+      c.shadowBlur = 8;
+      c.beginPath();
+      c.moveTo(p.x - 6, chevronY);
+      c.lineTo(p.x + 6, chevronY);
+      c.lineTo(p.x, chevronY + 7);
+      c.closePath();
+      c.fill();
+      c.restore();
     }
   }
   drawDefender(p) {

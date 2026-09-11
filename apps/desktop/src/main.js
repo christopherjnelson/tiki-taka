@@ -2722,47 +2722,35 @@ function drawTargetHighlight(target) {
   if (!c || !Number.isInteger(target)) return;
   const player = game?.players?.[target];
   if (!player || target === (game.ball?.to ?? game.carrier)) return;
-  const pulse = 1 + Math.sin(performance.now() / 150) * 0.06;
+  if (c._tikiPortrait) {
+    renderer.upright(player.x, player.y, () => drawTargetHighlight(target));
+    return;
+  }
+  const pulse = 1 + Math.sin(performance.now() / 180) * 0.04;
   const accent = renderer.venue?.accent || "#27ead8";
   c.save();
-  c.globalAlpha = 0.9;
-  c.strokeStyle = accent;
-  c.lineWidth = 4;
-  c.shadowColor = accent;
-  c.shadowBlur = 18;
+
+  // Subtle dashed receiver guide ring
+  c.strokeStyle = "rgba(255, 255, 255, 0.4)";
+  c.lineWidth = 1.4;
+  c.setLineDash([3, 6]);
   c.beginPath();
-  c.arc(player.x, player.y, 42 * pulse, 0, Math.PI * 2);
+  c.arc(player.x, player.y, 36 * pulse, 0, Math.PI * 2);
   c.stroke();
-  c.shadowBlur = 0;
-  c.globalAlpha = 1;
-  c.lineWidth = 2;
-  c.strokeStyle = "#fff";
-  c.beginPath();
-  c.arc(player.x, player.y, 50 * pulse, 0, Math.PI * 2);
-  c.stroke();
-  // Four corner brackets read as a reticle even against a busy court.
-  c.lineWidth = 3.5;
+  c.setLineDash([]);
+
+  // Four crisp, tactical corner reticle brackets (reduced visual weight)
+  c.globalAlpha = 0.8;
+  c.lineWidth = 2.2;
   c.strokeStyle = accent;
-  const r = 56 * pulse,
-    span = Math.PI / 9;
+  const r = 45 * pulse,
+    span = Math.PI / 10;
   for (let i = 0; i < 4; i++) {
     const mid = Math.PI / 4 + (i * Math.PI) / 2;
     c.beginPath();
     c.arc(player.x, player.y, r, mid - span, mid + span);
     c.stroke();
   }
-  c.font = '900 15px "Tiki Signage","Arial Narrow",sans-serif';
-  c.textAlign = "center";
-  c.textBaseline = "middle";
-  c.fillStyle = "rgba(6,12,26,.85)";
-  c.beginPath();
-  c.roundRect(player.x - 40, player.y - 78, 80, 22, 11);
-  c.fill();
-  c.strokeStyle = accent;
-  c.lineWidth = 1.5;
-  c.stroke();
-  c.fillStyle = "#fff";
-  c.fillText(bank ? "WALL ↗" : "PASS ↗", player.x, player.y - 66);
   c.restore();
 }
 function frame(now) {
