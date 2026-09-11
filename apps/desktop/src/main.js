@@ -2616,7 +2616,15 @@ function frame(now) {
       if (event !== turnoverEvent) renderer.addEvent(event);
       // finish() chooses the outcome-specific full-time sound after progress
       // has decided whether this was a clear or a defeat.
-      if (event.type !== "end") sound.play(event.type);
+      //
+      // A completed pass stays silent: the kick already marks it, and a voice
+      // on the reception too put a beep behind every single pass. The bonuses
+      // that can land on the same reception — wall, Focus, one-touch, the olé
+      // — still sound, so a noise now means something happened rather than
+      // just that the ball arrived. The score popup is unaffected; only the
+      // voice is dropped, and audio.js still defines one if it should return.
+      if (event.type !== "end" && event.type !== "score")
+        sound.play(event.type);
       if (event.type === "focus") {
         // The flash is about the Energy resource, not either ability chip.
         clearTimeout(focusEarnedTimeout);
