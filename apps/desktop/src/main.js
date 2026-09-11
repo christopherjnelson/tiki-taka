@@ -578,8 +578,55 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
     );
   }
 
+  function syncUserBest(entries) {
+    let userBestScore = 0;
+    let userBestPasses = null;
+    const courtName = COURTS[courtIdx]?.name?.toUpperCase() || "CIRCUIT";
+
+    if (progress?.records) {
+      const directScore = progress.records[courtIdx] ?? progress.records[String(courtIdx)];
+      if (typeof directScore === "number" && directScore > 0) {
+        userBestScore = directScore;
+      }
+    }
+
+    if (profile?.username && entries?.length) {
+      const userMatches = entries.filter(
+        (e) => e.name && e.name.toLowerCase() === profile.username.toLowerCase(),
+      );
+      if (userMatches.length) {
+        for (const m of userMatches) {
+          if (m.score > userBestScore) {
+            userBestScore = m.score;
+            userBestPasses = m.passes;
+          }
+        }
+      }
+    }
+
+    const userRankEl = $("hl-user-rank");
+    const userPlayerEl = $("hl-user-player") || $("hl-user-pilot");
+    const userVenueEl = $("hl-user-venue");
+    const userScoreEl = $("hl-user-score");
+
+    if (userPlayerEl) userPlayerEl.textContent = profile?.username || "GUEST PLAYER";
+    if (userVenueEl) userVenueEl.textContent = userBestPasses != null ? `${userBestPasses} PASSES` : courtName;
+    if (userScoreEl) userScoreEl.textContent = userBestScore > 0 ? Number(userBestScore).toLocaleString() : "—";
+    if (userRankEl) {
+      if (userBestScore === 0) {
+        userRankEl.textContent = "—";
+      } else {
+        const matchIdx = entries.findIndex(
+          (e) => e.score <= userBestScore,
+        );
+        userRankEl.textContent = matchIdx >= 0 ? `#${matchIdx + 1}` : `#${entries.length}+`;
+      }
+    }
+  }
+
   const fallback = BENCHMARK_LEADERBOARDS[courtIdx] || BENCHMARK_LEADERBOARDS[0];
-  let loadedEntries = null;
+  renderEntries(fallback);
+  syncUserBest(fallback);
 
   if (dataAdapter?.getLeaderboard) {
     try {
@@ -588,65 +635,19 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
         court: courtIdx,
         limit: 10,
       });
-      if (board?.entries?.length) {
-        loadedEntries = board.entries.map((e, idx) => ({
+      if (board?.entries?.length && courtIdx === homeLeaderboardCourt) {
+        const loadedEntries = board.entries.map((e, idx) => ({
           rank: idx + 1,
           name: e.username,
           passes: e.passes,
           score: e.score,
           medal: idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : String(idx + 1),
         }));
+        renderEntries(loadedEntries);
+        syncUserBest(loadedEntries);
       }
     } catch {
-      loadedEntries = null;
-    }
-  }
-
-  const activeEntries = loadedEntries || fallback;
-  renderEntries(activeEntries);
-
-  // User best row
-  let userBestScore = 0;
-  let userBestPasses = null;
-  const courtName = COURTS[courtIdx]?.name?.toUpperCase() || "CIRCUIT";
-
-  if (progress?.records) {
-    const directScore = progress.records[courtIdx] ?? progress.records[String(courtIdx)];
-    if (typeof directScore === "number" && directScore > 0) {
-      userBestScore = directScore;
-    }
-  }
-
-  if (profile?.username && activeEntries?.length) {
-    const userMatches = activeEntries.filter(
-      (e) => e.name && e.name.toLowerCase() === profile.username.toLowerCase(),
-    );
-    if (userMatches.length) {
-      for (const m of userMatches) {
-        if (m.score > userBestScore) {
-          userBestScore = m.score;
-          userBestPasses = m.passes;
-        }
-      }
-    }
-  }
-
-  const userRankEl = $("hl-user-rank");
-  const userPlayerEl = $("hl-user-player") || $("hl-user-pilot");
-  const userVenueEl = $("hl-user-venue");
-  const userScoreEl = $("hl-user-score");
-
-  if (userPlayerEl) userPlayerEl.textContent = profile?.username || "GUEST PLAYER";
-  if (userVenueEl) userVenueEl.textContent = userBestPasses != null ? `${userBestPasses} PASSES` : courtName;
-  if (userScoreEl) userScoreEl.textContent = userBestScore > 0 ? Number(userBestScore).toLocaleString() : "—";
-  if (userRankEl) {
-    if (userBestScore === 0) {
-      userRankEl.textContent = "—";
-    } else {
-      const matchIdx = activeEntries.findIndex(
-        (e) => e.score <= userBestScore,
-      );
-      userRankEl.textContent = matchIdx >= 0 ? `#${matchIdx + 1}` : `#${activeEntries.length}+`;
+      // Fallback is already displayed
     }
   }
 }
@@ -1633,37 +1634,35 @@ function getVenueSpectrumTheme(venue) {
 function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced, theme) {
   ctx.clearRect(0, 0, w, h);
 
-  const topPad = Math.round(58 * dpr);
-  const botPad = Math.round(8 * dpr);
-  const availH = h - topPad - botPad;
-  if (availH <= 40 || w <= 10) return;
+  if (h <= 40 || w <= 10) return;
 
   const pad = Math.max(2, Math.round(3 * dpr));
   const barWidth = Math.max(4, Math.floor((w - (VIZ_BARS + 1) * pad) / VIZ_BARS));
   const totalW = VIZ_BARS * barWidth + (VIZ_BARS - 1) * pad;
   const startX = Math.floor((w - totalW) / 2);
 
-  const numSegs = 44;
-  const segGap = Math.max(2, Math.round(2.5 * dpr));
-  const segH = Math.max(2, Math.floor((availH - (numSegs + 1) * segGap) / numSegs));
+  const numSegs = 50;
+  const segGap = Math.max(2, Math.round(2 * dpr));
+  const segH = Math.max(2, Math.floor((h - (numSegs - 1) * segGap) / numSegs));
+  const totalSegsH = numSegs * segH + (numSegs - 1) * segGap;
+  const remY = Math.max(0, Math.floor((h - totalSegsH) / 2));
   const rx = Math.max(1, Math.round(1.5 * dpr));
 
   for (let c = 0; c < VIZ_BARS; c++) {
-    // Symmetrical frequency mapping: low bass on the outer edge (flanking the arena),
-    // high treble towards the court.
-    const bandIdx = isLeft ? c : (VIZ_BARS - 1 - c);
     const bx = startX + c * (barWidth + pad);
-    const val = vizBarHeights[bandIdx];
-    const peak = vizBarPeaks[bandIdx];
+    const dataIdx = isLeft ? c : VIZ_BARS - 1 - c;
+    const val = vizBarHeights[dataIdx] || 0;
+    const peak = vizBarPeaks[dataIdx] || 0;
+
     const litCount = Math.round(val * numSegs);
     const peakSeg = Math.min(numSegs - 1, Math.round(peak * numSegs));
 
-    // Subtle dark chassis channel behind each bar, tinted with venue tone
+    // Subtle dark chassis channel behind each bar, running full height from top to bottom
     ctx.fillStyle = theme.unlit;
-    drawRoundedSegment(ctx, bx - 1, topPad, barWidth + 2, availH, rx);
+    drawRoundedSegment(ctx, bx - 1, remY, barWidth + 2, totalSegsH, rx);
 
     for (let s = 0; s < numSegs; s++) {
-      const sy = (h - botPad) - (s + 1) * (segH + segGap);
+      const sy = (h - remY) - (s + 1) * segH - s * segGap;
       const frac = s / (numSegs - 1);
       const isLit = s < litCount;
       const isPeak = !reduced && s === peakSeg && peak > 0.05;

@@ -260,9 +260,9 @@ export function createSupabaseDataAdapter({
     },
     async getLeaderboard({ mode = "career", court, limit = 10 } = {}) {
       try {
-        let query = supabase.from("leaderboard_entries").select("username, mode, court, score, passes, best_one_touch, created_at").eq("mode", mode).order("score", { ascending: false }).order("created_at", { ascending: true }).limit(Math.min(Math.max(integer(limit), 1), 100));
+        let query = supabase.from("leaderboard_entries").select("username, mode, court, score, passes, best_one_touch, created_at").eq("mode", mode);
         if (court !== undefined && court !== null) query = query.eq("court", court);
-        const result = await query;
+        const result = await query.order("score", { ascending: false }).order("created_at", { ascending: true }).limit(Math.min(Math.max(integer(limit), 1), 100));
         throwIfError(result.error, "Supabase could not load the leaderboard.");
         return { mode, court: court ?? null, entries: (result.data ?? []).map((row) => ({ username: row.username ?? "Player", score: number(row.score), passes: integer(row.passes), bestOneTouch: integer(row.best_one_touch), createdAt: row.created_at })) };
       } catch (error) {
