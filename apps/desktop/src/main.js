@@ -176,6 +176,92 @@ let keys = new Set(),
   gamepadMove = { x: 0, y: 0 },
   gamepadFocus = false,
   gamepadBoost = false;
+const ACTION_BUTTON_MAP = {
+  smartPass: "pass-button",
+  wallToggle: "bank-button",
+  shout: "shout-button",
+  focusHold: "focus-button",
+  boostHold: "boost-button",
+};
+const ACTION_NAMES = Object.keys(ACTION_BUTTON_MAP);
+const actionHighlightUntil = {
+  smartPass: 0,
+  wallToggle: 0,
+  shout: 0,
+  focusHold: 0,
+  boostHold: 0,
+};
+const gamepadPressedActions = {
+  smartPass: false,
+  wallToggle: false,
+  shout: false,
+  focusHold: false,
+  boostHold: false,
+};
+const actionPressedCache = {
+  smartPass: false,
+  wallToggle: false,
+  shout: false,
+  focusHold: false,
+  boostHold: false,
+};
+let toolbarActionButtons = null;
+function getToolbarActionButton(action) {
+  if (!toolbarActionButtons) {
+    toolbarActionButtons = {
+      smartPass: $("pass-button"),
+      wallToggle: $("bank-button"),
+      shout: $("shout-button"),
+      focusHold: $("focus-button"),
+      boostHold: $("boost-button"),
+    };
+  }
+  return toolbarActionButtons[action];
+}
+function triggerActionHighlight(action, duration = 180) {
+  if (action in actionHighlightUntil) {
+    actionHighlightUntil[action] = performance.now() + duration;
+    const btn = getToolbarActionButton(action);
+    if (btn && !actionPressedCache[action]) {
+      actionPressedCache[action] = true;
+      btn.classList.add("action-pressed");
+    }
+  }
+}
+function syncActionHighlights(now) {
+  if (view !== "arena") return;
+  for (const action of ACTION_NAMES) {
+    const btn = getToolbarActionButton(action);
+    if (!btn) continue;
+    let held = gamepadPressedActions[action];
+    if (!held) {
+      if (action === "smartPass") {
+        held =
+          actionDown(settings.bindings, keys, "smartPass") ||
+          actionDown(settings.bindings, keys, "direct1") ||
+          actionDown(settings.bindings, keys, "direct2") ||
+          actionDown(settings.bindings, keys, "direct3") ||
+          actionDown(settings.bindings, keys, "direct4");
+      } else if (action === "wallToggle") {
+        held =
+          actionDown(settings.bindings, keys, "wallToggle") ||
+          actionDown(settings.bindings, keys, "wallHold");
+      } else if (action === "shout") {
+        held = actionDown(settings.bindings, keys, "shout");
+      } else if (action === "focusHold") {
+        held = actionDown(settings.bindings, keys, "focusHold");
+      } else if (action === "boostHold") {
+        held = actionDown(settings.bindings, keys, "boostHold");
+      }
+    }
+    const triggered = (actionHighlightUntil[action] || 0) > now;
+    const isPressed = Boolean(held || triggered);
+    if (isPressed !== actionPressedCache[action]) {
+      actionPressedCache[action] = isPressed;
+      btn.classList.toggle("action-pressed", isPressed);
+    }
+  }
+}
 let padPrevious = [],
   padConnected = false,
   // The toolbar's key chips track which input the player is actually using,
@@ -825,8 +911,9 @@ function prepare() {
   );
   if ($("venue-vibe")) $("venue-vibe").textContent = venue.vibe;
   if ($("arena-venue-label"))
-    $("arena-venue-label").textContent =
-      `${venue.name} / ${venue.vibe}`.toUpperCase();
+    $("arena-venue-label").textContent = venue.name.toUpperCase();
+  if ($("arena-venue-sub"))
+    $("arena-venue-sub").textContent = venue.vibe.toUpperCase();
   phase = "ready";
   finished = false;
   roundCleared = false;
@@ -1055,6 +1142,15 @@ function clearInput() {
   gamepadBoost = false;
   pointerId = null;
   joystickId = null;
+  for (const action of ACTION_NAMES) {
+    gamepadPressedActions[action] = false;
+    actionHighlightUntil[action] = 0;
+    if (actionPressedCache[action]) {
+      actionPressedCache[action] = false;
+      const btn = getToolbarActionButton(action);
+      if (btn) btn.classList.remove("action-pressed");
+    }
+  }
   game?.clearQueuedPass?.();
   $("joystick-thumb").style.transform = "translate(0px, 0px)";
 }
@@ -1102,6 +1198,7 @@ function queuedSmartTarget() {
 }
 function doPass(id, forceBank = false) {
   if (phase !== "playing" || awaitingResume) return;
+  triggerActionHighlight("smartPass");
   unlockAudio();
   const target = id ?? queuedSmartTarget();
   const useBank =
@@ -1117,12 +1214,14 @@ function doPass(id, forceBank = false) {
 }
 function toggleBank() {
   if (phase !== "playing") return;
+  triggerActionHighlight("wallToggle");
   bank = !bank;
   $("bank-button").setAttribute("aria-pressed", String(bank));
   $("touch-bank").setAttribute("aria-pressed", String(bank));
 }
 function toggleFocus() {
   if (phase !== "playing") return;
+  triggerActionHighlight("focusHold");
   if (game.focus <= 0) {
     focusToggle = false;
     syncFocusButtons();
@@ -1136,6 +1235,7 @@ function toggleFocus() {
 }
 function toggleBoost() {
   if (phase !== "playing") return;
+  triggerActionHighlight("boostHold");
   if (game.focus <= 0) {
     boostToggle = false;
     syncBoostButtons();
@@ -1268,6 +1368,7 @@ function selectedPassTarget() {
 }
 function shoutTarget() {
   if (phase !== "playing" || awaitingResume) return;
+  triggerActionHighlight("shout");
   const target = selectedPassTarget();
   if (game.shout(target)) {
     toast(`Player ${target + 1} is moving to the bonus zone.`);
@@ -1505,11 +1606,69 @@ function drawRoundedSegment(ctx, x, y, w, h, r) {
   }
 }
 
-function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced) {
+const VENUE_SPECTRUM_THEMES = {
+  lisbon: {
+    low: "#21f3df",
+    mid: "#ffd64d",
+    high: "#ff587f",
+    glow: "#21f3df",
+    unlit: "rgba(10, 35, 50, 0.4)",
+  },
+  london: {
+    low: "#34e5ed",
+    mid: "#ffaa3b",
+    high: "#ff4f73",
+    glow: "#34e5ed",
+    unlit: "rgba(14, 28, 48, 0.4)",
+  },
+  barcelona: {
+    low: "#2debd2",
+    mid: "#ffc83b",
+    high: "#ff5d68",
+    glow: "#2debd2",
+    unlit: "rgba(12, 32, 45, 0.4)",
+  },
+  tokyo: {
+    low: "#38f5e5",
+    mid: "#bf55ec",
+    high: "#ff3c9c",
+    glow: "#ff3c9c",
+    unlit: "rgba(20, 15, 45, 0.4)",
+  },
+  "sao-paulo": {
+    low: "#6dff8a",
+    mid: "#ffe642",
+    high: "#ff4e8b",
+    glow: "#6dff8a",
+    unlit: "rgba(12, 38, 24, 0.4)",
+  },
+  amsterdam: {
+    low: "#40efff",
+    mid: "#ff9a3c",
+    high: "#ff4ba8",
+    glow: "#40efff",
+    unlit: "rgba(10, 30, 52, 0.4)",
+  },
+};
+
+function getVenueSpectrumTheme(venue) {
+  if (venue?.id && VENUE_SPECTRUM_THEMES[venue.id]) {
+    return VENUE_SPECTRUM_THEMES[venue.id];
+  }
+  return {
+    low: venue?.accent || "#00f0ff",
+    mid: "#ffd64d",
+    high: venue?.secondary || "#ff2a85",
+    glow: venue?.accent || "#00f0ff",
+    unlit: "rgba(16, 32, 64, 0.35)",
+  };
+}
+
+function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced, theme) {
   ctx.clearRect(0, 0, w, h);
 
   const topPad = Math.round(58 * dpr);
-  const botPad = Math.round(90 * dpr);
+  const botPad = Math.round(8 * dpr);
   const availH = h - topPad - botPad;
   if (availH <= 40 || w <= 10) return;
 
@@ -1518,7 +1677,7 @@ function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced) {
   const totalW = VIZ_BARS * barWidth + (VIZ_BARS - 1) * pad;
   const startX = Math.floor((w - totalW) / 2);
 
-  const numSegs = 36;
+  const numSegs = 44;
   const segGap = Math.max(2, Math.round(2.5 * dpr));
   const segH = Math.max(2, Math.floor((availH - (numSegs + 1) * segGap) / numSegs));
   const rx = Math.max(1, Math.round(1.5 * dpr));
@@ -1533,8 +1692,8 @@ function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced) {
     const litCount = Math.round(val * numSegs);
     const peakSeg = Math.min(numSegs - 1, Math.round(peak * numSegs));
 
-    // Subtle dark chassis channel behind each bar
-    ctx.fillStyle = "rgba(4, 9, 26, 0.35)";
+    // Subtle dark chassis channel behind each bar, tinted with venue tone
+    ctx.fillStyle = theme.unlit;
     drawRoundedSegment(ctx, bx - 1, topPad, barWidth + 2, availH, rx);
 
     for (let s = 0; s < numSegs; s++) {
@@ -1545,21 +1704,21 @@ function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced) {
 
       if (isPeak) {
         ctx.fillStyle = "#ffffff";
-        ctx.shadowColor = "#ffffff";
+        ctx.shadowColor = theme.glow;
         ctx.shadowBlur = Math.round(6 * dpr);
         drawRoundedSegment(ctx, bx, sy, barWidth, segH, rx);
         ctx.shadowBlur = 0;
       } else if (isLit) {
+        let segColor;
         if (frac < 0.55) {
-          ctx.fillStyle = "#00f0ff";
-          ctx.shadowColor = "#00f0ff";
+          segColor = theme.low;
         } else if (frac < 0.8) {
-          ctx.fillStyle = "#ffd64d";
-          ctx.shadowColor = "#ffd64d";
+          segColor = theme.mid;
         } else {
-          ctx.fillStyle = "#ff2a85";
-          ctx.shadowColor = "#ff2a85";
+          segColor = theme.high;
         }
+        ctx.fillStyle = segColor;
+        ctx.shadowColor = segColor;
         ctx.shadowBlur = (s >= litCount - 2) ? Math.round(5 * dpr) : 0;
         drawRoundedSegment(ctx, bx, sy, barWidth, segH, rx);
         ctx.shadowBlur = 0;
@@ -1641,8 +1800,11 @@ function paintRailVisualizers(dt) {
     }
   }
 
-  renderSpectrumCanvas(railCtxLeft, railVizLeft.width, railVizLeft.height, true, dpr, reduced);
-  renderSpectrumCanvas(railCtxRight, railVizRight.width, railVizRight.height, false, dpr, reduced);
+  const venue = game ? getVenue(game.config) : VENUES[0];
+  const theme = getVenueSpectrumTheme(venue);
+
+  renderSpectrumCanvas(railCtxLeft, railVizLeft.width, railVizLeft.height, true, dpr, reduced, theme);
+  renderSpectrumCanvas(railCtxRight, railVizRight.width, railVizRight.height, false, dpr, reduced, theme);
 }
 
 // The scoreboard floats over the top of the court in play view and reflows
@@ -2677,10 +2839,24 @@ window.addEventListener("keydown", (e) => {
   if (action) e.preventDefault();
   keys.add(e.code);
   if (e.repeat) return;
-  if (action?.startsWith("direct")) doPass(Number(action.slice(-1)) - 1);
-  if (action === "smartPass") doPass();
-  if (action === "wallToggle") toggleBank();
-  if (action === "shout") shoutTarget();
+  if (action?.startsWith("direct")) {
+    triggerActionHighlight("smartPass");
+    doPass(Number(action.slice(-1)) - 1);
+  }
+  if (action === "smartPass") {
+    triggerActionHighlight("smartPass");
+    doPass();
+  }
+  if (action === "wallToggle") {
+    triggerActionHighlight("wallToggle");
+    toggleBank();
+  }
+  if (action === "shout") {
+    triggerActionHighlight("shout");
+    shoutTarget();
+  }
+  if (action === "focusHold") triggerActionHighlight("focusHold");
+  if (action === "boostHold") triggerActionHighlight("boostHold");
 });
 window.addEventListener("keyup", (e) => {
   keys.delete(e.code);
@@ -2881,6 +3057,9 @@ function pollGamepad(dt) {
     gamepadMove = { x: 0, y: 0 };
     gamepadFocus = false;
     gamepadBoost = false;
+    for (const action of ACTION_NAMES) {
+      gamepadPressedActions[action] = false;
+    }
     // A pad that is gone cannot be the input in use, so the chips go back to
     // keys rather than advertising buttons the player no longer has.
     setInputSource("keyboard");
@@ -2898,6 +3077,17 @@ function pollGamepad(dt) {
   const pressed = pad.buttons.map((b) => b.pressed || (b.value || 0) >= 0.25),
     tap = (i) => pressed[i] && !padPrevious[i],
     dead = (v) => (Math.abs(v || 0) > 0.18 ? v : 0);
+
+  gamepadPressedActions.smartPass = Boolean(pressed[0]);
+  gamepadPressedActions.wallToggle = Boolean(pressed[2]);
+  gamepadPressedActions.shout = Boolean(pressed[4]);
+  gamepadPressedActions.focusHold = Boolean(pressed[6]);
+  gamepadPressedActions.boostHold = Boolean(pressed[7]);
+  if (tap(0)) triggerActionHighlight("smartPass");
+  if (tap(2)) triggerActionHighlight("wallToggle");
+  if (tap(4)) triggerActionHighlight("shout");
+  if (tap(6)) triggerActionHighlight("focusHold");
+  if (tap(7)) triggerActionHighlight("boostHold");
   // A gamepad press is not a user activation gesture, so this will not unblock
   // a browser on its own. It costs nothing, it does unblock the packaged shell
   // and any browser whose policy is relaxed, and on the rest it keeps the
@@ -3059,6 +3249,7 @@ function frame(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000 || 0);
   lastTime = now;
   pollGamepad(dt);
+  syncActionHighlights(now);
   if (awaitingResume) {
     holdElapsed += dt;
     // dt is clamped per frame, so the hold advances at a frame-rate-dependent
