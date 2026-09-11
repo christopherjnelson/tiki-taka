@@ -1028,7 +1028,7 @@ function toggleFocus() {
   if (game.focus <= 0) {
     focusToggle = false;
     syncFocusButtons();
-    toast("Earn Energy with triangles, bonus zones, or split passes.");
+    toast("Earn Energy with triangles, bonus zones, split passes, or Olé streaks.");
     return;
   }
   focusToggle = !focusToggle;
@@ -1041,7 +1041,7 @@ function toggleBoost() {
   if (game.focus <= 0) {
     boostToggle = false;
     syncBoostButtons();
-    toast("Earn Energy with triangles, bonus zones, or split passes.");
+    toast("Earn Energy with triangles, bonus zones, split passes, or Olé streaks.");
     return;
   }
   boostToggle = !boostToggle;

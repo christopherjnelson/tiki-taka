@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross } from '../src/game.js';
+import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -176,6 +176,8 @@ test('one-touch milestone adds its flat bonus exactly once every ten passes', ()
   assert.equal(events.filter(event => event.milestone).length, 2);
   assert.equal(events.at(-1).bonus, ONE_TOUCH.passBonus + ONE_TOUCH.milestoneBonus);
   assert.equal(events.at(-1).text, 'ONE TOUCH ×20 +55');
+  assert.equal(game.focus, ONE_TOUCH.milestoneFocus * 2);
+  assert.ok(game.events.some(event => event.type === 'focus' && event.text.includes('+2.0s')));
 });
 
 test('turnovers and intercepted one-touch attempts reset the current streak but preserve the best', () => {
@@ -274,6 +276,32 @@ test('three-player triangles earn 1.5 seconds of focus without exceeding capacit
   game.focus = game.tactic.focus;
   completePass(game, 1);
   assert.equal(game.focus, game.tactic.focus);
+});
+
+test('triangles must complete within TRIANGLE_WINDOW and break if hold exceeds TRIANGLE_MAX_HOLD', () => {
+  // 1. Holding longer than TRIANGLE_MAX_HOLD (1.2s) breaks the triangle chain
+  const game1 = openGame();
+  completePass(game1, 1);
+  advance(game1, TRIANGLE_MAX_HOLD + 0.15);
+  completePass(game1, 2);
+  completePass(game1, 0);
+  assert.equal(game1.triangles, 0, 'holding the ball longer than TRIANGLE_MAX_HOLD breaks the triangle chain');
+
+  // 2. Crisp passing within TRIANGLE_WINDOW and under TRIANGLE_MAX_HOLD awards the triangle
+  const game2 = openGame();
+  completePass(game2, 1);
+  completePass(game2, 2);
+  completePass(game2, 0);
+  assert.equal(game2.triangles, 1, 'crisp passing within time window awards the triangle');
+
+  // 3. Exceeding TRIANGLE_WINDOW (3.5s) total time prevents the triangle bonus
+  const game3 = openGame();
+  completePass(game3, 1);
+  advance(game3, 1.15); // under TRIANGLE_MAX_HOLD (1.2s)
+  completePass(game3, 2);
+  advance(game3, 1.15); // under TRIANGLE_MAX_HOLD (1.2s)
+  completePass(game3, 0);
+  assert.equal(game3.triangles, 0, 'exceeding TRIANGLE_WINDOW total time prevents the triangle bonus');
 });
 
 test('receiving inside a zone earns a bonus and rotates the target', () => {

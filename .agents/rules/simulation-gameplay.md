@@ -31,7 +31,7 @@ This document outlines the core physics, scoring, timing, and deterministic simu
    - Multiplies pass points, triangle bonuses, wall play, and zone bonuses.
    - Resets to x1 immediately on a turnover.
 3. **Triangles (A → B → C → A)**:
-   - Completing a pass cycle across 3 distinct teammates awards **35 points** (scaled by flow) and **1.5 seconds of Focus**.
+   - Completing a pass cycle across 3 distinct teammates within **3.5 seconds** (and without any player holding the ball longer than **1.2 seconds**) awards **35 points** (scaled by flow) and **1.5 seconds of Focus**.
    - In Endless mode, triangles also grant +5 bonus seconds on the match clock.
 4. **Wall Pass**:
    - Banking a pass off an arena boundary awards **18 points** (scaled by flow). It does not award Focus.
@@ -42,7 +42,7 @@ This document outlines the core physics, scoring, timing, and deterministic simu
    - Threading a pass between two defenders crossing the passing segment awards points and **2.0 seconds of Focus**. Narrower gaps award higher bonuses (`SPLIT_PRESS` ladder).
 7. **One-Touch Passes**:
    - Queued while ball is in flight, or executed within **0.35 seconds** of reception with **≤8 court units** of carrier movement.
-   - Adds **5 flat points** per pass, and a milestone bonus of **50 points** every 10 consecutive one-touch passes.
+   - Adds **5 flat points** per pass, and an Olé milestone bonus of **50 points** and **2.0 seconds of Focus** every 10 consecutive one-touch passes.
 
 ---
 

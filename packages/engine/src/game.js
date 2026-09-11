@@ -1,7 +1,9 @@
 export const WIDTH = 1000,
   HEIGHT = 620;
 export const LIMITS = { left: 50, right: 950, top: 50, bottom: 570 };
-export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, wall: 0 };
+export const FOCUS_REWARDS = { split: 2, triangle: 1.5, zone: 1, ole: 2, wall: 0 };
+export const TRIANGLE_WINDOW = 3.5;
+export const TRIANGLE_MAX_HOLD = 1.2;
 export const SPLIT_PRESS = {
   narrow: 70,
   wide: 200,
@@ -14,6 +16,7 @@ export const BONUS_LABELS = {
   split: "SPLIT THE PRESS",
   triangle: "TRIANGLE",
   zone: "ZONE BONUS",
+  ole: "OLÉ!",
   wall: "WALL PLAY",
 };
 export const ONE_TOUCH = {
@@ -22,6 +25,7 @@ export const ONE_TOUCH = {
   passBonus: 5,
   milestoneEvery: 10,
   milestoneBonus: 50,
+  milestoneFocus: 2,
 };
 // Boost spends the same earned Focus seconds as slow motion, but applies only
 // to the carrier's movement. Keeping its tuning here makes it a simulation
@@ -254,6 +258,7 @@ export class Game {
     this.passCooldown = 0;
     this.status = "playing";
     this.history = [0];
+    this.historyTimes = [0];
     this.events = [];
     this.zoneIndex = 0;
     this.zoneTimer = 12;
@@ -283,6 +288,7 @@ export class Game {
     this.ball = null;
     this.hold = 0;
     this.history = [0];
+    this.historyTimes = [this.elapsed || 0];
     this.grace = 1.5;
     this.passCooldown = 0;
     this.oneTouchStreak = 0;
@@ -334,6 +340,9 @@ export class Game {
       !this.players[id]
     )
       return false;
+    if (this.historyTimes?.length) {
+      this.historyTimes[this.historyTimes.length - 1] = this.elapsed;
+    }
     const oneTouch =
       this.oneTouchEligible &&
       this.oneTouchAge <= ONE_TOUCH.window &&
@@ -439,12 +448,21 @@ export class Game {
       focusReward += FOCUS_REWARDS.split;
     }
     this.history.push(this.carrier);
-    if (this.history.length > 4) this.history.shift();
+    this.historyTimes.push(this.elapsed);
+    if (this.history.length > 4) {
+      this.history.shift();
+      this.historyTimes.shift();
+    }
     let triangleCoords = null;
+    const triangleElapsed =
+      this.historyTimes.length >= 4
+        ? this.elapsed - this.historyTimes.at(-4)
+        : Infinity;
     if (
       this.history.length >= 4 &&
       this.history.at(-4) === this.carrier &&
-      new Set(this.history.slice(-3)).size === 3
+      new Set(this.history.slice(-3)).size === 3 &&
+      triangleElapsed <= TRIANGLE_WINDOW
     ) {
       points += 35 * multiplier;
       this.triangles++;
@@ -474,6 +492,11 @@ export class Game {
       oneTouchBonus =
         ONE_TOUCH.passBonus + (milestone ? ONE_TOUCH.milestoneBonus : 0);
       points += oneTouchBonus;
+      bonuses.push("one-touch");
+      if (milestone) {
+        bonuses.push("ole");
+        focusReward += ONE_TOUCH.milestoneFocus;
+      }
     }
     this.score += points;
     // Several bonuses can land on one pass; the label shows the best of them
@@ -641,6 +664,10 @@ export class Game {
         }
       }
       this.hold += delta;
+      if (this.hold > TRIANGLE_MAX_HOLD && this.history.length > 1) {
+        this.history = [this.carrier];
+        this.historyTimes = [this.elapsed];
+      }
     }
     for (const teammate of this.players) {
       if (teammate.id === this.carrier || this.ball?.to === teammate.id)

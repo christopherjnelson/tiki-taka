@@ -964,6 +964,9 @@ await check('the right stick picks the smart-pass target and marks it on the cou
   await page.evaluate(() => {
     const game = window.__observedGame.game;
     game.carrier = 0;
+    game.defenders = [];
+    game.grace = 100;
+    game.hold = 0;
     game.players[0].x = 500; game.players[0].y = 310;
     game.players[1].x = 500; game.players[1].y = 110;
     game.players[2].x = 850; game.players[2].y = 310;
