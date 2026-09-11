@@ -3342,6 +3342,8 @@ body.play-view .arena-view .below-court {
     /* Keep the renderer's established largest-fitting court calculation.
        The rails are paint in the leftover space, never a layout column. */
     --arena-court-width: min(100cqw, 161.2903cqh);
+    /* Outer accent line of the court is x: 43 to 957 (914 / 1000 design units) */
+    --arena-pitch-width: calc(var(--arena-court-width) * 0.914);
     --hud-score-width: clamp(210px, 20cqw, 290px);
     --hud-match-width: clamp(270px, 25cqw, 360px);
   }
@@ -3663,18 +3665,19 @@ body.play-view .arena-view .below-court {
   body.play-view .court-toolbar {
     z-index: 4;
     bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     align-items: stretch;
     justify-content: space-between;
     gap: 0;
-    width: var(--arena-court-width);
+    width: var(--arena-pitch-width);
     min-height: var(--desktop-control-rail);
     padding: 0;
     background: linear-gradient(180deg, #070d24 0%, #040816 100%);
-    border-top: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
-    border-bottom: 1px solid #142238;
+    border: 1px solid color-mix(in srgb, var(--venue-accent), #243e68 50%);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 -4px 16px rgba(0, 0, 0, 0.4);
-    border-radius: 0 0 4px 4px;
+    border-radius: 4px 4px 0 0;
     pointer-events: auto;
   }
   body.play-view .court-toolbar .target-info {
