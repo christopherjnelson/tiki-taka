@@ -217,8 +217,8 @@ input:focus-visible {
   background: var(--panel);
   border: 1px solid var(--line);
   border-left: 4px solid var(--a);
+  border-radius: 4px;
   text-align: left;
-  clip-path: polygon(0 0, 96% 0, 100% 18%, 100% 100%, 0 100%);
 }
 .court-list button:nth-child(2n) {
   --a: var(--pink);
@@ -604,10 +604,10 @@ body.play-view .one-touch-readout {
   color: #fff;
   background: #160c2df2;
   border: 2px solid var(--cyan);
+  border-radius: 8px;
   box-shadow:
-    10px 10px 0 #ff3aa7dd,
-    0 20px 55px #03010fcc;
-  clip-path: polygon(0 0, 94% 0, 100% 12%, 100% 100%, 6% 100%, 0 88%);
+    0 24px 60px #03010fcc,
+    0 0 24px color-mix(in srgb, var(--cyan), transparent 82%);
 }
 .invitation h2,
 dialog h2 {
@@ -647,14 +647,19 @@ dialog h2 {
     linear-gradient(135deg, color-mix(in srgb, var(--venue-accent), transparent 90%), transparent 42%),
     #090721f5;
   border-color: var(--venue-accent);
-  clip-path: polygon(0 0, calc(100% - 30px) 0, 100% 30px, 100% 100%, 30px 100%, 0 calc(100% - 30px));
-  box-shadow: 0 24px 70px #02010dcc;
+  border-radius: 10px;
+  box-shadow:
+    0 24px 70px #02010dcc,
+    0 0 32px color-mix(in srgb, var(--venue-accent), transparent 85%);
 }
 .game-overlay[data-result="defeat"] .invitation {
   border-color: var(--pink);
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--pink), transparent 91%), transparent 42%),
     #0c071ff5;
+  box-shadow:
+    0 24px 70px #02010dcc,
+    0 0 32px color-mix(in srgb, var(--pink), transparent 82%);
 }
 .game-overlay[data-result] .eyebrow {
   color: var(--venue-accent);
@@ -989,9 +994,10 @@ dialog {
   color: var(--ink);
   background: var(--surface);
   border: 2px solid var(--cyan);
+  border-radius: 8px;
   box-shadow:
-    12px 12px #ff3aa799,
-    0 25px 80px #03010fcc;
+    0 25px 80px #03010fcc,
+    0 0 32px color-mix(in srgb, var(--cyan), transparent 82%);
 }
 dialog::backdrop {
   background: #070218cc;
@@ -3056,10 +3062,10 @@ body.play-view .arena-view .below-court {
   background: var(--panel);
   border: 1px solid var(--line);
   border-left: 4px solid var(--line);
+  border-radius: 4px;
   text-align: left;
   text-transform: uppercase;
   font: 700 19px var(--sign);
-  clip-path: polygon(0 0, 97% 0, 100% 30%, 100% 100%, 0 100%);
   transition:
     background 0.14s,
     border-color 0.14s,
@@ -3192,7 +3198,10 @@ body.play-view .arena-view .below-court {
   color: #fff;
   background: #160c2df2;
   border: 1px solid var(--cyan);
-  box-shadow: 0 20px 60px #03010fcc;
+  border-radius: 8px;
+  box-shadow:
+    0 20px 60px #03010fcc,
+    0 0 24px color-mix(in srgb, var(--cyan), transparent 85%);
   text-align: center;
 }
 .pause-card h2 {
@@ -3657,7 +3666,7 @@ body.play-view .arena-view .below-court {
       radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--venue-accent), transparent 88%), transparent 42%),
       #070d23;
     border: 1px solid color-mix(in srgb, var(--venue-accent), #37557e 40%);
-    clip-path: polygon(0 14px, 14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+    border-radius: 6px;
     pointer-events: none;
   }
   body.play-view .arena-rail-left {
@@ -3667,13 +3676,12 @@ body.play-view .arena-view .below-court {
     right: max(8px, calc((100cqw - var(--arena-court-width)) / 4 - 83px));
     border-color: color-mix(in srgb, var(--pink), #37557e 42%);
     text-align: right;
-    clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%, 0 14px, calc(100% - 14px) 0);
   }
   .arena-rail strong {
     display: block;
     color: var(--pink);
     font: italic 800 clamp(12px, 0.9vw, 16px) / 0.9 var(--display);
-    transform: skewY(-5deg);
+    transform: none;
   }
   .arena-rail-rule {
     display: block;
