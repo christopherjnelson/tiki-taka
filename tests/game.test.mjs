@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS } from '../src/game.js';
+import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -422,9 +422,26 @@ test('receiving inside a zone earns a bonus and rotates the target', () => {
 test('zones rotate even when the player has not collected them', () => {
   const game = openGame();
   const previous = { ...game.zone };
-  advance(game, 12.1);
+  completePass(game, 1);
+  advance(game, 3);
+  completePass(game, 2);
+  advance(game, 3);
+  completePass(game, 0);
+  advance(game, 3);
+  advance(game, 3.5);
   assert.notDeepEqual(game.zone, previous);
   assert.equal(game.zones, 0);
+});
+
+test('holding the ball for MAX_HOLD seconds triggers a turnover', () => {
+  const game = openGame();
+  advance(game, MAX_HOLD - 0.1);
+  assert.equal(game.turnovers, 0);
+  assert.equal(game.status, 'playing');
+  advance(game, 0.2);
+  assert.equal(game.turnovers, 1);
+  const event = game.events.find(e => e.type === 'turnover');
+  assert.equal(event?.text, 'HELD TOO LONG');
 });
 
 test('wall routes remain on valid boundaries for diverse player positions', () => {

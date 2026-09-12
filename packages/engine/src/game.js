@@ -4,6 +4,7 @@ export const LIMITS = { left: 50, right: 950, top: 50, bottom: 570 };
 export const FOCUS_REWARDS = { split: 4, triangle: 3, zone: 2, ole: 4, wall: 0 };
 export const TRIANGLE_WINDOW = 3.5;
 export const TRIANGLE_MAX_HOLD = 1.2;
+export const MAX_HOLD = 6;
 export const SPLIT_PRESS = {
   narrow: 70,
   wide: 200,
@@ -722,6 +723,10 @@ export class Game {
       if (this.hold > TRIANGLE_MAX_HOLD && this.history.length > 1) {
         this.history = [this.carrier];
         this.historyTimes = [this.elapsed];
+      }
+      if (this.hold >= MAX_HOLD) {
+        this.turnover("HELD TOO LONG");
+        return;
       }
     }
     for (const teammate of this.players) {
