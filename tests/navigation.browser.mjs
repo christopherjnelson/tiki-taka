@@ -1198,24 +1198,26 @@ await check(
         configPossessions: window.__game?.config?.possessions,
       }));
     const expectPossessions = (snapshot, count, ordinal) => {
+      const word = count === 1 ? "POSSESSION" : "POSSESSIONS";
+      const wordLower = count === 1 ? "possession" : "possessions";
       assert.equal(snapshot.configPossessions, count);
       assert.equal(snapshot.lives, `${count} / ${count}`);
-      assert.match(snapshot.note, new RegExp(`${count} POSSESSIONS`));
+      assert.match(snapshot.note, new RegExp(`${count} ${word}`));
       assert.match(
         snapshot.note,
         new RegExp(`${ordinal} LOSS ENDS THE ROUND`, "i"),
       );
       assert.match(
         snapshot.copy,
-        new RegExp(`You have ${count} possessions; the ${ordinal} loss ends the round\\.`, "i"),
+        new RegExp(`You have ${count} ${wordLower}; the ${ordinal} loss ends the round\\.`, "i"),
       );
     };
     await setDifficulty("relaxed");
-    expectPossessions(await possessionSnapshot(), 4, "fourth");
+    expectPossessions(await possessionSnapshot(), 5, "fifth");
     await setDifficulty("standard");
     expectPossessions(await possessionSnapshot(), 3, "third");
     await setDifficulty("ruthless");
-    expectPossessions(await possessionSnapshot(), 2, "second");
+    expectPossessions(await possessionSnapshot(), 1, "first");
 
     assert.deepEqual(errors, []);
     await context.close();

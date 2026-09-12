@@ -60,7 +60,7 @@ export const COURTS = [
     place: "LISBON, PORTUGAL",
     short: "Find your rhythm",
     target: 600,
-    time: 75,
+    time: 90,
     speed: 76,
     defenders: 2,
     seed: 41,
@@ -71,7 +71,7 @@ export const COURTS = [
     place: "LONDON, ENGLAND",
     short: "Beat the press",
     target: 900,
-    time: 75,
+    time: 90,
     speed: 91,
     defenders: 3,
     seed: 117,
@@ -83,7 +83,7 @@ export const COURTS = [
     place: "BARCELONA, SPAIN",
     short: "Think in triangles",
     target: 1200,
-    time: 80,
+    time: 90,
     speed: 100,
     defenders: 3,
     seed: 272,
@@ -94,7 +94,7 @@ export const COURTS = [
     place: "TOKYO, JAPAN",
     short: "Work the walls",
     target: 1600,
-    time: 80,
+    time: 90,
     speed: 110,
     defenders: 3,
     seed: 525,
@@ -106,7 +106,7 @@ export const COURTS = [
     place: "SÃO PAULO, BRAZIL",
     short: "Make your own space",
     target: 2000,
-    time: 85,
+    time: 90,
     speed: 115,
     defenders: 4,
     seed: 808,
@@ -218,7 +218,7 @@ export function dailyConfig(date = new Date()) {
       place: "ONE DAY. ONE SHARED COURT.",
       short: key,
       target: 500,
-      time: 80,
+      time: 90,
       speed: 100 + (seed % 12),
       defenders: 3,
       seed,
@@ -232,15 +232,15 @@ export function dailyConfig(date = new Date()) {
 // Tier multipliers layered on top of each court's own ramp (COURTS above).
 // Standard is exactly today's numbers - it must never change these values.
 const DIFFICULTY_TIERS = {
-  relaxed: { targetMultiplier: 0.7, possessions: 4, speedMultiplier: 0.9, defenderBonus: 0 },
+  relaxed: { targetMultiplier: 0.7, possessions: 5, speedMultiplier: 0.9, defenderBonus: 0 },
   standard: { targetMultiplier: 1, possessions: 3, speedMultiplier: 1, defenderBonus: 0 },
-  ruthless: { targetMultiplier: 1.3, possessions: 2, speedMultiplier: 1.12, defenderBonus: 1 },
+  ruthless: { targetMultiplier: 1.3, possessions: 1, speedMultiplier: 1.12, defenderBonus: 1 },
 };
 export const DIFFICULTIES = [
   {
     id: "relaxed",
     name: "Relaxed",
-    label: "Softer targets and an extra life. Find your rhythm first.",
+    label: "Softer targets and extra lives. Find your rhythm first.",
   },
   {
     id: "standard",
@@ -250,7 +250,7 @@ export const DIFFICULTIES = [
   {
     id: "ruthless",
     name: "Ruthless",
-    label: "Tighter targets, a quicker press, one fewer life.",
+    label: "Tighter targets, a quicker press, only one life.",
   },
 ];
 export const MAX_DEFENDERS = 5;

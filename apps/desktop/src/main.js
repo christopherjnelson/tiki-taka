@@ -1176,12 +1176,13 @@ function prepare() {
   // on any tier but Standard.
   const possessions = possessionLimit(game.config);
   const possessionsOrdinal = possessionOrdinal(possessions).toUpperCase();
+  const possessionLabel = possessions === 1 ? "POSSESSION" : "POSSESSIONS";
   $("invitation-note").textContent =
     mode === "practice"
       ? `${game.config.time} SECONDS · UNLIMITED POSSESSIONS · FIND YOUR RHYTHM`
       : mode === "endless"
         ? `60 SECONDS · ${possessions} POSSESSIONS · TRIANGLES ADD TIME`
-        : `${game.config.time} SECONDS · ${possessions} POSSESSIONS · ${possessionsOrdinal} LOSS ENDS THE ROUND`;
+        : `${game.config.time} SECONDS · ${possessions} ${possessionLabel} · ${possessionsOrdinal} LOSS ENDS THE ROUND`;
   setOverlay(
     mode === "daily"
       ? `DAILY CIRCUIT · ${game.config.key}`
@@ -1193,7 +1194,7 @@ function prepare() {
     mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
       ? "Connect triangles to buy time. Survive the rising press."
-      : `Keep possession for ${game.config.time} seconds. ${mode === "practice" ? "Experiment freely." : `Earn ${game.config.target} points. You have ${possessions} possessions; the ${possessionOrdinal(possessions)} loss ends the round.`}`,
+      : `Keep possession for ${game.config.time} seconds. ${mode === "practice" ? "Experiment freely." : `Earn ${game.config.target} points. You have ${possessions} ${possessions === 1 ? "possession" : "possessions"}; the ${possessionOrdinal(possessions)} loss ends the round.`}`,
     mode === "daily"
       ? "Play today’s circuit"
       : mode === "endless"

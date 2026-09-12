@@ -93,7 +93,7 @@ test('applyDifficulty is pure and produces the documented values for every tier'
   const relaxed = applyDifficulty(court, 'relaxed');
   assert.deepEqual(court, frozen, 'applyDifficulty must not mutate its input');
   assert.equal(relaxed.target, 400); // 600 * 0.7 = 420, rounded to nearest 50
-  assert.equal(relaxed.possessions, 4);
+  assert.equal(relaxed.possessions, 5);
   assert.equal(relaxed.speed, 76 * 0.9);
   assert.equal(relaxed.defenders, 2);
   assert.equal(relaxed.difficulty, 'relaxed');
@@ -107,7 +107,7 @@ test('applyDifficulty is pure and produces the documented values for every tier'
 
   const ruthless = applyDifficulty(court, 'ruthless');
   assert.equal(ruthless.target, 800); // 600 * 1.3 = 780, rounded to nearest 50
-  assert.equal(ruthless.possessions, 2);
+  assert.equal(ruthless.possessions, 1);
   assert.equal(ruthless.speed, 76 * 1.12);
   assert.equal(ruthless.defenders, 3);
   assert.equal(ruthless.difficulty, 'ruthless');
@@ -138,7 +138,7 @@ test('standard is byte-equivalent to the pre-tier court behavior', () => {
 });
 
 test('the possessions limit ends a round after the tier-specific number of turnovers', () => {
-  for (const [tier, expected] of [['relaxed', 4], ['standard', 3], ['ruthless', 2]]) {
+  for (const [tier, expected] of [['relaxed', 5], ['standard', 3], ['ruthless', 1]]) {
     const config = applyDifficulty({ ...COURTS[0], defenders: 0 }, tier);
     const game = new Game(config);
     for (let i = 0; i < expected - 1; i++) {
