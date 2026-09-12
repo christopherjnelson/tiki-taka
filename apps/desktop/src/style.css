@@ -2573,7 +2573,6 @@ body.play-view .arena-view .below-court {
 .home-stage,
 .home-courts,
 .home-modes,
-.home-footer,
 .home-sunset {
   display: none;
 }
@@ -2645,7 +2644,7 @@ body.play-view .arena-view .below-court {
       minmax(260px, 26%)
       minmax(0, 1fr)
       minmax(250px, 27%);
-    grid-template-rows: minmax(0, 1fr) auto auto;
+    grid-template-rows: minmax(0, 1fr) auto;
     align-content: stretch;
     text-align: left;
   }
@@ -2698,10 +2697,6 @@ body.play-view .arena-view .below-court {
   .home-modes {
     grid-column: 1 / -1;
     display: grid;
-  }
-  .home-footer {
-    grid-column: 1 / -1;
-    display: flex;
   }
   /* The one flexible child in .home-intro's column — see the comment above
      .home-intro. flex-shrink is the default 1 with min-height: 0, so this
@@ -3166,40 +3161,6 @@ body.play-view .arena-view .below-court {
     transform: rotate(45deg);
   }
 }
-/* ── Home footer ─────────────────────────────────────────────────────────
-   Closes the composition the way the mockup does: a low, quiet signage bar
-   under the mode strip. Decorative only (see the aria-hidden on the
-   element in index.html) — it repeats the tagline and tells nobody
-   anything a screen reader user needs, so it carries no role or landmark. */
-.home-footer {
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 2px 4px 0;
-  color: var(--muted);
-  font: 700 9px var(--sign);
-  letter-spacing: 2px;
-  text-transform: uppercase;
-}
-.home-footer-left {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 0;
-  min-width: 0;
-}
-.home-footer-right {
-  margin: 0;
-  white-space: nowrap;
-}
-/* A short vertical rule standing in for the "|" between the two halves of
-   the left-hand signage, drawn rather than typed so its height tracks the
-   text instead of a monospace guess. */
-.home-footer-rule {
-  width: 1px;
-  height: 10px;
-  background: var(--line);
-}
 /* ── Home sunset emblem ──────────────────────────────────────────────────
    A restrained stand-in for the mockup's full sunset/palms/skyline
    illustration (the user's steer was "maybe not as much artwork"): a disc,
@@ -3363,25 +3324,6 @@ body.play-view .arena-view .below-court {
   color: var(--ink);
   font: italic 800 clamp(20px, 1.9vw, 32px) / 0.9 var(--display);
   letter-spacing: -1px;
-}
-.courts-count-block {
-  flex: none;
-  margin: 3px 0 0;
-  display: grid;
-  justify-items: end;
-  gap: 2px;
-  text-align: right;
-}
-.courts-count {
-  color: var(--pink);
-  font: 700 9px var(--sign);
-  letter-spacing: 1px;
-}
-.courts-count-sub {
-  color: var(--muted);
-  font: 700 8px var(--sign);
-  letter-spacing: 2px;
-  text-transform: uppercase;
 }
 /* One column of six on home: the courts sit beside the demo rather than under
    it, so they read as a list you scan down and never need a second page.
