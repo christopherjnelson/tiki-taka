@@ -2869,8 +2869,6 @@ function syncFullscreen() {
 $("fullscreen-button").addEventListener("click", async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
-    else if (shellFullscreen())
-      toast("Already fullscreen. Press F11 to play in a window.");
     else await document.documentElement.requestFullscreen();
   } catch {
     toast("Fullscreen is not available in this browser.");
@@ -2878,8 +2876,6 @@ $("fullscreen-button").addEventListener("click", async () => {
   syncFullscreen();
 });
 document.addEventListener("fullscreenchange", syncFullscreen);
-// F11 is handled by the shell, which only tells the page by resizing it.
-window.addEventListener("resize", syncFullscreen);
 function playFromMenu() {
   const resumeRound = phase === "paused";
   if (!resumeRound) {
