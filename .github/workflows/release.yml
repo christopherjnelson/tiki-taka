@@ -66,6 +66,24 @@ jobs:
         run: npm test
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      - name: Validate public Supabase build configuration
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ "$VITE_SUPABASE_URL" != "https://ibbprhuqzlbajuaeplgt.supabase.co" ]]; then
+            echo "Repository variable VITE_SUPABASE_URL is missing or does not match the allowed production origin." >&2
+            exit 1
+          fi
+          if [[ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]]; then
+            echo "Repository variable VITE_SUPABASE_PUBLISHABLE_KEY is required." >&2
+            exit 1
+          fi
+          if [[ "$VITE_SUPABASE_PUBLISHABLE_KEY" == sb_secret_* ]]; then
+            echo "Refusing to compile a Supabase secret key into the public browser bundle." >&2
+            exit 1
+          fi
       - name: Set build identity
         run: |
           # github.sha is not guaranteed to be the release commit for every
@@ -75,6 +93,9 @@ jobs:
       - name: Build the release artifact
         # Vite exposes VITE_* variables to the browser bundle. The client
         # build indicator consumes these when it is present.
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build
       - name: Verify service-worker install-cache contract
         run: node --test tests/service-worker-contract.mjs

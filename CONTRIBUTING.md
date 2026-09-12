@@ -104,3 +104,10 @@ PRs do not receive release versions or deployments. When a tested `main` commit 
 Publishing the release runs [Release artifact](.github/workflows/release.yml). It checks out that exact tag, rejects a tag that is not exactly `vX.Y.Z` or does not match `package.json`, runs unit and required desktop-browser tests, builds the production site, verifies the generated service-worker contract and bundle budgets, and uploads `tiki-taka-vX.Y.Z.tar.gz`. The archive contains `dist/desktop/` and is the sole input for production deployment. A manual run is available only to rebuild an existing tag; enter that tag exactly.
 
 The current workflow verifies and produces an artifact only: it makes no deployment record and has no Droplet credentials or SSH command. When the Droplet deployment procedure is agreed, add a real deployment job that downloads this artifact and is the only job that uses the GitHub `production` environment. Configure that environment's protection rules and deployment secrets before enabling the job.
+
+Release builds require the repository-level GitHub Actions variables
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`; the workflow fails
+closed rather than silently shipping a guest-only build. These are the same
+browser-public values used by local Vite builds. Never put a Supabase secret
+or service-role key in either variable—the workflow explicitly rejects the
+new `sb_secret_` format, and privileged keys must never enter a browser bundle.
