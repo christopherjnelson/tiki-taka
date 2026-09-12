@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -35,4 +37,27 @@ test('activate-release initializes dependent readonly values under nounset', asy
     result.stdout.trim(),
     '/srv/tiki-taka/incoming/run-1-1/tiki-taka-v0.3.0.tar.gz|/srv/tiki-taka/incoming/run-1-1/tiki-taka-v0.3.0.tar.gz.sha256|v0.3.0-0123456789ab-1.1|/srv/tiki-taka/releases/v0.3.0-0123456789ab-1.1',
   );
+});
+
+test('activate-release permits the Supabase SDK prefix but rejects secret-shaped values', async (t) => {
+  const source = await readFile(activatePath, 'utf8');
+  const pattern = source.match(/grep -RIlE '([^']+)' "\$1"/);
+  assert.ok(pattern, 'missing Supabase secret scan pattern');
+
+  const fixtureDir = await mkdtemp(join(tmpdir(), 'tiki-taka-deploy-secret-scan-'));
+  t.after(() => rm(fixtureDir, { recursive: true, force: true }));
+  const safeFile = join(fixtureDir, 'sdk.js');
+  await writeFile(safeFile, 'key.startsWith(`sb_secret_`)');
+
+  const grep = (path) => spawnSync('grep', ['-RIlE', pattern[1], path], { encoding: 'utf8' });
+  assert.equal(grep(safeFile).status, 1, 'the SDK validation prefix must be allowed');
+
+  for (const [filename, contents] of [
+    ['secret.js', 'const key = "sb_secret_x";'],
+    ['legacy.js', 'const role = "service_role";'],
+  ]) {
+    const path = join(fixtureDir, filename);
+    await writeFile(path, contents);
+    assert.equal(grep(path).status, 0, `${filename} must be rejected`);
+  }
 });
