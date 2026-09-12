@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS } from '../src/game.js';
+import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -203,14 +203,42 @@ test('pass validation rejects self, missing, in-flight, locked, and finished pas
 test('direct passing transfers possession, adds score and resets hold', () => {
   const game = openGame();
   advance(game, 0.5);
+  const passLength = distance(game.players[0], game.players[1]);
   completePass(game, 1);
   assert.equal(game.passes, 1);
-  assert.equal(game.score, 12);
+  assert.equal(game.score, Math.round(12 * passDistanceMultiplier(passLength)));
   assert.equal(game.combo, 1);
   assert.equal(game.hold, 0);
   assert.ok(game.grace > 0);
   assert.ok(game.events.some(event => event.type === 'kick'));
   assert.ok(game.events.some(event => event.type === 'score'));
+});
+
+test('pass distance multipliers are bounded, exact at their thresholds, and monotonic', () => {
+  assert.equal(passDistanceMultiplier(PASS_DISTANCE.near), 1);
+  assert.equal(passDistanceMultiplier(PASS_DISTANCE.far), PASS_DISTANCE.maxPassMultiplier);
+  assert.equal(passDistanceMultiplier(PASS_DISTANCE.near - 1), 1);
+  assert.equal(
+    passDistanceMultiplier(PASS_DISTANCE.far + 1),
+    PASS_DISTANCE.maxPassMultiplier,
+  );
+  assert.ok(
+    passDistanceMultiplier(350) > passDistanceMultiplier(250) &&
+      passDistanceMultiplier(500) > passDistanceMultiplier(350),
+  );
+
+  const short = openGame({ speed: 0 });
+  short.players[1].x = short.players[0].x + PASS_DISTANCE.near;
+  short.players[1].y = short.players[0].y;
+  completePass(short, 1);
+  assert.equal(short.score, ordinaryPassPoints(PASS_DISTANCE.near));
+
+  const long = openGame({ speed: 0 });
+  long.players[1].x = long.players[0].x + PASS_DISTANCE.far;
+  long.players[1].y = long.players[0].y;
+  completePass(long, 1);
+  assert.equal(long.score, ordinaryPassPoints(PASS_DISTANCE.far));
+  assert.ok(long.score > short.score, 'a longer ordinary pass pays more');
 });
 
 test('a brief first-touch cooldown prevents instant pass chains after reception', () => {
@@ -228,10 +256,18 @@ test('one-touch starts unarmed, then rewards quick stationary deliveries', () =>
   assert.equal(game.oneTouchEligible, true);
   assert.equal(game.events.some(event => event.type === 'one-touch'), false);
   const before = game.score;
-  completePass(game, 2);
+  advance(game, game.passCooldown + STEP);
+  assert.equal(game.pass(2), true);
+  const passLength = game.ball.passDistance;
+  for (let frame = 0; game.ball && frame < 600 && game.status === 'playing'; frame++) game.update(STEP);
+  assert.equal(game.ball, null, 'one-touch pass must resolve within ten seconds');
+  assert.equal(game.carrier, 2);
   assert.equal(game.oneTouchStreak, 1);
   assert.equal(game.bestOneTouch, 1);
-  assert.equal(game.score - before, 12 + ONE_TOUCH.passBonus);
+  assert.equal(
+    game.score - before,
+    ordinaryPassPoints(passLength) + ONE_TOUCH.passBonus,
+  );
   assert.deepEqual(game.events.find(event => event.type === 'one-touch'), {
     type: 'one-touch', text: 'ONE TOUCH ×1 +5', x: game.players[2].x, y: game.players[2].y,
     streak: 1, bonus: 5, milestone: false,
@@ -376,9 +412,15 @@ test('three-player triangles earn 3 energy without exceeding capacity', () => {
   assert.ok(game.score - before > 12);
   assert.equal(game.focus, focusBefore + FOCUS_REWARDS.triangle);
   assert.ok(game.events.some(event => event.type === 'focus' && event.text === '+3 ENERGY' && event.x === game.players[0].x));
+  assert.deepEqual(game.history, [0], 'a rewarded triangle starts a fresh sequence');
   game.focus = game.tactic.focus;
   completePass(game, 1);
+  assert.equal(game.triangles, 1, 'the next pass cannot reuse the rewarded triangle');
   assert.equal(game.focus, game.tactic.focus);
+  completePass(game, 2);
+  assert.equal(game.triangles, 1);
+  completePass(game, 0);
+  assert.equal(game.triangles, 2, 'three fresh passes can complete another triangle');
 });
 
 test('triangles must complete within TRIANGLE_WINDOW and break if hold exceeds TRIANGLE_MAX_HOLD', () => {
@@ -417,6 +459,32 @@ test('receiving inside a zone earns a bonus and rotates the target', () => {
   assert.notDeepEqual(game.zone, previous);
   assert.equal(game.zoneTimer, 12);
   assert.equal(game.focus, FOCUS_REWARDS.zone);
+});
+
+test('a receiver overlapping the zone line counts, but a visible gap does not', () => {
+  const overlapping = openGame();
+  overlapping.zone = { x: 500, y: 300, r: 92 };
+  overlapping.players[1].x =
+    overlapping.zone.x + overlapping.zone.r + PLAYER_RADIUS - 0.01;
+  overlapping.players[1].y = overlapping.zone.y;
+  completePass(overlapping, 1);
+  assert.equal(overlapping.zones, 1, 'the visible player disc overlaps the zone');
+
+  const touching = openGame();
+  touching.zone = { x: 500, y: 300, r: 92 };
+  touching.players[1].x =
+    touching.zone.x + touching.zone.r + PLAYER_RADIUS;
+  touching.players[1].y = touching.zone.y;
+  completePass(touching, 1);
+  assert.equal(touching.zones, 1, 'touching the zone line counts');
+
+  const outside = openGame();
+  outside.zone = { x: 500, y: 300, r: 92 };
+  outside.players[1].x =
+    outside.zone.x + outside.zone.r + PLAYER_RADIUS + 0.01;
+  outside.players[1].y = outside.zone.y;
+  completePass(outside, 1);
+  assert.equal(outside.zones, 0, 'a receiver beyond its visible radius stays out');
 });
 
 test('zones rotate even when the player has not collected them', () => {
@@ -585,6 +653,7 @@ test('boost spends Focus to increase only the carrier movement at normal game sp
     'Boost applies its multiplier to the controlled player only',
   );
   assert.ok(Math.abs(boosted.focus - (boosted.tactic.focus - BOOST_DRAIN_RATE)) < 1e-8);
+  assert.equal(BOOST_DRAIN_RATE, 3, 'Boost spends Energy three times as fast as Focus');
   assert.deepEqual(boosted.players.slice(1), normal.players.slice(1), 'Boost does not change teammate AI movement');
 });
 
@@ -726,12 +795,27 @@ test('aim assists toward the selected direction and never chooses the carrier', 
 });
 
 test('shout sends an eligible pass target to the active bonus zone without affecting scoring', () => {
-  const game = openGame();
+  const game = openGame(), normal = openGame();
   game.zone = { x: 735, y: 430, r: 92 };
   const target = game.players[1];
+  const shoutedStart = { ...target };
+  const normalStart = { ...normal.players[1] };
   const before = distance(target, game.zone);
   assert.equal(game.shout(target.id), true);
-  advance(game, 1);
+  game.update(STEP);
+  normal.update(STEP);
+  const shoutedStep = distance(shoutedStart, target);
+  const normalStep = distance(normalStart, normal.players[1]);
+  assert.ok(Math.abs(normalStep - TEAMMATE_RUN_SPEED * STEP) < 1e-8);
+  assert.ok(
+    Math.abs(shoutedStep / normalStep - SHOUT_RUN_SPEED_MULTIPLIER) < 1e-8,
+    'a shouted runner accelerates above ordinary off-ball movement',
+  );
+  assert.ok(
+    shoutedStep / STEP < game.tactic.speed * BOOST_SPEED_MULTIPLIER,
+    'a shouted runner remains slower than a boosted ball carrier',
+  );
+  advance(game, 1 - STEP);
   assert.ok(distance(target, game.zone) < before, 'target should close on the bonus zone');
   assert.equal(game.score, 0);
   assert.equal(game.passes, 0);
@@ -784,6 +868,23 @@ function threadingGame(defenders) {
   return game;
 }
 
+function ordinaryPassPoints(length, combo = 1, repeat = false) {
+  const flowMultiplier = 1 + Math.min(4, Math.floor(combo / 4));
+  return Math.round((repeat ? 6 : 12) * passDistanceMultiplier(length)) * flowMultiplier;
+}
+
+function splitPassPoints(length, tightness, defenders = 2, combo = 1) {
+  const flowMultiplier = 1 + Math.min(4, Math.floor(combo / 4));
+  const splitDistanceMultiplier =
+    1 + (passDistanceMultiplier(length) - 1) * PASS_DISTANCE.splitInfluence;
+  const splitPoints = Math.round(
+    (SPLIT_PRESS.base + SPLIT_PRESS.tight * tightness) *
+      (1 + SPLIT_PRESS.perDefender * (defenders - 2)) *
+      splitDistanceMultiplier,
+  );
+  return ordinaryPassPoints(length, combo) + splitPoints * flowMultiplier;
+}
+
 test('segmentsCross is a proper crossing: strict, so touching and collinear are not', () => {
   // A horizontal bar and a vertical bar through its middle: a clean X.
   assert.equal(segmentsCross({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: -5 }, { x: 5, y: 5 }), true);
@@ -804,13 +905,13 @@ test('a pass with no pair to thread is not a split', () => {
   const empty = threadingGame([]);
   completePass(empty, 1);
   assert.equal(empty.splits, 0);
-  assert.equal(empty.score, 12);
+  assert.equal(empty.score, ordinaryPassPoints(500));
   // A lone defender near the lane has nobody to be split from.
   const single = threadingGame([{ x: 450, y: 257 }]);
   completePass(single, 1);
   assert.equal(single.turnovers, 0);
   assert.equal(single.splits, 0);
-  assert.equal(single.score, 12);
+  assert.equal(single.score, ordinaryPassPoints(500));
   assert.equal(single.focus, 0);
 });
 
@@ -825,12 +926,12 @@ test('two defenders hugging the lane on the SAME side are not split', () => {
   assert.equal(game.carrier, 1);
   assert.equal(game.splits, 0);
   assert.equal(game.focus, 0);
-  assert.equal(game.score, 12, 'a pass that skirts a pair pays the plain pass only');
+  assert.equal(game.score, ordinaryPassPoints(500), 'a pass that skirts a pair pays the plain pass only');
   // The mirrored case: both defenders BELOW the lane, equally close.
   const below = threadingGame([{ x: 430, y: 355 }, { x: 470, y: 343 }]);
   completePass(below, 1);
   assert.equal(below.splits, 0);
-  assert.equal(below.score, 12);
+  assert.equal(below.score, ordinaryPassPoints(500));
 });
 
 test('a pass threaded between two defenders earns the bonus, focus and its own label', () => {
@@ -845,9 +946,9 @@ test('a pass threaded between two defenders earns the bonus, focus and its own l
   assert.equal(game.carrier, 1);
   assert.equal(game.turnovers, 0);
   assert.equal(game.splits, 1, 'defenders scattering during flight cannot erase the split that was aimed through');
-  assert.equal(game.score, 12 + 96);
+  assert.equal(game.score, splitPassPoints(500, (200 - 80) / (200 - 70)));
   assert.equal(game.focus, FOCUS_REWARDS.split);
-  assert.ok(game.events.some(event => event.type === 'score' && event.text === 'SPLIT THE PRESS +108'));
+  assert.ok(game.events.some(event => event.type === 'score' && event.text === `SPLIT THE PRESS +${splitPassPoints(500, (200 - 80) / (200 - 70))}`));
   assert.ok(FOCUS_REWARDS.split > FOCUS_REWARDS.triangle, 'splitting the press pays the most focus in the game');
 });
 
@@ -857,20 +958,50 @@ test('a narrower pair outscores a wider one and tops the bonus ladder', () => {
     const game = threadingGame([{ x: 450, y: 300 - half }, { x: 450, y: 300 + half }]);
     completePass(game, 1);
     assert.equal(game.splits, 1);
-    return game.score - 12;
+    return game.score - ordinaryPassPoints(500);
   };
   const tight = bonus(40), loose = bonus(90);
   assert.ok(tight > loose, `a 80-wide gap (${tight}) must beat a 180-wide gap (${loose})`);
-  assert.equal(tight, 96);
-  assert.equal(loose, 58);
+  assert.equal(tight, splitPassPoints(500, (200 - 80) / (200 - 70)) - ordinaryPassPoints(500));
+  assert.equal(loose, splitPassPoints(500, (200 - 180) / (200 - 70)) - ordinaryPassPoints(500));
   assert.ok(loose > 35, 'even the laziest split outscores a triangle');
   assert.equal(SPLIT_PRESS.base, 50);
   assert.equal(SPLIT_PRESS.base + SPLIT_PRESS.tight, 100);
   assert.equal(SPLIT_PRESS.narrow, 70);
   assert.equal(SPLIT_PRESS.wide, 200);
   // A pair at or inside `narrow` pays the ceiling; at or beyond `wide`, the floor.
-  assert.equal(bonus(30), SPLIT_PRESS.base + SPLIT_PRESS.tight, 'a 60-wide gap is already maxed out');
-  assert.equal(bonus(110), SPLIT_PRESS.base, 'a 220-wide gap is a split in name only');
+  assert.equal(
+    bonus(30),
+    splitPassPoints(500, 1) - ordinaryPassPoints(500),
+    'a 60-wide gap is already maxed out',
+  );
+  assert.equal(
+    bonus(110),
+    splitPassPoints(500, 0) - ordinaryPassPoints(500),
+    'a 220-wide gap is a split in name only',
+  );
+});
+
+test('split rewards inherit half of the ordinary pass-distance influence', () => {
+  const tightness = (SPLIT_PRESS.wide - 80) /
+    (SPLIT_PRESS.wide - SPLIT_PRESS.narrow);
+  const splitOnly = length =>
+    splitPassPoints(length, tightness) - ordinaryPassPoints(length);
+  assert.equal(
+    splitOnly(PASS_DISTANCE.near),
+    Math.round(SPLIT_PRESS.base + SPLIT_PRESS.tight * tightness),
+  );
+  assert.equal(
+    splitOnly(PASS_DISTANCE.far),
+    Math.round(
+      (SPLIT_PRESS.base + SPLIT_PRESS.tight * tightness) *
+        (1 + (PASS_DISTANCE.maxPassMultiplier - 1) * PASS_DISTANCE.splitInfluence),
+    ),
+  );
+  assert.ok(
+    splitOnly(PASS_DISTANCE.far) > splitOnly(PASS_DISTANCE.near),
+    'a longer split receives a smaller, positive distance lift',
+  );
 });
 
 test('the same split pays more on a court with more defenders', () => {
@@ -883,13 +1014,13 @@ test('the same split pays more on a court with more defenders', () => {
     completePass(game, 1);
     assert.equal(game.splits, 1);
     assert.equal(game.focus, FOCUS_REWARDS.split, 'focus never scales with the defender count');
-    return game.score - 12;
+    return game.score - ordinaryPassPoints(500);
   };
   const two = bonus([]), three = bonus([{ x: 200, y: 60 }]);
   const four = bonus([{ x: 200, y: 60 }, { x: 800, y: 560 }]);
-  assert.equal(two, 96);
-  assert.equal(three, 125);
-  assert.equal(four, 154);
+  assert.equal(two, splitPassPoints(500, (200 - 80) / (200 - 70), 2) - ordinaryPassPoints(500));
+  assert.equal(three, splitPassPoints(500, (200 - 80) / (200 - 70), 3) - ordinaryPassPoints(500));
+  assert.equal(four, splitPassPoints(500, (200 - 80) / (200 - 70), 4) - ordinaryPassPoints(500));
   assert.ok(three > two, `three defenders (${three}) must beat two (${two}) for the same split`);
   assert.ok(four > three, `four defenders (${four}) must beat three (${three})`);
   assert.equal(SPLIT_PRESS.perDefender, 0.3);
@@ -906,8 +1037,10 @@ test('with several crossed pairs the narrowest one sets the reward', () => {
   assert.ok(Math.abs(game.ball.split - (200 - 130) / (200 - 70)) < 1e-9, 'the 130 gap, not the 250 one, is the split that was made');
   for (let frame = 0; game.ball && frame < 600 && game.status === 'playing'; frame++) game.update(STEP);
   assert.equal(game.splits, 1, 'one pass through a crowd is still one split');
-  // (50 + 50 * 70/130) * 1.3 for the three-defender court.
-  assert.equal(game.score - 12, 100);
+  assert.equal(
+    game.score,
+    splitPassPoints(500, (200 - 130) / (200 - 70), 3),
+  );
 });
 
 test('splits scale with the combo multiplier like other bonuses', () => {
@@ -915,7 +1048,10 @@ test('splits scale with the combo multiplier like other bonuses', () => {
   game.combo = 7;
   completePass(game, 1);
   assert.equal(game.splits, 1);
-  assert.equal(game.score, (12 + 96) * 3);
+  assert.equal(
+    game.score,
+    splitPassPoints(500, (200 - 80) / (200 - 70), 2, 8),
+  );
 });
 
 test('a bank pass can split on its second segment, after the wall', () => {
@@ -952,11 +1088,11 @@ test('a plain pass carries an empty bonus list', () => {
   const game = threadingGame([]);
   completePass(game, 1);
   const scored = game.events.find(event => event.type === 'score');
-  assert.equal(scored.text, 'PASS +12');
+  assert.equal(scored.text, `PASS +${ordinaryPassPoints(500)}`);
   assert.deepEqual(scored.bonuses, []);
 });
 
-test('a pass that splits and completes a triangle shows the split and pays both', () => {
+test('a split that completes a triangle keeps its flight geometry but pays only the triangle', () => {
   const game = openGame({ speed: 0 });
   const place = () => {
     game.players[0].x = 200; game.players[0].y = 300;
@@ -976,16 +1112,25 @@ test('a pass that splits and completes a triangle shows the split and pays both'
   game.defenders = [{ x: 500, y: 60, id: 0 }, { x: 700, y: 60, id: 1 }];
   pass(1);
   pass(2);
-  assert.equal(game.score, 24);
+  const beforeFinal = game.score;
   game.defenders = [{ x: 500, y: 340, id: 0 }, { x: 500, y: 260, id: 1 }];
-  pass(0);
-  assert.equal(game.splits, 1);
+  advance(game, Math.max(game.passCooldown, ONE_TOUCH.window) + STEP);
+  place();
+  assert.equal(game.pass(0), true);
+  const finalDistance = game.ball.passDistance;
+  assert.notEqual(game.ball.split, null, 'the split remains available to the in-flight visual');
+  for (let frame = 0; game.ball && frame < 600 && game.status === 'playing'; frame++) game.update(STEP);
   assert.equal(game.triangles, 1);
-  assert.equal(game.score, 24 + 12 + 96 + 35, 'the triangle and the split both pay in full');
-  assert.equal(game.focus, FOCUS_REWARDS.split + FOCUS_REWARDS.triangle);
+  assert.equal(game.splits, 0, 'triangle passes do not also count as split rewards');
+  assert.equal(
+    game.score - beforeFinal,
+    ordinaryPassPoints(finalDistance) + 35,
+    'only the ordinary pass and triangle bonus pay',
+  );
+  assert.equal(game.focus, FOCUS_REWARDS.triangle);
   const scored = game.events.filter(event => event.type === 'score').at(-1);
-  assert.equal(scored.text, 'SPLIT THE PRESS +143', 'the rarest bonus owns the label');
-  assert.deepEqual(scored.bonuses, ['split', 'triangle']);
+  assert.equal(scored.text, `TRIANGLE +${ordinaryPassPoints(finalDistance) + 35}`);
+  assert.deepEqual(scored.bonuses, ['triangle']);
   assert.equal(scored.x, game.players[0].x);
   assert.equal(scored.y, game.players[0].y - 25);
 });
@@ -995,11 +1140,16 @@ test('the zone outranks the wall on a banked pass into the zone', () => {
   game.players[0].x = 200; game.players[0].y = 200;
   game.players[1].x = 600; game.players[1].y = 200;
   game.zone = { x: 600, y: 200, r: 92 };
+  const passLength = distance(game.players[0], game.players[1]);
   completePass(game, 1, true);
   assert.equal(game.banks, 1);
   assert.equal(game.zones, 1);
-  assert.equal(game.score, 12 + 18 + 25, 'the wall and the zone both pay in full');
+  assert.equal(
+    game.score,
+    ordinaryPassPoints(passLength) + 18 + 25,
+    'the wall and the zone both pay in full',
+  );
   const scored = game.events.filter(event => event.type === 'score').at(-1);
-  assert.equal(scored.text, 'ZONE BONUS +55');
+  assert.equal(scored.text, `ZONE BONUS +${game.score}`);
   assert.deepEqual(scored.bonuses, ['wall', 'zone']);
 });
