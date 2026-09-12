@@ -32,6 +32,31 @@ npm run test:web
 
 `test:web` covers desktop gameplay, interface, navigation, one-touch, desktop-account, and audio. Each suite also has a standalone script, such as `npm run test:desktop-account`, for focused iteration.
 
+### Optional desktop performance baseline
+
+Run `npm run test:perf` to build the production desktop bundle and collect a
+local desktop-browser baseline. It is deliberately not part of `test:web` or
+CI: its numbers depend on the browser, machine, display refresh rate, and
+concurrent load. The command starts a real arena session with normal motion
+and prints navigation/FCP timings, long-task totals, and frame-pacing
+percentiles. It also writes the full machine-readable result to
+`test-results/desktop-performance.json` (or `PERF_OUTPUT=path`). Use repeated
+runs on the same machine and compare the JSON rather than treating one run as
+a release gate. `PERF_DURATION_MS=10000 npm run test:perf` changes the
+post-warmup sampling duration (default: 5000 ms). The sustained sample holds
+rightward movement in the arena while benchmark-only state prevents a
+turnover or clock expiry. Long tasks are reported separately for the home
+load, arena-ready transition, one-second warmup, and post-warmup sample.
+
+Run `npm run perf:bundle` for the complementary production asset measurement.
+It reports compressed HTML/CSS/JavaScript size, font size, service-worker
+precache size, soundtrack size, and total build size, then checks optional
+budgets for code, fonts, and the install cache. This command is also excluded
+from CI and the default test suites.
+`npm run test:sw-contract` separately verifies that the generated install cache
+contains the app shell but no audio; the required browser suite covers cached
+audio remaining available offline after its first online fetch.
+
 Mobile and coarse-pointer layouts are frozen: their existing implementation and tests remain, but they are not an active product target and do not gate desktop UI work. Run their optional regression coverage only when intentionally changing that area:
 
 ```sh

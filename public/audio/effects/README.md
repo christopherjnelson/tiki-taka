@@ -6,7 +6,7 @@ and the build read.
 
 - Filenames: lowercase, hyphenated, ASCII, no spaces or accents
   (`crowd-ole.ogg`, `crowd-cheer.ogg`). Encoded names have broken the service
-  worker's precache before.
+  worker's audio request before.
 - Formats: `.ogg` matches the soundtrack; `.mp3` and `.wav` decode as well.
 - Level: whatever is convenient. Each entry takes an optional `gain` trim, and
   everything plays through the effects master, so the effects switch and the

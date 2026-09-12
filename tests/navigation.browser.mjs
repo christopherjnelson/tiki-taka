@@ -128,6 +128,31 @@ await check(
     assert.equal(await page.locator(".hl-tab").count(), 6);
     assert.equal(await page.locator("[data-home-mode]").count(), 4);
     assert.equal(await page.locator(".court-item").count(), 6);
+    // Thumbnails are intentionally deferred until after the home UI can
+    // paint. They must still arrive, and the focus preview remains useful to
+    // keyboard players while that work is scheduled.
+    await page.waitForFunction(
+      () =>
+        [...document.querySelectorAll(".court-thumb")].every((image) =>
+          image.getAttribute("src")?.startsWith("data:image/png"),
+        ),
+      undefined,
+      { timeout: 10_000 },
+    );
+    await page.locator(".court-item").first().focus();
+    assert.equal(
+      await page
+        .locator(".court-item")
+        .first()
+        .evaluate((button) => button.classList.contains("hover-preview")),
+      true,
+    );
+    assert.match(
+      await page.locator("#home-court-preview").getAttribute("alt"),
+      /court preview$/i,
+    );
+    await page.locator("#title-play").focus();
+    assert.equal(await page.locator(".court-item.hover-preview").count(), 0);
     assert.match(await page.locator("#level-label").textContent(), /LEVEL 1/i);
     assert.equal(await page.locator("#home-stars").textContent(), "0");
     assert.match(await page.locator("#home-cleared").textContent(), /^0/);
