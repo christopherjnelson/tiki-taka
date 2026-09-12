@@ -2748,6 +2748,7 @@ $("profile-button").addEventListener("click", openAccount);
 // A mouse-only player's way out of a round: the same togglePause() Esc and the
 // gamepad's Start already call, on a labelled control that never sits over the
 // court. Both of those keep working untouched.
+$("top-home").addEventListener("click", () => applyView("home"));
 $("top-pause").addEventListener("click", togglePause);
 $("close-account").addEventListener("click", () => $("account-dialog").close());
 $("register-form").addEventListener("submit", async (event) => {

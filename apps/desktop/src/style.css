@@ -1543,13 +1543,19 @@ body.play-view .ambience {
   border-color: var(--cyan);
   outline: none;
 }
-/* Only a live round has a pause menu to reach, so the Menu button is only
-   there while one is on screen. display:none also takes it out of
+.bar-icon {
+  display: block;
+  flex-shrink: 0;
+}
+/* Only a live round has a pause menu or quick home exit in the top bar, so these buttons
+   are only shown while in the arena. display:none also takes them out of
    padFocusables(), so the d-pad never lands on a control that does nothing. */
-.top-pause {
+.top-pause,
+.top-home {
   display: none;
 }
-body[data-view="arena"] .top-pause {
+body[data-view="arena"] .top-pause,
+body[data-view="arena"] .top-home {
   display: inline-flex;
 }
 /* Local demo data, and the chip says so. It opens the same #account-dialog

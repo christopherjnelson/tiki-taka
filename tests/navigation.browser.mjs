@@ -883,6 +883,7 @@ await check(
       "the Menu button must not sit over the court",
     );
     assert.equal(await page.locator("#top-pause").isVisible(), true);
+    assert.equal(await page.locator("#top-home").isVisible(), true);
     await page.locator("#top-pause").click();
     await page.locator("#pause-menu").waitFor({ state: "visible" });
     await page.locator("#pause-home").click();
@@ -897,7 +898,13 @@ await check(
     // Nothing on a menu screen has a pause menu to reach, so the button is not
     // offered there.
     assert.equal(await page.locator("#top-pause").isVisible(), false);
+    assert.equal(await page.locator("#top-home").isVisible(), false);
     // Escape and the gamepad's Start still do exactly what they did.
+    await page.locator("#court-list button").first().click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#top-home").isVisible(), true);
+    await page.locator("#top-home").click();
+    await page.locator("#home-view").waitFor({ state: "visible" });
     await page.locator("#court-list button").first().click();
     await page.locator("#arena-view").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
