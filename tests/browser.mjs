@@ -373,8 +373,10 @@ await check('a complete playable career run clears and unlocks the next court', 
   await expectText(page.locator('#secondary-button'), /^Back to the round intro$/);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tiki-taka.progress.v1')));
   assert.equal(saved.unlocked, 1);
-  assert.ok(saved.courts['0'].stars >= 1);
-  assert.ok(saved.records['court-0'] >= 180);
+  // Stars and bests are tracked per difficulty tier now; the default
+  // selection is Standard, so that is the tier this run's clear lands under.
+  assert.ok(saved.courts['0'].standard.stars >= 1);
+  assert.ok(saved.records['court-0-standard'] >= 180);
   assert.equal(await page.locator('.court-item').nth(1).isDisabled(), false);
   assert.deepEqual(errors, []);
   await context.close();

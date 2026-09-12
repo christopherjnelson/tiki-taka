@@ -952,6 +952,198 @@ await check(
 );
 
 await check(
+  "the leaderboard difficulty filter re-queries by tier, and the round setup selector changes the applied target",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 900 },
+      serviceWorkers: "block",
+    });
+    // A mock adapter whose getLeaderboard records the difficulty it was
+    // called with and tags returned entries with it — this is what proves
+    // the toggle actually re-queries rather than merely restyling rows that
+    // were already on screen.
+    await context.addInitScript(() => {
+      window.__leaderboardCalls = [];
+      const bindings = {
+        moveUp: ["KeyW", "ArrowUp"], moveDown: ["KeyS", "ArrowDown"],
+        moveLeft: ["KeyA", "ArrowLeft"], moveRight: ["KeyD", "ArrowRight"],
+        smartPass: ["Space"], direct1: ["Digit1"], direct2: ["Digit2"],
+        direct3: ["Digit3"], direct4: ["Digit4"], wallToggle: ["KeyB"],
+        wallHold: ["ShiftLeft"], focusHold: ["KeyE"], boostHold: ["KeyR"],
+        shout: ["KeyF"], pause: ["Escape"],
+      };
+      window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
+        kind: "local",
+        async getSession() { return null; },
+        async loadUserData() {
+          return {
+            progress: {
+              version: 1, xp: 0, unlocked: 5, courts: {}, records: {},
+              sound: true, tactic: "balanced", difficulty: "standard", lastCourt: 0,
+            },
+            settings: {
+              theme: "dark", effectsOn: false, effectsVolume: 0, musicOn: false,
+              musicVolume: 0, audioMigrated: true, preset: "wasd", bindings,
+            },
+            stats: { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 },
+            preferences: { scoreSaveChoice: "ask" },
+          };
+        },
+        async saveUserData() { return {}; },
+        async recordRound() { return { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 }; },
+        async getLeaderboard({ difficulty } = {}) {
+          window.__leaderboardCalls.push(difficulty);
+          return {
+            entries: [{
+              username: `mock-${difficulty}`, score: 4242, passes: 10,
+              triangles: 1, oles: 1, splits: 1, zones: 1, difficulty,
+            }],
+          };
+        },
+        onAuthStateChange() { return () => {}; },
+      });
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(`${baseURL}/`);
+    await page.locator("#home-view").waitFor({ state: "visible" });
+    await page.locator("#home-leaderboard").waitFor({ state: "visible" });
+    // Sets progress.difficulty and fires prepare() exactly like a real
+    // selection would — works from any view since #difficulty-select is
+    // always in the DOM (see the .below-court hidden-in-play-view note
+    // below), just not painted while the arena is on screen.
+    const setDifficulty = (tier) =>
+      page.evaluate((t) => {
+        const select = document.getElementById("difficulty-select");
+        select.value = t;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }, tier);
+
+    // The deck defaults to the player's own currently-selected tier
+    // (Standard here), and shows it unambiguously via the active toggle
+    // segment alone (no separate badge repeating the same word next to it —
+    // that used to render as "RUTHLESS RUTHLESS" side by side), not merely
+    // by restyling — the row content itself is the mocked "standard" query
+    // result.
+    await page.waitForFunction(() => window.__leaderboardCalls.includes("standard"));
+    const standardBtn = page.locator('#hl-difficulty-toggle .hl-diff-btn[data-tier="standard"]');
+    assert.equal(await standardBtn.getAttribute("aria-pressed"), "true");
+    assert.equal(await standardBtn.textContent(), "STD");
+    await page.locator("#home-leaderboard-list .hl-row").first().waitFor({ state: "visible" });
+    assert.match(
+      await page.locator("#home-leaderboard-list .hl-row .hl-cell-player").first().textContent(),
+      /mock-standard/,
+    );
+    // No element anywhere in the header repeats the identical label next to
+    // the toggle's own active segment.
+    assert.equal(await page.locator("#hl-mode-badge").count(), 0);
+
+    // Switching to Ruthless re-queries the adapter with that tier rather
+    // than just restyling the existing Standard rows.
+    const ruthlessBtn = page.locator('#hl-difficulty-toggle .hl-diff-btn[data-tier="ruthless"]');
+    await ruthlessBtn.click();
+    await page.waitForFunction(() => window.__leaderboardCalls.includes("ruthless"));
+    assert.equal(await ruthlessBtn.getAttribute("aria-pressed"), "true");
+    assert.equal(await ruthlessBtn.textContent(), "RUT");
+    assert.equal(await standardBtn.getAttribute("aria-pressed"), "false");
+    await page.waitForFunction(
+      () => document.querySelector("#home-leaderboard-list .hl-row .hl-cell-player")?.textContent === "mock-ruthless",
+    );
+    // The header title stays on one line — the toggle used to crowd it onto
+    // two at 1080px.
+    const titleBox = await page.locator(".hl-title").boundingBox();
+    const titleLineHeight = await page.locator(".hl-title").evaluate(
+      (el) => parseFloat(getComputedStyle(el).lineHeight) || 0,
+    );
+    assert.ok(
+      titleBox && titleBox.height <= titleLineHeight * 1.4,
+      `"CIRCUIT LEADERBOARDS" must stay on one line, got height ${titleBox?.height} vs line-height ${titleLineHeight}`,
+    );
+
+    // Re-check the same one-line requirement at the app's narrower cited
+    // desktop width (1080px) — the header must not have been fixed for one
+    // width by breaking the other.
+    await page.setViewportSize({ width: 1080, height: 1024 });
+    await page.waitForTimeout(100);
+    const narrowTitleBox = await page.locator(".hl-title").boundingBox();
+    assert.ok(
+      narrowTitleBox && narrowTitleBox.height <= titleLineHeight * 1.4,
+      `"CIRCUIT LEADERBOARDS" must stay on one line at 1080px too, got height ${narrowTitleBox?.height}`,
+    );
+
+    // The court list's tier tag must be a real abbreviation, never a
+    // mid-word clip like "STA" (a plain name.slice(0, 3) mangled
+    // "Standard") — check all three tiers, since they abbreviate
+    // differently, on the first court card.
+    for (const [tier, short] of [["relaxed", "REL"], ["standard", "STD"], ["ruthless", "RUT"]]) {
+      await setDifficulty(tier);
+      const tag = await page.locator(".court-item").first().locator(".court-tier-tag").textContent();
+      assert.equal(tag, short, `court tier tag for ${tier}`);
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+
+    // Now prove the round setup's own difficulty selector actually changes
+    // the applied target, not just its own label: Relaxed x0.7, Standard
+    // x1.0 and Ruthless x1.3 over the same court, rounded to the nearest 50.
+    // The arena is always Play view (.below-court, which holds this
+    // selector, stays hidden the whole time per the existing "reclaim the
+    // window for the court" design) — set the value directly and dispatch
+    // change, exactly what a real selection does, rather than a visible
+    // click the layout never offers.
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    await setDifficulty("standard");
+    const standardTarget = await page.locator("#difficulty-target").textContent();
+    await setDifficulty("ruthless");
+    const ruthlessTarget = await page.locator("#difficulty-target").textContent();
+    await setDifficulty("relaxed");
+    const relaxedTarget = await page.locator("#difficulty-target").textContent();
+    assert.notEqual(standardTarget, ruthlessTarget);
+    assert.notEqual(standardTarget, relaxedTarget);
+    assert.notEqual(relaxedTarget, ruthlessTarget);
+    assert.match(standardTarget, /TARGET 600/);
+    assert.match(ruthlessTarget, /TARGET \d+/);
+    assert.match(relaxedTarget, /TARGET \d+/);
+
+    // The possession count must agree with the tier everywhere it's shown —
+    // the HUD counter (#lives-value), the pre-round note, and the overlay
+    // copy — not just the target. This is what would have caught the
+    // hardcoded-3 possessions/turnovers bug: Relaxed gets 4 lives, Standard
+    // 3, Ruthless 2, and the ordinal wording ("second"/"third"/"fourth")
+    // must track the count exactly.
+    const possessionSnapshot = () =>
+      page.evaluate(() => ({
+        lives: document.getElementById("lives-value")?.textContent,
+        note: document.getElementById("invitation-note")?.textContent,
+        copy: document.getElementById("overlay-copy")?.textContent,
+        configPossessions: window.__game?.config?.possessions,
+      }));
+    const expectPossessions = (snapshot, count, ordinal) => {
+      assert.equal(snapshot.configPossessions, count);
+      assert.equal(snapshot.lives, `${count} / ${count}`);
+      assert.match(snapshot.note, new RegExp(`${count} POSSESSIONS`));
+      assert.match(
+        snapshot.note,
+        new RegExp(`${ordinal} LOSS ENDS THE ROUND`, "i"),
+      );
+      assert.match(
+        snapshot.copy,
+        new RegExp(`You have ${count} possessions; the ${ordinal} loss ends the round\\.`, "i"),
+      );
+    };
+    await setDifficulty("relaxed");
+    expectPossessions(await possessionSnapshot(), 4, "fourth");
+    await setDifficulty("standard");
+    expectPossessions(await possessionSnapshot(), 3, "third");
+    await setDifficulty("ruthless");
+    expectPossessions(await possessionSnapshot(), 2, "second");
+
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
   "every round overlay says plainly what its buttons do, in every mode",
   async () => {
     const context = await browser.newContext({

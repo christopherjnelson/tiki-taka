@@ -2,6 +2,8 @@ import {
   Game,
   COURTS,
   TACTICS,
+  DIFFICULTIES,
+  applyDifficulty,
   dailyConfig,
   distance,
   clamp,
@@ -454,14 +456,26 @@ function syncTitle() {
     ? `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`
     : `${court.name} · ${court.place}`;
 }
+// progress.courts[i] is sparse and per-tier now: {relaxed?, standard?,
+// ruthless?}, each {stars, best}. These three helpers are the one place that
+// reads that shape so every other call site (home totals, the court list)
+// stays agnostic of which tiers happen to be present.
+function starsForTier(courtIndexValue, tier) {
+  return progress.courts?.[courtIndexValue]?.[tier]?.stars || 0;
+}
+function bestStarsForCourt(courtIndexValue) {
+  return Math.max(0, ...DIFFICULTIES.map((tier) => starsForTier(courtIndexValue, tier.id)));
+}
+function totalStarsForCourt(courtIndexValue) {
+  return DIFFICULTIES.reduce((sum, tier) => sum + starsForTier(courtIndexValue, tier.id), 0);
+}
 function syncHome() {
   if ($("home-view")) syncTitle();
-  const courtProgress = Object.values(progress.courts || {});
   $("home-stars").textContent = String(
-    courtProgress.reduce((total, item) => total + (item.stars || 0), 0),
+    COURTS.reduce((total, _court, i) => total + totalStarsForCourt(i), 0),
   );
   $("home-cleared").textContent =
-    `${courtProgress.filter((item) => (item.stars || 0) > 0).length} / ${COURTS.length}`;
+    `${COURTS.filter((_court, i) => bestStarsForCourt(i) > 0).length} / ${COURTS.length}`;
   const best = Math.max(0, ...Object.values(progress.records || {}));
   $("home-best").textContent = best ? String(best) : "—";
   $("home-games").textContent = String(accountStats.games);
@@ -525,7 +539,67 @@ const BENCHMARK_LEADERBOARDS = {
   ],
 };
 
+const DIFFICULTY_IDS = DIFFICULTIES.map((tier) => tier.id);
+// A three-letter abbreviation for space-constrained UI (the leaderboard
+// header's segmented toggle, the court list's tier tag). A plain
+// name.slice(0, 3) mangled "Standard" into "STA" — an explicit map so every
+// known tier gets an actual short word, with the slice only as a fallback
+// for some future tier id this map hasn't been taught yet.
+const DIFFICULTY_SHORT_LABELS = { relaxed: "REL", standard: "STD", ruthless: "RUT" };
+function shortTierLabel(id) {
+  return DIFFICULTY_SHORT_LABELS[id] || String(id).slice(0, 3).toUpperCase();
+}
 let homeLeaderboardCourt = 0;
+// Scores are not comparable across tiers, so the deck always shows exactly
+// one tier at a time rather than an "all" blend. It defaults to whatever the
+// player currently has selected for their own next round (progress.difficulty)
+// so the board they land on matches the challenge they are about to play.
+let homeLeaderboardDifficulty = DIFFICULTY_IDS.includes(progress.difficulty)
+  ? progress.difficulty
+  : "standard";
+
+// Built once from DIFFICULTIES — never hardcoded — so the toggle always
+// matches whatever tiers the engine defines. Labels are abbreviated (REL /
+// STD / RUT) rather than full names: the header used to also carry a
+// separate badge repeating the active tier's full name right next to this
+// toggle's own active segment, which read as the same word printed twice in
+// a row, and the full names ("RELAXED"/"STANDARD"/"RUTHLESS") were wide
+// enough to wrap "CIRCUIT LEADERBOARDS" onto a second line at 1080px. The
+// selected segment alone now carries the meaning — the full name is still
+// available as the accessible name and the hover title.
+function renderHomeLeaderboardDifficultyToggle() {
+  const host = $("hl-difficulty-toggle");
+  if (!host) return;
+  host.replaceChildren(
+    ...DIFFICULTIES.map((tier) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "hl-diff-btn";
+      btn.dataset.tier = tier.id;
+      btn.textContent = shortTierLabel(tier.id);
+      btn.setAttribute("aria-pressed", "false");
+      btn.setAttribute("aria-label", `${tier.name} — ${tier.label}`);
+      btn.title = `${tier.name} — ${tier.label}`;
+      btn.addEventListener("click", () => selectHomeLeaderboardDifficulty(tier.id));
+      return btn;
+    }),
+  );
+  syncHomeLeaderboardDifficultyButtons();
+}
+
+function syncHomeLeaderboardDifficultyButtons() {
+  document.querySelectorAll("#hl-difficulty-toggle .hl-diff-btn").forEach((btn) => {
+    const isActive = btn.dataset.tier === homeLeaderboardDifficulty;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function selectHomeLeaderboardDifficulty(tier) {
+  homeLeaderboardDifficulty = DIFFICULTY_IDS.includes(tier) ? tier : "standard";
+  syncHomeLeaderboardDifficultyButtons();
+  void syncHomeLeaderboard(homeLeaderboardCourt);
+}
 
 function selectHomeLeaderboardCourt(courtIdx) {
   homeLeaderboardCourt = Math.max(0, Math.min(COURTS.length - 1, Number(courtIdx) || 0));
@@ -539,7 +613,7 @@ function selectHomeLeaderboardCourt(courtIdx) {
   void syncHomeLeaderboard(homeLeaderboardCourt);
 }
 
-async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
+async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeLeaderboardDifficulty) {
   const list = $("home-leaderboard-list");
   if (!list) return;
   const statusEl = $("home-leaderboard-status");
@@ -607,7 +681,7 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
     let userBestZones = 0;
 
     if (progress?.records) {
-      const directScore = progress.records[courtIdx] ?? progress.records[String(courtIdx)];
+      const directScore = progress.records[`court-${courtIdx}-${tier}`];
       if (typeof directScore === "number" && directScore > 0) {
         userBestScore = directScore;
       }
@@ -662,7 +736,16 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
     }
   }
 
-  const fallback = BENCHMARK_LEADERBOARDS[courtIdx] || BENCHMARK_LEADERBOARDS[0];
+  // BENCHMARK_LEADERBOARDS is illustrative offline/fallback data, not real
+  // per-tier records — there's only one sample table per court, not one per
+  // tier. Rather than leave the deck blank for two of the three tiers while
+  // offline, the same sample rows are shown under every tier selection and
+  // stamped with the tier actually selected, so "your best" stays internally
+  // consistent; the difficulty toggle and badge still say plainly which tier
+  // is "showing", which is what matters once a live board is available.
+  const fallback = (BENCHMARK_LEADERBOARDS[courtIdx] || BENCHMARK_LEADERBOARDS[0]).map(
+    (entry) => ({ ...entry, difficulty: tier }),
+  );
   renderEntries(fallback);
   syncUserBest(fallback);
 
@@ -671,9 +754,14 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
       const board = await dataAdapter.getLeaderboard({
         mode: "career",
         court: courtIdx,
+        difficulty: tier,
         limit: 10,
       });
-      if (board?.entries?.length && courtIdx === homeLeaderboardCourt) {
+      if (
+        board?.entries?.length &&
+        courtIdx === homeLeaderboardCourt &&
+        tier === homeLeaderboardDifficulty
+      ) {
         const loadedEntries = board.entries.map((e, idx) => ({
           rank: idx + 1,
           name: e.username,
@@ -683,10 +771,17 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
           oles: e.oles || 0,
           splits: e.splits || 0,
           zones: e.zones || 0,
+          difficulty: e.difficulty || tier,
           medal: idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : String(idx + 1),
         }));
         renderEntries(loadedEntries);
         syncUserBest(loadedEntries);
+      } else if (courtIdx === homeLeaderboardCourt && tier === homeLeaderboardDifficulty) {
+        // A real query that came back empty means no one has a score on this
+        // tier yet — that is real information and must replace the sample
+        // rows rather than leaving demo data looking like a live result.
+        renderEntries([]);
+        syncUserBest([]);
       }
     } catch {
       // Fallback is already displayed
@@ -727,41 +822,149 @@ function startAttract() {}
 function stopAttract() {}
 function updateAttract() {}
 function config() {
+  // dailyConfig() applies its own forced-standard difficulty internally (see
+  // engine/src/game.js) — the Daily circuit's premise is one shared course
+  // for everyone, so it never honours progress.difficulty.
   if (mode === "daily") return dailyConfig();
   if (mode === "endless")
-    return {
-      ...COURTS[1],
-      name: "The infinite rondo",
-      place: "STAY IN THE FLOW",
-      target: 0,
-      time: 60,
-      speed: 85,
-      endless: true,
-      seed: Date.now() >>> 0,
-      description:
-        "Three lives. Endless possibility. Every triangle adds 5 seconds. The press gets faster.",
-    };
+    return applyDifficulty(
+      {
+        ...COURTS[1],
+        name: "The infinite rondo",
+        place: "STAY IN THE FLOW",
+        target: 0,
+        time: 60,
+        speed: 85,
+        endless: true,
+        seed: Date.now() >>> 0,
+        description:
+          "Three lives. Endless possibility. Every triangle adds 5 seconds. The press gets faster.",
+      },
+      progress.difficulty,
+    );
   if (mode === "practice")
-    return {
-      ...COURTS[0],
-      name: "The warm-up",
-      place: "YOUR SPACE TO EXPERIMENT",
-      target: 120,
-      time: 90,
-      speed: 58,
-      defenders: 2,
-      practice: true,
-      description:
-        "A gentle press and unlimited recoveries. Learn the rhythm, try the walls, find your triangle.",
-    };
-  return COURTS[courtIndex];
+    return applyDifficulty(
+      {
+        ...COURTS[0],
+        name: "The warm-up",
+        place: "YOUR SPACE TO EXPERIMENT",
+        target: 120,
+        time: 90,
+        speed: 58,
+        defenders: 2,
+        practice: true,
+        description:
+          "A gentle press and unlimited recoveries. Learn the rhythm, try the walls, find your triangle.",
+      },
+      progress.difficulty,
+    );
+  return applyDifficulty(COURTS[courtIndex], progress.difficulty);
 }
+// The single source of truth for "how many possessions does this round
+// allow" — mirrors the exact fallback the engine itself uses (game.js's
+// turnover() and progress.js's awardMatch both read config.possessions with
+// this same `?? 3` fallback). Every place in the UI that shows or reasons
+// about the possession count must call this rather than repeat the literal
+// 3, or a difficulty tier's Relaxed/Ruthless possession count (4/2) silently
+// disagrees with what the engine is actually enforcing.
+function possessionLimit(config = game?.config) {
+  return Number.isFinite(config?.possessions) ? config.possessions : 3;
+}
+const POSSESSION_ORDINALS = {
+  1: "first",
+  2: "second",
+  3: "third",
+  4: "fourth",
+  5: "fifth",
+};
+// Falls back to "Nth" for anything outside the tiers' 2-4 range so a future
+// tier or config change degrades gracefully instead of reading blank/wrong.
+function possessionOrdinal(n) {
+  return POSSESSION_ORDINALS[n] || `${n}th`;
+}
+// Mirrors the exact key format awardMatch() writes in progress.js
+// (court-<index>-<tier>) — must be read off game.config.difficulty, the tier
+// applyDifficulty actually stamped onto the running round, never off
+// progress.difficulty/UI state that could have changed since kickoff.
 function recordKey() {
   return mode === "career"
-    ? `court-${courtIndex}`
+    ? `court-${courtIndex}-${game.config.difficulty}`
     : mode === "daily"
       ? `daily-${game.config.key}`
       : mode;
+}
+// Builds the difficulty <select> options straight from DIFFICULTIES, the
+// same way the engine defines them — never hardcoded here.
+function renderDifficultyOptions() {
+  const select = $("difficulty-select");
+  if (!select) return;
+  select.replaceChildren(
+    ...DIFFICULTIES.map((tier) => {
+      const option = document.createElement("option");
+      option.value = tier.id;
+      option.textContent = tier.name;
+      return option;
+    }),
+  );
+  renderOverlayDifficultyToggle();
+}
+// The overlay toggle mirrors the <select>'s options exactly (same
+// DIFFICULTIES source, same ids), just as a set of buttons rather than a
+// dropdown, since it lives in the actually-visible pre-round card.
+function renderOverlayDifficultyToggle() {
+  const host = $("overlay-difficulty-toggle");
+  if (!host) return;
+  host.replaceChildren(
+    ...DIFFICULTIES.map((tier) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "hl-diff-btn";
+      btn.dataset.tier = tier.id;
+      btn.textContent = tier.name;
+      btn.title = tier.label;
+      btn.setAttribute("aria-pressed", "false");
+      btn.addEventListener("click", () => {
+        if (btn.disabled) return;
+        progress.difficulty = tier.id;
+        persist();
+        prepare();
+      });
+      return btn;
+    }),
+  );
+}
+// Reflects the tier actually in effect (game.config.difficulty, which
+// applyDifficulty stamped — forced to "standard" for Daily) onto every
+// difficulty-related control: the below-court select/description (mirroring
+// the pre-existing, currently off-screen tactic-select pattern) and the
+// overlay toggle/description/target, which is what a player actually sees
+// before a round.
+function syncDifficultyChrome() {
+  const dailyLocked = mode === "daily";
+  const activeDifficulty = game.config.difficulty;
+  const difficultyMeta =
+    DIFFICULTIES.find((tier) => tier.id === activeDifficulty) || DIFFICULTIES[1];
+  const lockedCopy =
+    "Locked to Standard — the Daily circuit is one shared course for everyone today.";
+
+  $("difficulty-select").disabled = dailyLocked;
+  $("difficulty-select").value = activeDifficulty;
+  $("difficulty-description").textContent = dailyLocked ? lockedCopy : difficultyMeta.label;
+  $("difficulty-target").textContent = game.config.target ? `TARGET ${game.config.target}` : "";
+
+  $("overlay-difficulty").hidden = false;
+  $("overlay-difficulty-target").textContent = game.config.target
+    ? `TARGET ${game.config.target}`
+    : "";
+  $("overlay-difficulty-description").textContent = dailyLocked ? lockedCopy : difficultyMeta.label;
+  document.querySelectorAll("#overlay-difficulty-toggle .hl-diff-btn").forEach((btn) => {
+    const isActive = btn.dataset.tier === activeDifficulty;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-pressed", String(isActive));
+    // Daily forces the tier rather than merely defaulting it, so every other
+    // option is disabled rather than silently ignored if pressed.
+    btn.disabled = dailyLocked && !isActive;
+  });
 }
 function syncProgress() {
   const r = rank(progress.xp);
@@ -769,19 +972,32 @@ function syncProgress() {
   $("xp-label").textContent = `${progress.xp % 300} / 300 XP`;
   $("xp-fill").style.width = `${r.fraction * 100}%`;
   $("court-list").innerHTML = "";
+  // Stars are tracked per tier now (progress.courts[i][tier]); the court
+  // list shows the tier the player currently has selected rather than
+  // guessing or flattening every tier into one number, and says which tier
+  // that is with a compact tag rather than a second row of stats.
+  const listedTier = DIFFICULTY_IDS.includes(progress.difficulty)
+    ? progress.difficulty
+    : "standard";
+  const listedTierName =
+    DIFFICULTIES.find((tier) => tier.id === listedTier)?.name || "Standard";
+  // shortTierLabel(), not a plain slice(0, 3) — "Standard".slice(0, 3) is
+  // "STA", not a word. See shortTierLabel's own comment.
+  const listedTierTag = shortTierLabel(listedTier);
   COURTS.forEach((court, i) => {
     const btn = document.createElement("button");
     btn.className = `court-item ${i === courtIndex && mode === "career" ? "active" : ""}`;
     btn.disabled = i > progress.unlocked;
+    const stars = starsForTier(i, listedTier);
     btn.setAttribute(
       "aria-label",
-      `${court.name}, ${btn.disabled ? "locked" : `${progress.courts[i]?.stars || 0} stars`}`,
+      `${court.name}, ${btn.disabled ? "locked" : `${stars} stars on ${listedTierName}`}`,
     );
     btn.setAttribute(
       "aria-current",
       i === courtIndex && mode === "career" ? "true" : "false",
     );
-    btn.innerHTML = `<span class="court-number">${String(i + 1).padStart(2, "0")}</span><span><span class="court-name">${court.name}</span><span class="court-meta">${court.short}</span></span><span class="court-stars">${btn.disabled ? "↗" : progress.courts[i]?.stars ? "★".repeat(progress.courts[i].stars) : "○"}</span>`;
+    btn.innerHTML = `<span class="court-number">${String(i + 1).padStart(2, "0")}</span><span><span class="court-name">${court.name}</span><span class="court-meta">${court.short}</span></span><span class="court-stars">${btn.disabled ? "↗" : `<span class="court-tier-tag">${listedTierTag}</span>${stars ? "★".repeat(stars) : "○"}`}</span>`;
     btn.addEventListener("click", () => switchMode("career", i));
     $("court-list").append(btn);
   });
@@ -801,6 +1017,10 @@ function setOverlay(kicker, title, copy, primary, secondary = "") {
   $("result-burst").hidden = true;
   $("result-stats").hidden = true;
   $("result-cheer").hidden = true;
+  // The difficulty picker only belongs on the pre-round invitation; results
+  // screens and the "end this round?" confirmation reuse this same overlay,
+  // so the generic reset hides it and prepare() explicitly opts back in.
+  $("overlay-difficulty").hidden = true;
   $("overlay-actions").hidden = false;
   $("start-button").disabled = false;
   $("secondary-button").disabled = false;
@@ -973,12 +1193,20 @@ function prepare() {
   $("boost-button").setAttribute("aria-pressed", "false");
   $("touch-bank").setAttribute("aria-pressed", "false");
   $("touch-focus").setAttribute("aria-pressed", "false");
+  // Every branch below reads the possession count off game.config
+  // (possessionLimit(), the same fallback the engine itself uses) rather
+  // than a literal 3 — Relaxed/Ruthless move it to 4/2, and endless mode is
+  // tier-scaled here too (config() runs it through applyDifficulty just
+  // like career), so a hardcoded 3 would silently disagree with the engine
+  // on any tier but Standard.
+  const possessions = possessionLimit(game.config);
+  const possessionsOrdinal = possessionOrdinal(possessions).toUpperCase();
   $("invitation-note").textContent =
     mode === "practice"
       ? `${game.config.time} SECONDS · UNLIMITED POSSESSIONS · FIND YOUR RHYTHM`
       : mode === "endless"
-        ? "60 SECONDS · 3 POSSESSIONS · TRIANGLES ADD TIME"
-        : `${game.config.time} SECONDS · 3 POSSESSIONS · THIRD LOSS ENDS THE ROUND`;
+        ? `60 SECONDS · ${possessions} POSSESSIONS · TRIANGLES ADD TIME`
+        : `${game.config.time} SECONDS · ${possessions} POSSESSIONS · ${possessionsOrdinal} LOSS ENDS THE ROUND`;
   setOverlay(
     mode === "daily"
       ? `DAILY CIRCUIT · ${game.config.key}`
@@ -990,7 +1218,7 @@ function prepare() {
     mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
       ? "Connect triangles to buy time. Survive the rising press."
-      : `Keep possession for ${game.config.time} seconds. ${mode === "practice" ? "Experiment freely." : `Earn ${game.config.target} points. You have 3 possessions; the third loss ends the round.`}`,
+      : `Keep possession for ${game.config.time} seconds. ${mode === "practice" ? "Experiment freely." : `Earn ${game.config.target} points. You have ${possessions} possessions; the ${possessionOrdinal(possessions)} loss ends the round.`}`,
     mode === "daily"
       ? "Play today’s circuit"
       : mode === "endless"
@@ -999,6 +1227,15 @@ function prepare() {
           ? "Start the warm-up"
           : "Play the court",
   );
+  // Must run after setOverlay(): that generic reset hides #overlay-difficulty
+  // (it is also reused by the results screen and the "end this round?"
+  // prompt, neither of which should show a difficulty picker), and this call
+  // is what opts the pre-round invitation back in. The tier actually in
+  // effect always comes off game.config.difficulty — applyDifficulty()
+  // already stamped it there (forced to "standard" for Daily regardless of
+  // progress.difficulty) — so every difficulty control reflects reality
+  // rather than UI state that could disagree with the round it sits next to.
+  syncDifficultyChrome();
   syncProgress();
   syncHud();
 }
@@ -1053,6 +1290,7 @@ function start() {
   setPauseState(false);
   setControlsEnabled(true);
   $("tactic-select").disabled = true;
+  $("difficulty-select").disabled = true;
   $("court").focus({ preventScroll: true });
   toast(
     mode === "practice"
@@ -1903,9 +2141,10 @@ function syncHud() {
     hudCache.combo = comboTier;
   }
 
+  const roundPossessions = possessionLimit(game.config);
   const livesText = game.config.practice
     ? "∞"
-    : `${Math.max(0, 3 - game.turnovers)} / 3`;
+    : `${Math.max(0, roundPossessions - game.turnovers)} / ${roundPossessions}`;
   if (livesText !== hudCache.lives) {
     $("lives-value").textContent = livesText;
     hudCache.lives = livesText;
@@ -2043,6 +2282,9 @@ function finish() {
     oles: game.oles || 0,
     splits: game.splits || 0,
     zones: game.zones || 0,
+    // Read off the config applyDifficulty stamped onto this exact round —
+    // never off progress.difficulty, which could have changed since kickoff.
+    difficulty: game.config.difficulty,
   };
   if (dataAdapter.kind !== "supabase") {
     void recordRound(completedRound).then((saved) => {
@@ -2058,7 +2300,13 @@ function finish() {
   }
   persist();
   syncProgress();
-  const outOfPossessions = game.turnovers >= 3 && !game.config.practice;
+  // Must match game.js's own turnover() end-of-round condition exactly
+  // (turnovers >= config.possessions, practice exempt) or the UI can decide
+  // the round ended for a different reason than the engine actually used —
+  // possessionLimit() is the one place both read that fallback from, so this
+  // can't drift the way a re-typed literal 3 already had.
+  const outOfPossessions =
+    game.turnovers >= possessionLimit(game.config) && !game.config.practice;
   const extra =
     mode === "career" && result.cleared
       ? courtIndex === COURTS.length - 1
@@ -2164,6 +2412,12 @@ $("boost-button").addEventListener("click", toggleBoost);
 $("shout-button").addEventListener("click", shoutTarget);
 $("tactic-select").addEventListener("change", (e) => {
   progress.tactic = e.target.value;
+  persist();
+  prepare();
+});
+$("difficulty-select").addEventListener("change", (e) => {
+  if (!DIFFICULTY_IDS.includes(e.target.value)) return;
+  progress.difficulty = e.target.value;
   persist();
   prepare();
 });
@@ -3321,10 +3575,13 @@ function frame(now) {
     }
     game.events = [];
     if (turnoverEvent) {
-      // A third turnover ends the round outright, and the finish overlay owns
-      // the screen from there: never hold on top of it. In that case the
-      // announcement strip is the only home for the reason, and finish() has
-      // already wiped the renderer's effects, so nothing is re-added.
+      // The engine's own turnover() decides when the round-ending turnover
+      // has happened (possessionLimit()'s count — 4/3/2 by tier, "third" only
+      // on Standard) and sets phase to "finished" itself; the finish overlay
+      // owns the screen from there, so this never holds on top of it. In
+      // that case the announcement strip is the only home for the reason,
+      // and finish() has already wiped the renderer's effects, so nothing is
+      // re-added.
       if (phase === "playing") beginHold(turnoverEvent.text);
       else announce(turnoverEvent.text);
     }
@@ -3384,6 +3641,8 @@ function frame(now) {
 syncSettingChrome();
 syncFullscreen();
 syncAccountDialog();
+renderDifficultyOptions();
+renderHomeLeaderboardDifficultyToggle();
 prepare();
 syncPauseMenu();
 // Drop a stale #play or #courts so the address bar agrees with the home screen
