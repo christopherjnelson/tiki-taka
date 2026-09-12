@@ -2563,16 +2563,10 @@ function setInputSource(source) {
 }
 function syncSettingChrome() {
   syncAudioChrome();
-  document.documentElement.dataset.theme = settings.theme;
+  document.documentElement.dataset.theme = "dark";
   document.body.classList.toggle("play-view", view === "arena");
   document.body.dataset.view = view;
   publishScoreboardHeight();
-  $("theme-button").setAttribute(
-    "aria-pressed",
-    String(settings.theme === "light"),
-  );
-  $("theme-button").innerHTML =
-    `<span aria-hidden="true">◐</span> ${settings.theme === "dark" ? "Light" : "Dark"}`;
   if ($("preset-select")) $("preset-select").value = settings.preset;
   refreshToolbarChips();
   // The court's own aria-label stays keyboard-phrased: it is read once by a
@@ -2864,11 +2858,7 @@ $("reset-bindings").addEventListener("click", () => {
   renderBindings();
   syncSettingChrome();
 });
-$("theme-button").addEventListener("click", () => {
-  settings.theme = settings.theme === "dark" ? "light" : "dark";
-  persistSettings();
-  syncSettingChrome();
-});
+
 function syncFullscreen() {
   const active = document.fullscreenElement === document.documentElement;
   document.body.classList.toggle("fullscreen-game", active);

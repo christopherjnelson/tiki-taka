@@ -299,7 +299,6 @@ await check(
     // there is no account system to open it onto.
     for (const id of [
       "sound-button",
-      "theme-button",
       "fullscreen-button",
       "help-button",
     ])

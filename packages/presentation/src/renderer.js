@@ -113,21 +113,14 @@ const THEMES = {
     line: "#b8fff5",
     muted: "#88b9bd",
   },
-  light: {
-    void: "#e7d8d0",
-    pitch: "#185a68",
-    pitch2: "#244c68",
-    line: "#ecffff",
-    muted: "#416571",
-  },
 };
 const SURFACES = {
-  lisbon: { dark: ["#155c82", "#196978"], light: ["#247fa0", "#287e83"] },
-  london: { dark: ["#282c38", "#363846"], light: ["#4c5260", "#60636c"] },
-  barcelona: { dark: ["#87443f", "#9d503f"], light: ["#ae5c49", "#c36e51"] },
-  tokyo: { dark: ["#21124e", "#32135b"], light: ["#3d2670", "#502b79"] },
-  "sao-paulo": { dark: ["#173e38", "#205448"], light: ["#296355", "#367462"] },
-  amsterdam: { dark: ["#163d79", "#20518d"], light: ["#2863a0", "#3975ad"] },
+  lisbon: ["#155c82", "#196978"],
+  london: ["#282c38", "#363846"],
+  barcelona: ["#87443f", "#9d503f"],
+  tokyo: ["#21124e", "#32135b"],
+  "sao-paulo": ["#173e38", "#205448"],
+  amsterdam: ["#163d79", "#20518d"],
 };
 // A native-DPR court bitmap is large (and can be very large on a 4K display).
 // Keeping the current theme plus one recently used variant makes theme/venue
@@ -163,13 +156,8 @@ export class Renderer {
     if (typeof document !== "undefined" && document.fonts?.ready)
       document.fonts.ready.then(() => this.backgrounds.clear());
   }
-  themeName(v) {
-    return (
-      v ||
-      (typeof document !== "undefined" &&
-        document.documentElement.dataset.theme) ||
-      "dark"
-    );
+  themeName() {
+    return "dark";
   }
   // The pitch, lines and stadium art used to be painted once into a 1000x620
   // bitmap and stretched onto the live canvas by drawImage every frame. That
@@ -216,9 +204,8 @@ export class Renderer {
     const scale = c.getTransform().a || 1;
     return Math.max(1, Math.round(px * scale)) / scale;
   }
-  paintArena(c, v, p) {
-    const theme = p === THEMES.light ? "light" : "dark",
-      surface = SURFACES[v.id]?.[theme] || [p.pitch, p.pitch2],
+  paintArena(c, v, p = THEMES.dark) {
+    const surface = SURFACES[v.id] || [p.pitch, p.pitch2],
       g = c.createLinearGradient(0, 0, WIDTH, HEIGHT);
     g.addColorStop(0, p.void);
     g.addColorStop(1, v.id === "tokyo" ? "#27104c" : "#10152c");

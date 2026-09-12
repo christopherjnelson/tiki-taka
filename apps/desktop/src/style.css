@@ -44,16 +44,7 @@
   white-space: nowrap;
   border: 0;
 }
-:root[data-theme="light"] {
-  color-scheme: light;
-  --bg: #eee8fa;
-  --surface: #fffaff;
-  --panel: #e8def8;
-  --ink: #19102f;
-  --muted: #685c79;
-  --line: #c7b9df;
-  --accent-text: #087d75;
-}
+
 * {
   box-sizing: border-box;
 }
@@ -110,10 +101,7 @@ body {
     var(--bg);
   transition: 0.2s;
 }
-:root[data-theme="light"] body {
-  background:
-    radial-gradient(circle at 85% 0, #ff3aa724, transparent 30rem), var(--bg);
-}
+
 button,
 select {
   font: inherit;
@@ -1468,9 +1456,7 @@ body.play-view .ambience {
   background: linear-gradient(100deg, #120c28, #2a1247);
   border-bottom: 1px solid var(--line);
 }
-:root[data-theme="light"] .top-bar {
-  background: linear-gradient(100deg, #ffffff, #f1ecff);
-}
+
 .music-player {
   display: flex;
   align-items: center;
@@ -1513,9 +1499,7 @@ body.play-view .ambience {
   font: italic 800 22px/1 var(--display);
   letter-spacing: -1px;
 }
-:root[data-theme="light"] .top-brand-mark {
-  color: var(--ink);
-}
+
 .top-brand-mark span {
   color: var(--cyan);
 }
@@ -1535,9 +1519,7 @@ body.play-view .ambience {
   gap: 10px;
   min-width: 0;
 }
-:root[data-theme="light"] .music-track {
-  color: var(--ink);
-}
+
 .bar-button {
   display: inline-flex;
   align-items: center;
@@ -1552,10 +1534,7 @@ body.play-view .ambience {
   letter-spacing: 1px;
   white-space: nowrap;
 }
-:root[data-theme="light"] .bar-button {
-  color: var(--ink);
-  background: #ffffffaa;
-}
+
 .bar-button:hover,
 .bar-button:focus-visible,
 .bar-button.pad-focus {
@@ -1587,10 +1566,7 @@ body[data-view="arena"] .top-pause {
   border: 1px solid var(--line);
   text-align: left;
 }
-:root[data-theme="light"] .profile-chip {
-  color: var(--ink);
-  background: #ffffffaa;
-}
+
 .profile-chip:hover,
 .profile-chip:focus-visible,
 .profile-chip.pad-focus {
@@ -2172,13 +2148,7 @@ body.play-view #bank-button {
 :root {
   --accent-text: var(--cyan);
 }
-:root[data-theme="light"] .eyebrow,
-:root[data-theme="light"] .binding-status,
-:root[data-theme="light"] .energy-value,
-:root[data-theme="light"] .touch-focus-value,
-:root[data-theme="light"] .brand-tagline {
-  color: var(--accent-text);
-}
+
 .energy-value {
   font: italic 800 22px/1 var(--display);
   text-align: right;

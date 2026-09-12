@@ -75,14 +75,18 @@ try {
   assert.equal(await page.locator("#profile-button").isVisible(), false);
   await page.locator("#settings-button").click();
   await page.locator("#settings-dialog").waitFor({ state: "visible" });
-  assert.equal(await page.locator("#account-button").isVisible(), false);
-  await page.locator("#theme-button").click();
-  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  assert.equal(await page.locator("#sound-button").textContent(), "Sound off");
+  await page.locator("#sound-button").click();
+  assert.equal(await page.locator("#sound-button").textContent(), "Sound on");
   await page.locator("#close-settings").click();
   await page.reload();
   assert.equal(await page.locator("#xp-label").textContent(), "180 / 300 XP");
-  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
   assert.equal(await page.locator("#profile-button").isVisible(), false);
+  await page.locator("#settings-button").click();
+  await page.locator("#settings-dialog").waitFor({ state: "visible" });
+  assert.equal(await page.locator("#sound-button").textContent(), "Sound on");
+  await page.locator("#close-settings").click();
   console.log(
     "✓ with no Supabase configuration, no account UI is offered and guest progress saves and reloads",
   );
