@@ -9,8 +9,10 @@ readonly incoming=${1:-} tag=${2:-} sha=${3:-} run_id=${4:-} attempt=${5:-}
 [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
 [[ "$run_id" =~ ^[1-9][0-9]*$ && "$attempt" =~ ^[1-9][0-9]*$ ]]
 readonly upload="$ROOT/incoming/$incoming"
-readonly archive="$upload/tiki-taka-$tag.tar.gz" checksum="$archive.sha256"
-readonly name="$tag-${sha:0:12}-$run_id.$attempt" candidate="$ROOT/releases/$name"
+readonly archive="$upload/tiki-taka-$tag.tar.gz"
+readonly checksum="$archive.sha256"
+readonly name="$tag-${sha:0:12}-$run_id.$attempt"
+readonly candidate="$ROOT/releases/$name"
 test -f "$archive" && test -f "$checksum" && test ! -e "$candidate"
 expected=$(awk 'NR == 1 { print $1 }' "$checksum")
 [[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]]
