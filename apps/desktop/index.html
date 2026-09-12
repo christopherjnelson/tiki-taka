@@ -201,7 +201,18 @@
                   <span class="hl-icon" aria-hidden="true">🏆</span>
                   <span class="hl-title">CIRCUIT LEADERBOARDS</span>
                 </div>
-                <span class="hl-badge" id="hl-mode-badge">WORLD TOUR</span>
+                <!-- The selected segment below is the one place the active
+                tier is shown here — a separate badge used to repeat the same
+                name right next to it, which read as a duplicate rather than
+                emphasis. -->
+                <div
+                  id="hl-difficulty-toggle"
+                  class="hl-difficulty-toggle"
+                  role="group"
+                  aria-label="Filter leaderboard by difficulty"
+                >
+                  <!-- dynamic buttons generated from DIFFICULTIES by renderHomeLeaderboardDifficulty() -->
+                </div>
               </header>
               <nav class="hl-tabs" role="tablist" aria-label="Court Leaderboard Selection">
                 <button type="button" class="hl-tab active" role="tab" aria-selected="true" data-court="0" id="hl-tab-0" tabindex="0">
@@ -518,6 +529,21 @@
                     Four players. One ball. No goals.<br />Outthink the press.
                     Keep the beautiful game moving.
                   </p>
+                  <div id="overlay-difficulty" class="overlay-difficulty" hidden>
+                    <div class="card-heading">
+                      <span class="section-label">DIFFICULTY</span
+                      ><span id="overlay-difficulty-target" class="difficulty-target"></span>
+                    </div>
+                    <div
+                      id="overlay-difficulty-toggle"
+                      class="hl-difficulty-toggle"
+                      role="group"
+                      aria-label="Choose difficulty"
+                    >
+                      <!-- dynamic buttons generated from DIFFICULTIES by renderDifficultyOptions() -->
+                    </div>
+                    <p id="overlay-difficulty-description" class="overlay-difficulty-description"></p>
+                  </div>
                   <div id="result-stats" class="result-stats" hidden>
                     <dl class="result-headline">
                       <div><dt>Score</dt><dd id="result-score">0</dd></div>
@@ -547,6 +573,11 @@
                       Try again
                     </button>
                   </div>
+                  <!-- Placeholder only: prepare() always overwrites this
+                  textContent before the invitation is ever shown, for every
+                  mode, using the round's actual time/possession count (which
+                  varies by difficulty tier) — never leave a literal
+                  possession count here, it is dead text. -->
                   <p id="invitation-note" class="invitation-note">
                     75 SECONDS · 3 POSSESSIONS · YOUR RHYTHM
                   </p>
@@ -738,6 +769,17 @@
                 <option value="maestro">Conductor</option>
               </select>
               <p id="tactic-description">A little more time to see the pass.</p>
+            </section>
+            <section class="tactic-card difficulty-card" aria-label="Difficulty">
+              <div class="card-heading">
+                <label class="section-label" for="difficulty-select"
+                  >DIFFICULTY</label
+                ><span id="difficulty-target" class="difficulty-target"></span>
+              </div>
+              <select id="difficulty-select">
+                <!-- dynamic options generated from DIFFICULTIES by renderDifficultyOptions() -->
+              </select>
+              <p id="difficulty-description"></p>
             </section>
           </div>
           <footer class="game-footer">
@@ -976,9 +1018,8 @@
       </div>
       <h2 id="help-title">Keep it moving.</h2>
       <p class="help-lead">
-        You have four players, three possessions, and one job: keep the ball.
-        There are no goals and no shooting. Your score comes from the way you
-        play.
+        You have four players and one job: keep the ball. There are no goals
+        and no shooting. Your score comes from the way you play.
       </p>
       <div class="help-grid">
         <section>
@@ -990,8 +1031,9 @@
           </p>
           <p>
             <strong>Hit the target and survive the clock</strong> to clear a
-            court. Three turnovers end the match. Earn XP, collect court stars,
-            and travel the world.
+            court. Losing the ball too many times ends the match — how many
+            turnovers you get depends on your difficulty tier. Earn XP,
+            collect court stars, and travel the world.
           </p>
           <h3>Make something beautiful</h3>
           <ul>

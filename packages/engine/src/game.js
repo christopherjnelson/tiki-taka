@@ -206,18 +206,69 @@ export function dailyConfig(date = new Date()) {
   const key = date.toISOString().slice(0, 10);
   let seed = 0;
   for (const c of key) seed = (Math.imul(seed, 31) + c.charCodeAt(0)) >>> 0;
+  // The Daily circuit's premise is "one day, one shared course" for every
+  // player, so it is always run at the standard tier regardless of the
+  // selection remembered elsewhere. applyDifficulty forces this too (it
+  // recognizes a daily config by its `key`), but stamping it here keeps a
+  // bare `dailyConfig()` result already correct for callers that never pass
+  // it through applyDifficulty.
+  return applyDifficulty(
+    {
+      name: "Daily circuit",
+      place: "ONE DAY. ONE SHARED COURT.",
+      short: key,
+      target: 500,
+      time: 80,
+      speed: 100 + (seed % 12),
+      defenders: 3,
+      seed,
+      description:
+        "The same formation and pressure for everyone today. Beat your personal best.",
+      key,
+    },
+    "standard",
+  );
+}
+// Tier multipliers layered on top of each court's own ramp (COURTS above).
+// Standard is exactly today's numbers - it must never change these values.
+const DIFFICULTY_TIERS = {
+  relaxed: { targetMultiplier: 0.7, possessions: 4, speedMultiplier: 0.9, defenderBonus: 0 },
+  standard: { targetMultiplier: 1, possessions: 3, speedMultiplier: 1, defenderBonus: 0 },
+  ruthless: { targetMultiplier: 1.3, possessions: 2, speedMultiplier: 1.12, defenderBonus: 1 },
+};
+export const DIFFICULTIES = [
+  {
+    id: "relaxed",
+    name: "Relaxed",
+    label: "Softer targets and an extra life. Find your rhythm first.",
+  },
+  {
+    id: "standard",
+    name: "Standard",
+    label: "The intended challenge, exactly as built.",
+  },
+  {
+    id: "ruthless",
+    name: "Ruthless",
+    label: "Tighter targets, a quicker press, one fewer life.",
+  },
+];
+export const MAX_DEFENDERS = 5;
+// Pure: returns a new config with the tier's multipliers applied, never
+// mutating `config`. Daily configs (identified by their `key`) are always
+// forced to standard, matching the Daily circuit's "one shared course"
+// premise regardless of what tier is otherwise selected.
+export function applyDifficulty(config, tier) {
+  const requested = config?.key ? "standard" : tier;
+  const id = Object.hasOwn(DIFFICULTY_TIERS, requested) ? requested : "standard";
+  const scale = DIFFICULTY_TIERS[id];
   return {
-    name: "Daily circuit",
-    place: "ONE DAY. ONE SHARED COURT.",
-    short: key,
-    target: 500,
-    time: 80,
-    speed: 100 + (seed % 12),
-    defenders: 3,
-    seed,
-    description:
-      "The same formation and pressure for everyone today. Beat your personal best.",
-    key,
+    ...config,
+    target: Math.round(((config.target || 0) * scale.targetMultiplier) / 50) * 50,
+    possessions: scale.possessions,
+    speed: (config.speed || 0) * scale.speedMultiplier,
+    defenders: Math.min(MAX_DEFENDERS, (config.defenders || 0) + scale.defenderBonus),
+    difficulty: id,
   };
 }
 export class Game {
@@ -560,7 +611,10 @@ export class Game {
     this.boostActive = false;
     this.lock = 1.2;
     this.emit("turnover", reason, 500, 310);
-    if (this.turnovers >= 3 && !this.config.practice) {
+    const possessions = Number.isFinite(this.config.possessions)
+      ? this.config.possessions
+      : 3;
+    if (this.turnovers >= possessions && !this.config.practice) {
       this.status = "finished";
       this.emit("end", "");
       return;

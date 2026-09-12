@@ -1,4 +1,9 @@
-import { COURTS } from "./game.js";
+import { COURTS, DIFFICULTIES } from "./game.js";
+const DIFFICULTY_IDS = DIFFICULTIES.map((tier) => tier.id);
+// The clear bonus scales with tier so the easiest difficulty is not also the
+// fastest XP in the game. The rest of the XP formula and the rank() curve are
+// deliberately left alone here - a separate rebalance is out of scope.
+const CLEAR_BONUS = { relaxed: 30, standard: 60, ruthless: 90 };
 export function freshProgress() {
   return {
     version: 1,
@@ -8,6 +13,7 @@ export function freshProgress() {
     records: {},
     sound: true,
     tactic: "balanced",
+    difficulty: "standard",
     lastCourt: 0,
   };
 }
@@ -38,11 +44,17 @@ export function normalizeProgress(value) {
         const court = value.courts[index];
         if (!court || typeof court !== "object" || Array.isArray(court))
           continue;
-        const stars = Number.isFinite(court.stars)
-          ? Math.min(3, Math.max(0, Math.floor(court.stars)))
-          : 0;
-        const best = Number.isFinite(court.best) ? Math.max(0, court.best) : 0;
-        progress.courts[index] = { stars, best };
+        const entry = {};
+        for (const tier of DIFFICULTY_IDS) {
+          const raw = court[tier];
+          if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+          const stars = Number.isFinite(raw.stars)
+            ? Math.min(3, Math.max(0, Math.floor(raw.stars)))
+            : 0;
+          const best = Number.isFinite(raw.best) ? Math.max(0, raw.best) : 0;
+          entry[tier] = { stars, best };
+        }
+        if (Object.keys(entry).length) progress.courts[index] = entry;
       }
     }
     if (
@@ -57,6 +69,9 @@ export function normalizeProgress(value) {
     progress.tactic = ["balanced", "runner", "maestro"].includes(value.tactic)
       ? value.tactic
       : "balanced";
+    progress.difficulty = DIFFICULTY_IDS.includes(value.difficulty)
+      ? value.difficulty
+      : "standard";
     return progress;
   } catch {
     return freshProgress();
@@ -78,31 +93,49 @@ export function saveProgress(storage, progress) {
   }
 }
 export function awardMatch(progress, game, mode, courtIndex) {
+  const possessions = Number.isFinite(game.config.possessions)
+    ? game.config.possessions
+    : 3;
+  const tier = DIFFICULTY_IDS.includes(game.config.difficulty)
+    ? game.config.difficulty
+    : "standard";
   const cleared =
     game.time <= 0 &&
-    (mode === "practice" || game.config.practice || game.turnovers < 3) &&
+    (mode === "practice" || game.config.practice || game.turnovers < possessions) &&
     game.score >= game.config.target;
   const stars = cleared
     ? 1 +
       Number(game.score >= game.config.target * 1.5) +
       Number(game.score >= game.config.target * 2.2 && game.turnovers === 0)
     : 0;
-  const xp = Math.max(10, Math.floor(game.score / 8)) + (cleared ? 60 : 0);
+  const xp =
+    Math.max(10, Math.floor(game.score / 8)) + (cleared ? CLEAR_BONUS[tier] : 0);
   progress.xp += xp;
   const key =
     mode === "career"
-      ? `court-${courtIndex}`
+      ? `court-${courtIndex}-${tier}`
       : mode === "daily"
         ? `daily-${game.config.key}`
         : mode;
   const prev = Number(progress.records[key]) || 0;
   progress.records[key] = Math.max(prev, game.score);
   if (mode === "career") {
-    const previous = progress.courts[courtIndex] || {};
+    const courtEntry =
+      progress.courts[courtIndex] &&
+      typeof progress.courts[courtIndex] === "object" &&
+      !Array.isArray(progress.courts[courtIndex])
+        ? progress.courts[courtIndex]
+        : {};
+    const previous = courtEntry[tier] || {};
     progress.courts[courtIndex] = {
-      stars: Math.max(Number(previous.stars) || 0, stars),
-      best: Math.max(Number(previous.best) || 0, game.score),
+      ...courtEntry,
+      [tier]: {
+        stars: Math.max(Number(previous.stars) || 0, stars),
+        best: Math.max(Number(previous.best) || 0, game.score),
+      },
     };
+    // Unlocks stay global: clearing on ANY tier, including Relaxed, unlocks
+    // the next court. This is deliberate - unlocking is not tier-gated.
     if (cleared)
       progress.unlocked = Math.max(
         progress.unlocked,
