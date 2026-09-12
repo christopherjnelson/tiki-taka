@@ -3,8 +3,9 @@
 //
 // Recorded sounds — a crowd olé, applause, a whistle — go in public/audio/
 // effects/ and get a line here. main.js hands the list to Sound.useSamples()
-// and scripts/build.mjs copies from it into dist/desktop/audio/effects, where
-// the generated service worker precaches whatever it finds. That is the whole
+// and scripts/build.mjs copies from it into dist/desktop/audio/effects. Audio
+// is cached by the service worker after its first successful fetch, rather
+// than being downloaded during service-worker installation. That is the whole
 // drop-in: one file, one line, no code.
 //
 //   name   the effect the sample replaces. The names the game plays are
@@ -15,9 +16,8 @@
 //          never played.
 //   file   the filename inside public/audio/effects. Keep it lowercase,
 //          hyphenated and ASCII — no spaces, no accents. Encoded names have
-//          broken the service worker's precache before, which fails the whole
-//          cache.addAll(). .ogg matches the soundtrack; .mp3 and .wav decode
-//          just as well.
+//          broken audio requests before. .ogg matches the soundtrack; .mp3
+//          and .wav decode just as well.
 //   gain   optional 0..1 trim for that one sample, so a hot recording can be
 //          matched to the mix without touching the effects master. Default 1.
 //

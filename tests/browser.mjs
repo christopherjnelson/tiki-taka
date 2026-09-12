@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { accessSync, constants } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
+import { TRACK_FILES } from '../apps/desktop/src/playlist.js';
 import { freePort } from './free-port.mjs';
 import { gotoArena } from "./open-arena.mjs";
 
@@ -800,8 +801,25 @@ async function offlineReload(baseURL) {
       if (!navigator.serviceWorker.controller) await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
     });
     await page.reload({ waitUntil: 'networkidle' });
+    const trackPath = `/audio/${TRACK_FILES[0]}`;
+    const onlineTrack = await page.evaluate(async (path) => {
+      const response = await fetch(path);
+      return { ok: response.ok, bytes: (await response.arrayBuffer()).byteLength };
+    }, trackPath);
+    assert.equal(onlineTrack.ok, true, 'online audio fetch must succeed');
+    const onlineTrackBytes = onlineTrack.bytes;
+    await page.waitForFunction(
+      async (path) => Boolean(await caches.match(path)),
+      trackPath,
+    );
     await context.setOffline(true);
     await page.reload({ waitUntil: 'domcontentloaded' });
+    const offlineTrack = await page.evaluate(async (path) => {
+      const response = await fetch(path);
+      return { ok: response.ok, bytes: (await response.arrayBuffer()).byteLength };
+    }, trackPath);
+    assert.equal(offlineTrack.ok, true, 'a fetched track must remain available offline');
+    assert.equal(offlineTrack.bytes, onlineTrackBytes);
     // A reload is a cold load, and cold loads open the title screen whatever
     // the hash says, so the way to the arena offline is the same menu a player
     // would use. That the menu renders at all is itself the precache working.
@@ -813,11 +831,8 @@ async function offlineReload(baseURL) {
     await expectText(page.locator('#overlay-kicker'), /FOUR PLAYERS/i);
     await page.locator('#start-button').click();
     assert.equal(await page.locator('#game-overlay').isHidden(), true);
-    // Only the playlist's opening track is precached at install; it's the one
-    // that plays here, so the soundtrack still comes up offline. The other
-    // five tracks are cached on first fetch instead (see scripts/build.mjs)
-    // and are not exercised by this reload, which never advances the playlist.
-    await page.waitForFunction(() => document.body.dataset.music !== 'unavailable');
+    // Audio is not install-time precached. The fetch above proves that the
+    // worker retains a track for offline use after its first online request.
     assert.deepEqual(errors, []);
     await context.setOffline(false);
   } finally {

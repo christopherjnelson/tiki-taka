@@ -28,6 +28,7 @@ const types = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".ttf": "font/ttf",
+  ".woff2": "font/woff2",
   ".txt": "text/plain",
 };
 // The page also carries a CSP meta tag, but a meta element cannot deliver
@@ -57,9 +58,8 @@ const publicFile = (relative) =>
   (servingBuild && relative === "sw.js") ||
   rootAssets.includes(relative) ||
   relative.startsWith(`assets${path.sep}`) ||
-  // The built desktop output carries the soundtrack beside index.html, and the
-  // generated service worker precaches it, so a build served from dist has to
-  // be able to hand it over or the offline install fails.
+  // The built desktop output carries audio beside index.html. It is fetched on
+  // demand and cached after first playback, so the build server must expose it.
   relative.startsWith(`audio${path.sep}`) ||
   relative.startsWith(`licenses${path.sep}`) ||
   relative.startsWith(`src${path.sep}`) ||

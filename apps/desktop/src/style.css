@@ -1,13 +1,13 @@
 @font-face {
   font-family: "Tiki Display";
-  src: url("../../../public/fonts/display.ttf") format("truetype");
+  src: url("../../../public/fonts/display.woff2") format("woff2");
   font-weight: 800;
   font-style: italic;
   font-display: swap;
 }
 @font-face {
   font-family: "Tiki Signage";
-  src: url("../../../public/fonts/signage.ttf") format("truetype");
+  src: url("../../../public/fonts/signage.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
@@ -4427,4 +4427,3 @@ body.play-view .arena-view .below-court {
   color: #fff;
   text-align: right;
 }
-

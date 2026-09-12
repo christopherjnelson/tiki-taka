@@ -155,6 +155,11 @@ const music = createMusic({
 });
 music.setEnabled(settings.musicOn);
 const renderer = new Renderer($("court"));
+// Court thumbnails are decorative—the full-size selected-court preview is
+// still rendered synchronously—so their six PNG conversions do not belong in
+// module startup. Keep a generation so a later progress refresh can invalidate
+// callbacks queued for the old list.
+let courtThumbnailGeneration = 0;
 // Two views now. #courts was the courts page's own hash; it survives here only
 // so an old bookmark lands on home rather than nowhere.
 const viewForHash = () => (location.hash === "#play" ? "arena" : "home");
@@ -468,6 +473,26 @@ function syncTitle() {
     preview.src = renderer.courtPreview(court);
     preview.alt = `${court.name} court preview`;
   }
+}
+function deferCourtThumbnails(list, generation) {
+  const thumbnails = [...list.querySelectorAll(".court-thumb")];
+  let next = 0;
+  const populateNext = () => {
+    // syncProgress() replaces the list. Never spend work painting an old,
+    // detached set of thumbnails.
+    if (generation !== courtThumbnailGeneration || !list.isConnected) return;
+    const thumbnail = thumbnails[next++];
+    if (thumbnail) {
+      const court = COURTS[Number(thumbnail.dataset.courtIndex)];
+      if (court) thumbnail.src = renderer.courtPreview(court, 120, 75);
+      // One canvas/data-URL conversion per frame avoids replacing startup
+      // work with a single delayed long task on slower devices.
+      requestAnimationFrame(populateNext);
+    }
+  };
+  // Two frames ensures the browser has an opportunity to paint the complete
+  // home UI before the first non-critical preview conversion begins.
+  requestAnimationFrame(() => requestAnimationFrame(populateNext));
 }
 // progress.courts[i] is sparse and per-tier now: {relaxed?, standard?,
 // ruthless?}, each {stars, best}. These three helpers are the one place that
@@ -934,6 +959,7 @@ function syncDifficultyChrome() {
   });
 }
 function syncProgress() {
+  const thumbnailGeneration = ++courtThumbnailGeneration;
   const r = rank(progress.xp);
   $("level-label").textContent = `LEVEL ${r.level} · ${r.name}`;
   $("xp-label").textContent = `${progress.xp % 300} / 300 XP`;
@@ -964,7 +990,9 @@ function syncProgress() {
       "aria-current",
       i === courtIndex && mode === "career" ? "true" : "false",
     );
-    btn.innerHTML = `<img class="court-thumb" src="${renderer.courtPreview(court, 120, 75)}" alt="" width="48" height="30" loading="lazy" /><span class="court-number">${String(i + 1).padStart(2, "0")}</span><span><span class="court-name">${court.name}</span><span class="court-meta">${court.place}</span></span><span class="court-stars">${btn.disabled ? "↗" : `<span class="court-tier-tag">${listedTierTag}</span>${stars ? "★".repeat(stars) : "○"}`}</span>`;
+    // The thumb source is intentionally populated after first paint below.
+    // Width/height preserve the existing layout while it is pending.
+    btn.innerHTML = `<img class="court-thumb" data-court-index="${i}" alt="" width="48" height="30" loading="lazy" /><span class="court-number">${String(i + 1).padStart(2, "0")}</span><span><span class="court-name">${court.name}</span><span class="court-meta">${court.place}</span></span><span class="court-stars">${btn.disabled ? "↗" : `<span class="court-tier-tag">${listedTierTag}</span>${stars ? "★".repeat(stars) : "○"}`}</span>`;
     const previewHover = () => {
       const preview = $("home-court-preview");
       if (preview) {
@@ -995,6 +1023,7 @@ function syncProgress() {
     btn.addEventListener("click", () => switchMode("career", i));
     $("court-list").append(btn);
   });
+  deferCourtThumbnails($("court-list"), thumbnailGeneration);
   if (!$("court-list")._hoverPreviewBound) {
     $("court-list")._hoverPreviewBound = true;
     $("court-list").addEventListener("mouseleave", () => {
