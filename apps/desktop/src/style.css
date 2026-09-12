@@ -1481,6 +1481,20 @@ body.play-view .ambience {
   font: 700 11px var(--sign);
   letter-spacing: 1px;
 }
+.music-player .bar-button {
+  justify-content: center;
+  padding: 0;
+  letter-spacing: 0;
+}
+.music-player .bar-button span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+#music-toggle[aria-pressed="false"] span {
+  margin-left: 1px;
+}
 .top-brand {
   grid-column: 2;
   display: flex;
