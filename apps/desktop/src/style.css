@@ -1116,14 +1116,26 @@ kbd {
   bottom: 20px;
   left: 50%;
   z-index: 80;
-  padding: 14px 21px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
   color: #100923;
   background: var(--cyan);
+  font: 700 13px var(--sign);
+  letter-spacing: 0.5px;
   transform: translate(-50%, 20px);
   opacity: 0;
   transition: 0.2s;
   /* Status only: it must never swallow a tap meant for the controls beneath. */
   pointer-events: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(39, 234, 216, 0.35);
+}
+.toast-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 .toast.visible,
 .toast.show {
@@ -1254,6 +1266,52 @@ dialog::backdrop {
 }
 .audio-hint {
   color: var(--cyan);
+}
+.settings-gamepad {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.gamepad-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+@media (min-width: 901px) {
+  .gamepad-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+.gamepad-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border-left: 3px solid var(--cyan);
+}
+.gamepad-field:nth-child(even) {
+  border-left-color: var(--pink);
+}
+.gamepad-field label {
+  font: 700 10px var(--sign);
+  text-transform: uppercase;
+  color: var(--ink);
+  letter-spacing: 0.5px;
+}
+.gamepad-field select {
+  min-height: 32px;
+  padding: 4px 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font: 700 11px var(--sign);
+  cursor: pointer;
+}
+.gamepad-field select:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
 }
 .settings-preset {
   display: flex;

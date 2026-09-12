@@ -465,14 +465,29 @@ await check(
       () => document.querySelector("#pass-button kbd").textContent === "A",
     );
     assert.equal(await page.locator("#bank-button kbd").textContent(), "X");
-    assert.equal(await page.locator("#shout-button kbd").textContent(), "LB");
+    assert.equal(await page.locator("#shout-button kbd").textContent(), "RB");
     assert.equal(await page.locator("#focus-button kbd").textContent(), "LT");
     assert.equal(await page.locator("#boost-button kbd").textContent(), "RT");
     assert.match(
       await page.locator("#shout-button").getAttribute("title"),
-      /LB/,
+      /RB/,
       "the title must agree with the visible chip once on gamepad",
     );
+
+    // Remapping a gamepad button via settings dropdown updates toolbar chips
+    await page.evaluate(() => {
+      const select = document.querySelector("#gamepad-shout");
+      select.value = "3"; // Y
+      select.dispatchEvent(new Event("change"));
+    });
+    assert.equal(await page.locator("#shout-button kbd").textContent(), "Y");
+    // Restore default
+    await page.evaluate(() => {
+      const select = document.querySelector("#gamepad-shout");
+      select.value = "5"; // RB
+      select.dispatchEvent(new Event("change"));
+    });
+    assert.equal(await page.locator("#shout-button kbd").textContent(), "RB");
 
     // Any keydown reverts to keyboard chips immediately.
     await page.keyboard.press("KeyG");

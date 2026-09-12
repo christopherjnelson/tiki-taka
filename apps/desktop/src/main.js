@@ -31,6 +31,8 @@ import {
   clearBinding,
   readableKey,
   captureAllowed,
+  DEFAULT_GAMEPAD_BINDINGS,
+  GAMEPAD_SHORT_LABELS,
 } from "../../../packages/engine/src/settings.js";
 import { createLocalDataAdapter, selectDataAdapter } from "../../../packages/data/src/index.js";
 import { createMusic } from "./music.js";
@@ -334,8 +336,14 @@ function persistSettings() {
   if (!profile && storage && !saveSettings(storage, settings))
     toast("Settings could not be saved on this browser.");
 }
-function toast(text) {
-  $("toast").textContent = text;
+const GAMEPAD_ICON_SVG = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg>`;
+
+function toast(text, icon = "") {
+  if (icon) {
+    $("toast").innerHTML = `${icon}<span>${text}</span>`;
+  } else {
+    $("toast").textContent = text;
+  }
   $("toast").classList.add("visible");
   clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => $("toast").classList.remove("visible"), 4000);
@@ -1152,6 +1160,7 @@ function prepare() {
   // menu, so it stays live for the whole time the arena is on screen rather
   // than only while a round is running. Touch players need it before kickoff.
   $("pause-button").disabled = false;
+  shoutVisual = null;
   setPauseState(false);
   setControlsEnabled(false);
   $("bank-button").setAttribute("aria-pressed", "false");
@@ -1594,14 +1603,13 @@ function syncBoostButtons() {
 function selectedPassTarget() {
   return game.queuedPass?.id ?? queuedSmartTarget();
 }
+let shoutVisual = null;
 function shoutTarget() {
   if (phase !== "playing" || awaitingResume) return;
   triggerActionHighlight("shout");
   const target = selectedPassTarget();
   if (game.shout(target)) {
-    toast(`Player ${target + 1} is moving to the bonus zone.`);
-  } else {
-    toast("No selected teammate can move to the bonus zone.");
+    shoutVisual = { playerId: target, start: performance.now(), duration: 2000 };
   }
 }
 // THE COURT'S OWN BOX
@@ -2538,7 +2546,7 @@ for (const [id, key] of [
 const GAMEPAD_ACTION_LABELS = {
   smartPass: "A",
   wallToggle: "X",
-  shout: "LB",
+  shout: "RB",
   focusHold: "LT",
   boostHold: "RT",
 };
@@ -2546,8 +2554,13 @@ const GAMEPAD_ACTION_LABELS = {
 // gamepad glyph while the player is actively using a pad, otherwise the
 // player's configured key(s).
 function chipLabel(action) {
-  if (inputSource === "gamepad" && GAMEPAD_ACTION_LABELS[action])
-    return GAMEPAD_ACTION_LABELS[action];
+  if (inputSource === "gamepad") {
+    const gb = settings.gamepadBindings || DEFAULT_GAMEPAD_BINDINGS;
+    if (gb[action] !== undefined) {
+      return GAMEPAD_SHORT_LABELS[gb[action]] || String(gb[action]);
+    }
+    if (GAMEPAD_ACTION_LABELS[action]) return GAMEPAD_ACTION_LABELS[action];
+  }
   const codes = settings.bindings[action] || [];
   return codes.map(readableKey).join(" / ") || "Unbound";
 }
@@ -2584,6 +2597,7 @@ function syncSettingChrome() {
   document.body.dataset.view = view;
   publishScoreboardHeight();
   if ($("preset-select")) $("preset-select").value = settings.preset;
+  syncGamepadDropdowns();
   refreshToolbarChips();
   // The court's own aria-label stays keyboard-phrased: it is read once by a
   // screen reader, not glanced at mid-play, so it is not worth chasing the
@@ -2869,11 +2883,33 @@ $("reset-bindings").addEventListener("click", () => {
   clearInput();
   settings.preset = "wasd";
   settings.bindings = presetBindings();
+  settings.gamepadBindings = { ...DEFAULT_GAMEPAD_BINDINGS };
   $("preset-select").value = "wasd";
   persistSettings();
   setBindingStatus("Default bindings restored.");
   renderBindings();
   syncSettingChrome();
+});
+
+function syncGamepadDropdowns() {
+  const gb = settings.gamepadBindings || DEFAULT_GAMEPAD_BINDINGS;
+  document.querySelectorAll("[data-gamepad-action]").forEach((select) => {
+    const action = select.dataset.gamepadAction;
+    if (gb[action] !== undefined) {
+      select.value = String(gb[action]);
+    }
+  });
+}
+document.querySelectorAll("[data-gamepad-action]").forEach((select) => {
+  select.addEventListener("change", () => {
+    const action = select.dataset.gamepadAction;
+    const val = Number(select.value);
+    if (!settings.gamepadBindings)
+      settings.gamepadBindings = { ...DEFAULT_GAMEPAD_BINDINGS };
+    settings.gamepadBindings[action] = val;
+    persistSettings();
+    refreshToolbarChips();
+  });
 });
 
 function syncFullscreen() {
@@ -3288,9 +3324,7 @@ function pollGamepad(dt) {
   }
   if (!padConnected) {
     padConnected = true;
-    toast(
-      "Controller connected. Right stick picks the pass · A plays it · X arms the wall · LT focuses · RT boosts · LB shouts.",
-    );
+    toast("Gamepad Connected", GAMEPAD_ICON_SVG);
   }
   // Standard gamepad triggers expose an analog value even when their `pressed`
   // bit is unreliable. Treat a quarter pull as held and retain that normalized
@@ -3299,16 +3333,17 @@ function pollGamepad(dt) {
     tap = (i) => pressed[i] && !padPrevious[i],
     dead = (v) => (Math.abs(v || 0) > 0.18 ? v : 0);
 
-  gamepadPressedActions.smartPass = Boolean(pressed[0]);
-  gamepadPressedActions.wallToggle = Boolean(pressed[2]);
-  gamepadPressedActions.shout = Boolean(pressed[4]);
-  gamepadPressedActions.focusHold = Boolean(pressed[6]);
-  gamepadPressedActions.boostHold = Boolean(pressed[7]);
-  if (tap(0)) triggerActionHighlight("smartPass");
-  if (tap(2)) triggerActionHighlight("wallToggle");
-  if (tap(4)) triggerActionHighlight("shout");
-  if (tap(6)) triggerActionHighlight("focusHold");
-  if (tap(7)) triggerActionHighlight("boostHold");
+  const gb = settings.gamepadBindings || DEFAULT_GAMEPAD_BINDINGS;
+  gamepadPressedActions.smartPass = Boolean(pressed[gb.smartPass]);
+  gamepadPressedActions.wallToggle = Boolean(pressed[gb.wallToggle]);
+  gamepadPressedActions.shout = Boolean(pressed[gb.shout]);
+  gamepadPressedActions.focusHold = Boolean(pressed[gb.focusHold]);
+  gamepadPressedActions.boostHold = Boolean(pressed[gb.boostHold]);
+  if (tap(gb.smartPass)) triggerActionHighlight("smartPass");
+  if (tap(gb.wallToggle)) triggerActionHighlight("wallToggle");
+  if (tap(gb.shout)) triggerActionHighlight("shout");
+  if (tap(gb.focusHold)) triggerActionHighlight("focusHold");
+  if (tap(gb.boostHold)) triggerActionHighlight("boostHold");
   // A gamepad press is not a user activation gesture, so this will not unblock
   // a browser on its own. It costs nothing, it does unblock the packaged shell
   // and any browser whose policy is relaxed, and on the rest it keeps the
@@ -3398,9 +3433,9 @@ function pollGamepad(dt) {
     // pausing is the only time the d-pad is free to leave the court.
     else nav([$("pause-menu"), $("top-bar")], () => $("pause-resume").click());
   } else if (view === "arena" && phase === "playing" && !awaitingResume) {
-    if (tap(0)) doPass();
-    if (tap(2)) toggleBank();
-    if (tap(4)) shoutTarget();
+    if (tap(gb.smartPass)) doPass();
+    if (tap(gb.wallToggle)) toggleBank();
+    if (tap(gb.shout)) shoutTarget();
     if (tap(9)) openPauseMenu();
   } else if (view === "arena" && awaitingResume) {
     if (tap(9)) openPauseMenu();
@@ -3575,6 +3610,7 @@ function frame(now) {
       aim,
       bank: bank || actionDown(settings.bindings, keys, "wallHold"),
       paused: phase === "paused" || phase === "finished" || awaitingResume,
+      shoutVisual,
     });
     drawTargetHighlight(target);
     const courtTargetStr = Number.isInteger(target) ? String(target) : "";

@@ -621,6 +621,7 @@ export class Renderer {
       paused = false,
       theme = null,
       orientation = "landscape",
+      shoutVisual = null,
     } = {},
   ) {
     if (!game) return;
@@ -697,6 +698,20 @@ export class Renderer {
             preview,
           );
       }
+    const activeShout = shoutVisual || this.shoutVisual;
+    if (activeShout && game.zone) {
+      const elapsed = (performance.now() - activeShout.start) / 1000;
+      const total = (activeShout.duration || 2000) / 1000;
+      if (elapsed < total) {
+        const p = game.players[activeShout.playerId];
+        if (p && p.id !== game.carrier) {
+          const alpha = Math.max(0, 1 - elapsed / total);
+          this.drawShoutTrail(p, game.zone, alpha);
+        }
+      } else if (this.shoutVisual === activeShout) {
+        this.shoutVisual = null;
+      }
+    }
     if (
       game.ball &&
       bank &&
@@ -914,6 +929,39 @@ export class Renderer {
       c.stroke();
       c.restore();
     }
+  }
+  triggerShout(playerId, duration = 2000) {
+    this.shoutVisual = { playerId, start: performance.now(), duration };
+  }
+  drawShoutTrail(p, zone, alpha = 1) {
+    const c = this.ctx;
+    c.save();
+    c.globalAlpha = Math.max(0, Math.min(1, alpha));
+    c.strokeStyle = "#ffd32f";
+    c.lineWidth = 2.4;
+    c.setLineDash([4, 6]);
+    c.lineDashOffset = this.reducedMotion ? 0 : -this.clock * 14;
+    c.beginPath();
+    c.moveTo(p.x, p.y);
+    c.lineTo(zone.x, zone.y);
+    c.stroke();
+    c.setLineDash([]);
+
+    const an = Math.atan2(zone.y - p.y, zone.x - p.x);
+    const d = Math.hypot(zone.x - p.x, zone.y - p.y);
+    if (d > 45) {
+      const offset = Math.min(d * 0.5, (zone.r || 40) + 12);
+      const ax = zone.x - Math.cos(an) * offset;
+      const ay = zone.y - Math.sin(an) * offset;
+      c.translate(ax, ay);
+      c.rotate(an);
+      c.beginPath();
+      c.moveTo(-8, -6);
+      c.lineTo(0, 0);
+      c.lineTo(-8, 6);
+      c.stroke();
+    }
+    c.restore();
   }
   drawPlayer(p, carrier, selected, hold, preview) {
     if (this.ctx._tikiPortrait)

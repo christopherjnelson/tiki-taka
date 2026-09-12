@@ -985,8 +985,78 @@
           and the arrow keys from the keyboard.
         </p>
       </div>
+      <div class="settings-gamepad" role="group" aria-labelledby="gamepad-heading">
+        <p id="gamepad-heading" class="settings-audio-heading">GAMEPAD CONTROLS</p>
+        <div class="gamepad-grid">
+          <div class="gamepad-field">
+            <label for="gamepad-smartPass">Smart pass</label>
+            <select id="gamepad-smartPass" data-gamepad-action="smartPass">
+              <option value="0">A / ✕ (South)</option>
+              <option value="1">B / ○ (East)</option>
+              <option value="2">X / □ (West)</option>
+              <option value="3">Y / △ (North)</option>
+              <option value="4">LB / L1 (Left Bumper)</option>
+              <option value="5">RB / R1 (Right Bumper)</option>
+              <option value="6">LT / L2 (Left Trigger)</option>
+              <option value="7">RT / R2 (Right Trigger)</option>
+            </select>
+          </div>
+          <div class="gamepad-field">
+            <label for="gamepad-wallToggle">Wall pass</label>
+            <select id="gamepad-wallToggle" data-gamepad-action="wallToggle">
+              <option value="0">A / ✕ (South)</option>
+              <option value="1">B / ○ (East)</option>
+              <option value="2">X / □ (West)</option>
+              <option value="3">Y / △ (North)</option>
+              <option value="4">LB / L1 (Left Bumper)</option>
+              <option value="5">RB / R1 (Right Bumper)</option>
+              <option value="6">LT / L2 (Left Trigger)</option>
+              <option value="7">RT / R2 (Right Trigger)</option>
+            </select>
+          </div>
+          <div class="gamepad-field">
+            <label for="gamepad-shout">Shout to zone</label>
+            <select id="gamepad-shout" data-gamepad-action="shout">
+              <option value="0">A / ✕ (South)</option>
+              <option value="1">B / ○ (East)</option>
+              <option value="2">X / □ (West)</option>
+              <option value="3">Y / △ (North)</option>
+              <option value="4">LB / L1 (Left Bumper)</option>
+              <option value="5" selected>RB / R1 (Right Bumper)</option>
+              <option value="6">LT / L2 (Left Trigger)</option>
+              <option value="7">RT / R2 (Right Trigger)</option>
+            </select>
+          </div>
+          <div class="gamepad-field">
+            <label for="gamepad-focusHold">Hold Focus</label>
+            <select id="gamepad-focusHold" data-gamepad-action="focusHold">
+              <option value="0">A / ✕ (South)</option>
+              <option value="1">B / ○ (East)</option>
+              <option value="2">X / □ (West)</option>
+              <option value="3">Y / △ (North)</option>
+              <option value="4">LB / L1 (Left Bumper)</option>
+              <option value="5">RB / R1 (Right Bumper)</option>
+              <option value="6">LT / L2 (Left Trigger)</option>
+              <option value="7">RT / R2 (Right Trigger)</option>
+            </select>
+          </div>
+          <div class="gamepad-field">
+            <label for="gamepad-boostHold">Hold Boost</label>
+            <select id="gamepad-boostHold" data-gamepad-action="boostHold">
+              <option value="0">A / ✕ (South)</option>
+              <option value="1">B / ○ (East)</option>
+              <option value="2">X / □ (West)</option>
+              <option value="3">Y / △ (North)</option>
+              <option value="4">LB / L1 (Left Bumper)</option>
+              <option value="5">RB / R1 (Right Bumper)</option>
+              <option value="6">LT / L2 (Left Trigger)</option>
+              <option value="7">RT / R2 (Right Trigger)</option>
+            </select>
+          </div>
+        </div>
+      </div>
       <div class="settings-preset">
-        <label for="preset-select">CONTROL PRESET</label>
+        <label for="preset-select">KEYBOARD PRESET</label>
         <select id="preset-select">
           <option value="wasd" selected>WASD</option>
           <option value="arrows">Arrow keys</option>
