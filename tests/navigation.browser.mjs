@@ -114,8 +114,8 @@ await check(
           .filter((el) => !el.hidden)
           .map((el) => el.id),
       ),
-      ["title-play", "settings-button"],
-      "the home menu offers Play and Settings and nothing else",
+      ["title-play"],
+      "the home menu offers Play and nothing else",
     );
     // Keyboard and controller both start on the menu with no clicking first.
     assert.equal(
@@ -231,7 +231,12 @@ await check(
       true,
       "leaving the arena must freeze the active round",
     );
-    await page.locator('[data-home-mode="endless"]').click();
+    assert.equal(
+      await page.locator('[data-home-mode="endless"]').isDisabled(),
+      true,
+      "endless mode should be disabled",
+    );
+    await page.locator('[data-home-mode="practice"]').click();
     // The confirmation names both outcomes plainly, and neither button says
     // anything a player would have to guess at.
     assert.match(
@@ -262,9 +267,9 @@ await check(
       "resume keeps the same round time",
     );
     await leaveToHome(page);
-    await page.locator('[data-home-mode="endless"]').click();
+    await page.locator('[data-home-mode="practice"]').click();
     await page.locator("#secondary-button").click();
-    assert.match(await page.locator("#mode-label").textContent(), /ENDLESS/i);
+    assert.match(await page.locator("#mode-label").textContent(), /PRACTICE|WARM-UP/i);
     // The arena still pushes its own history entry, so Back leaves the court.
     await page.goBack();
     await page.waitForFunction(() => location.hash !== "#play");
@@ -1237,8 +1242,12 @@ await check(
     await page.locator("#home-view").waitFor({ state: "visible" });
     // The card that opens a round names the round it is about to open, so the
     // button is never just a generic "Play" the player has to interpret.
+    assert.equal(
+      await page.locator('[data-home-mode="endless"]').isDisabled(),
+      true,
+      "endless mode should be disabled",
+    );
     for (const [mode, primary] of [
-      ["endless", /^Start the run$/],
       ["practice", /^Start the warm-up$/],
       ["career", /^Play the court$/],
     ]) {

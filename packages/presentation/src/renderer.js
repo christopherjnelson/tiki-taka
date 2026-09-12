@@ -159,6 +159,22 @@ export class Renderer {
   themeName() {
     return "dark";
   }
+  courtPreview(venue, width = 500, height = 310) {
+    if (typeof document === "undefined") return "";
+    if (!this.previewCache) this.previewCache = new Map();
+    const v = typeof venue === "string" ? getVenue({ venue }) : getVenue(venue);
+    const key = `${v.id}:${width}:${height}`;
+    if (this.previewCache.has(key)) return this.previewCache.get(key);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(width / WIDTH, 0, 0, height / HEIGHT, 0, 0);
+    this.paintArena(ctx, v, THEMES.dark);
+    const dataUrl = canvas.toDataURL("image/png");
+    this.previewCache.set(key, dataUrl);
+    return dataUrl;
+  }
   // The pitch, lines and stadium art used to be painted once into a 1000x620
   // bitmap and stretched onto the live canvas by drawImage every frame. That
   // stretch is a non-integer scale in any real window (1.67x at 1920x1080),

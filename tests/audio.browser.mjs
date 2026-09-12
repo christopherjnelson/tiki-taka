@@ -256,11 +256,11 @@ await check('the volumes are reachable and operable by gamepad and survive a rel
     'effects should default well below the ceiling the constants set');
   assert.equal(await page.locator('#music-volume').inputValue(), '100');
 
-  // Reach Settings from the title menu with the d-pad only, then open it with A.
+  // Reach Settings from the home screen / top bar with the d-pad only, then open it with A.
   for (let step = 0; step < 8 && await page.evaluate(() => document.activeElement?.id) !== 'settings-button'; step++)
-    await pulsePad(page, 13);
+    await pulsePad(page, 12);
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'settings-button',
-    'the d-pad must reach Settings on the title menu');
+    'the d-pad must reach Settings with the d-pad');
   await padUntil(page, 0, () => page.locator('#settings-dialog').isVisible());
   await page.locator('#settings-dialog').waitFor({ state: 'visible' });
 
