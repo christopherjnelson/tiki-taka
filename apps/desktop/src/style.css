@@ -1116,14 +1116,26 @@ kbd {
   bottom: 20px;
   left: 50%;
   z-index: 80;
-  padding: 14px 21px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
   color: #100923;
   background: var(--cyan);
+  font: 700 13px var(--sign);
+  letter-spacing: 0.5px;
   transform: translate(-50%, 20px);
   opacity: 0;
   transition: 0.2s;
   /* Status only: it must never swallow a tap meant for the controls beneath. */
   pointer-events: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(39, 234, 216, 0.35);
+}
+.toast-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 .toast.visible,
 .toast.show {

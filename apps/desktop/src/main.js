@@ -334,8 +334,14 @@ function persistSettings() {
   if (!profile && storage && !saveSettings(storage, settings))
     toast("Settings could not be saved on this browser.");
 }
-function toast(text) {
-  $("toast").textContent = text;
+const GAMEPAD_ICON_SVG = `<svg class="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.32 5H6.68a4 4 0 0 0-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 0 0 3 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 0 1 9.828 16h4.344a2 2 0 0 1 1.414.586L17 18c.5.5 1 1 2 1a3 3 0 0 0 3-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0 0 17.32 5z"/></svg>`;
+
+function toast(text, icon = "") {
+  if (icon) {
+    $("toast").innerHTML = `${icon}<span>${text}</span>`;
+  } else {
+    $("toast").textContent = text;
+  }
   $("toast").classList.add("visible");
   clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => $("toast").classList.remove("visible"), 4000);
@@ -3288,9 +3294,7 @@ function pollGamepad(dt) {
   }
   if (!padConnected) {
     padConnected = true;
-    toast(
-      "Controller connected. Right stick picks the pass · A plays it · X arms the wall · LT focuses · RT boosts · LB shouts.",
-    );
+    toast("Gamepad Connected", GAMEPAD_ICON_SVG);
   }
   // Standard gamepad triggers expose an analog value even when their `pressed`
   // bit is unreliable. Treat a quarter pull as held and retain that normalized
