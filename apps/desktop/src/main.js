@@ -1253,7 +1253,7 @@ function prepare() {
   syncHud();
 }
 function switchMode(next, index = courtIndex) {
-  if (next === "daily") return;
+  if (next === "daily" || next === "endless") return;
   closePauseMenu({ restoreFocus: false });
   if (phase === "playing" || phase === "paused") {
     pause();

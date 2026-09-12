@@ -2364,6 +2364,7 @@ body.play-view #bank-button {
   gap: 10px;
 }
 .home-modes button {
+  --mode-accent: var(--cyan);
   /* Tall enough to hold a 34px icon plus two lines of copy — this also
      deliberately eats into row 1's share of the column, which is what
      closes up the dead space still sitting above/below the demo canvas. */
@@ -2385,11 +2386,34 @@ body.play-view #bank-button {
   );
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ink), transparent 88%);
   border: 1px solid var(--line);
-  border-top: 4px solid var(--cyan);
+  border-top: 4px solid var(--mode-accent);
   text-align: left;
+  transition:
+    transform 0.16s ease,
+    border-color 0.16s ease,
+    background 0.16s ease,
+    box-shadow 0.16s ease;
 }
 .home-modes button:nth-child(even) {
-  border-top-color: var(--pink);
+  --mode-accent: var(--pink);
+  border-top-color: var(--mode-accent);
+}
+.home-modes button:not(:disabled):not([aria-disabled="true"]):hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--mode-accent), transparent 30%);
+  border-top-color: var(--mode-accent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface), var(--mode-accent) 14%) 0%,
+    color-mix(in srgb, var(--surface), var(--mode-accent) 6%) 100%
+  );
+  box-shadow:
+    0 8px 20px color-mix(in srgb, var(--mode-accent), transparent 82%),
+    inset 0 1px 0 color-mix(in srgb, var(--ink), transparent 80%);
+}
+.home-modes button:not(:disabled):not([aria-disabled="true"]):hover::after {
+  color: var(--mode-accent);
+  transform: translateX(2px);
 }
 .home-modes button:disabled,
 .home-modes button[aria-disabled="true"] {
@@ -2408,6 +2432,10 @@ body.play-view #bank-button {
   text-transform: uppercase;
   color: var(--pink);
   opacity: 0.85;
+}
+.home-modes button:nth-child(odd):disabled .mode-copy span,
+.home-modes button:nth-child(odd)[aria-disabled="true"] .mode-copy span {
+  color: var(--cyan);
 }
 /* Line-art icon, coloured by the same accent as the card's top border —
    currentColor so one rule covers both the shape's stroke and the
@@ -2433,6 +2461,7 @@ body.play-view #bank-button {
   color: var(--muted);
   font-size: 1.4em;
   line-height: 1;
+  transition: transform 0.16s ease, color 0.16s ease;
 }
 .home-modes strong,
 .home-modes span {
