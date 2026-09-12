@@ -2315,8 +2315,7 @@ body.play-view #bank-button {
   text-transform: uppercase;
 }
 .account-note,
-.score-save-note,
-.leaderboard-note {
+.score-save-note {
   color: var(--muted);
   line-height: 1.55;
 }
@@ -2370,60 +2369,6 @@ body.play-view #bank-button {
 }
 .score-save-actions button {
   width: 100%;
-}
-.leaderboard-controls {
-  display: flex;
-  gap: 14px;
-  margin: 4px 0 14px;
-}
-.leaderboard-controls label {
-  display: grid;
-  gap: 6px;
-  color: var(--muted);
-  text-transform: uppercase;
-  font: 700 9px var(--sign);
-  letter-spacing: 1px;
-}
-.leaderboard-controls select {
-  min-height: 40px;
-  padding: 7px 9px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
-  font:
-    400 14px Arial,
-    sans-serif;
-}
-.leaderboard-list {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.leaderboard-list li {
-  display: grid;
-  grid-template-columns: 2em 1fr auto;
-  gap: 10px;
-  align-items: baseline;
-  padding: 9px 12px;
-  background: var(--panel);
-  border-left: 4px solid var(--cyan);
-}
-.leaderboard-list li:nth-child(2n) {
-  border-left-color: var(--pink);
-}
-.leaderboard-list .leaderboard-rank {
-  color: var(--muted);
-  font: 700 12px var(--sign);
-}
-.leaderboard-list .leaderboard-name {
-  color: var(--ink);
-  font: 700 14px var(--sign);
-}
-.leaderboard-list .leaderboard-score {
-  color: var(--pink);
-  font: italic 800 16px var(--display);
 }
 .home-progress dl div {
   min-width: 0;
@@ -2700,6 +2645,18 @@ body.play-view .arena-view .below-court {
     border-radius: 4px;
     overflow: hidden;
     font-family: var(--sign);
+    /* Eight columns shared by the header, every data row and the "your
+       best" footer, so the numbers line up top to bottom. Narrower desktop
+       widths shrink the shared gap and bonus-column width together (see
+       the max-width tier below) rather than letting any one row diverge. */
+    --hl-cols: 34px 1fr 30px 30px 30px 30px 64px 78px;
+    --hl-gap: 7px;
+  }
+  @media (max-width: 1180px) {
+    .home-leaderboard {
+      --hl-cols: 28px 1fr 24px 24px 24px 24px 48px 62px;
+      --hl-gap: 5px;
+    }
   }
   .hl-header {
     display: flex;
@@ -2799,8 +2756,8 @@ body.play-view .arena-view .below-court {
   }
   .hl-head {
     display: grid;
-    grid-template-columns: 36px 1fr 85px 85px;
-    gap: 8px;
+    grid-template-columns: var(--hl-cols);
+    gap: var(--hl-gap);
     padding: 7px 10px;
     font: 700 10.5px/1 var(--sign);
     letter-spacing: 1.5px;
@@ -2829,8 +2786,8 @@ body.play-view .arena-view .below-court {
   }
   .hl-row {
     display: grid;
-    grid-template-columns: 36px 1fr 85px 85px;
-    gap: 8px;
+    grid-template-columns: var(--hl-cols);
+    gap: var(--hl-gap);
     align-items: center;
     padding: 7px 10px;
     font-size: 13px;
@@ -2885,14 +2842,7 @@ body.play-view .arena-view .below-court {
     letter-spacing: 0.5px;
     color: var(--muted);
     text-align: right;
-  }
-  .hl-cell-venue {
-    font-size: 10px;
-    letter-spacing: 0.5px;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-variant-numeric: tabular-nums;
   }
   .hl-cell-score {
     font-family: var(--mono);
@@ -2901,14 +2851,52 @@ body.play-view .arena-view .below-court {
     text-align: right;
     color: var(--accent);
     letter-spacing: 0.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  /* ── Bonus columns (TRI / OLÉ / SPL / ZON) ───────────────────────────
+     Secondary to score by design: smaller, dimmer, right-aligned so the
+     digits line up under the header. A zero dims further still, echoing
+     .result-stat.is-zero in the results modal — the same "nothing to see
+     here" language, reused rather than reinvented. */
+  .hl-cell-bonus {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-align: right;
+    color: var(--muted);
+    opacity: 0.75;
+    letter-spacing: 0.3px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .hl-cell-bonus.hl-cell-ole {
+    color: var(--accent);
+    opacity: 0.85;
+  }
+  .hl-cell-bonus.is-zero {
+    opacity: 0.35;
+  }
+  .hl-head .hl-cell-bonus {
+    font-size: 9.5px;
+    font-weight: 700;
+    opacity: 1;
+    text-align: right;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+  .hl-head .hl-cell-bonus.hl-cell-ole {
+    color: var(--accent);
   }
   /* ── User Best Footer ──────────────────────────────────────────────── */
+  /* The tag ("YOUR BEST") is a decorative label, not a data column, so it
+     sits outside the grid; .hl-user-cells reuses the exact --hl-cols/--hl-gap
+     the header and every data row share, so the numbers line up underneath
+     them without duplicating the column widths a second time. */
   .hl-user-row {
-    display: grid;
-    grid-template-columns: auto auto 1fr auto auto;
-    gap: 8px;
+    display: flex;
     align-items: center;
-    padding: 8px 12px;
+    gap: 6px;
+    padding: 8px 10px;
     background: linear-gradient(
       90deg,
       color-mix(in srgb, var(--accent), transparent 82%),
@@ -2918,12 +2906,24 @@ body.play-view .arena-view .below-court {
     font-size: 12.5px;
     min-height: 34px;
   }
+  .hl-user-cells {
+    display: grid;
+    grid-template-columns: var(--hl-cols);
+    gap: var(--hl-gap);
+    align-items: center;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  /* Two tight lines rather than one wide phrase: the label is decorative
+     next to the aligned numbers, so it spends height, not the width the
+     bonus columns need at narrower desktop sizes. */
   .hl-user-tag {
-    font: 800 10.5px/1 var(--sign);
-    letter-spacing: 1.2px;
+    flex: 0 0 auto;
+    width: 34px;
+    font: 800 8px/1.2 var(--sign);
+    letter-spacing: 0.8px;
     color: var(--accent);
     text-transform: uppercase;
-    white-space: nowrap;
   }
   .hl-user-rank {
     font-family: var(--mono);
@@ -2941,12 +2941,11 @@ body.play-view .arena-view .below-court {
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .hl-user-venue {
+  .hl-user-bonus {
     font-size: 11px;
-    color: var(--muted);
-    letter-spacing: 0.5px;
-    text-align: right;
-    white-space: nowrap;
+  }
+  .hl-user-passes {
+    font-weight: 700;
   }
   .hl-user-score {
     font-family: var(--mono);
@@ -2955,7 +2954,7 @@ body.play-view .arena-view .below-court {
     color: var(--accent);
     text-align: right;
     white-space: nowrap;
-    min-width: 50px;
+    font-variant-numeric: tabular-nums;
   }
   /* ── Court panel bands ─────────────────────────────────────────────────
      Header band: LIVE DEMO / BOTS IN POSSESSION pinned left, the venue name

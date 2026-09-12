@@ -399,8 +399,7 @@ const anyDialogOpen = () =>
   $("settings-dialog").open ||
   $("help-dialog").open ||
   $("account-dialog").open ||
-  $("score-save-dialog").open ||
-  $("leaderboard-dialog").open;
+  $("score-save-dialog").open;
 // Any menu that must swallow gameplay input before it reaches the court.
 const menuBlocking = () => menuOpen || anyDialogOpen();
 function syncPauseMenu() {
@@ -471,54 +470,58 @@ function syncHome() {
   syncHomeLeaderboard();
 }
 
+// Bonus counts are made up for the offline fallback, but kept internally
+// plausible: they scale down roughly with passes/score down the table, and
+// olés (one per ten-pass one-touch streak) never outrun passes / 10.
+const bonus = (triangles, oles, splits, zones) => ({ triangles, oles, splits, zones });
 const BENCHMARK_LEADERBOARDS = {
   0: [
-    { rank: 1, name: "redwurm", passes: 116, score: 14567, medal: "🥇" },
-    { rank: 2, name: "CRUYFF", passes: 98, score: 1480, medal: "🥈" },
-    { rank: 3, name: "XAVI", passes: 84, score: 1210, medal: "🥉" },
-    { rank: 4, name: "INIESTA", passes: 76, score: 1050, medal: "4" },
-    { rank: 5, name: "PIRLO", passes: 68, score: 920, medal: "5" },
-    { rank: 6, name: "BUSQUETS", passes: 62, score: 840, medal: "6" },
+    { rank: 1, name: "redwurm", passes: 116, score: 14567, medal: "🥇", ...bonus(14, 9, 7, 11) },
+    { rank: 2, name: "CRUYFF", passes: 98, score: 1480, medal: "🥈", ...bonus(11, 7, 6, 9) },
+    { rank: 3, name: "XAVI", passes: 84, score: 1210, medal: "🥉", ...bonus(9, 5, 5, 7) },
+    { rank: 4, name: "INIESTA", passes: 76, score: 1050, medal: "4", ...bonus(7, 4, 4, 6) },
+    { rank: 5, name: "PIRLO", passes: 68, score: 920, medal: "5", ...bonus(6, 3, 3, 4) },
+    { rank: 6, name: "BUSQUETS", passes: 62, score: 840, medal: "6", ...bonus(4, 2, 2, 3) },
   ],
   1: [
-    { rank: 1, name: "redwurm", passes: 105, score: 9012, medal: "🥇" },
-    { rank: 2, name: "BECKHAM", passes: 82, score: 1350, medal: "🥈" },
-    { rank: 3, name: "SCHOLES", passes: 78, score: 1120, medal: "🥉" },
-    { rank: 4, name: "LAMPARD", passes: 70, score: 990, medal: "4" },
-    { rank: 5, name: "GERRARD", passes: 64, score: 880, medal: "5" },
-    { rank: 6, name: "ROONEY", passes: 58, score: 790, medal: "6" },
+    { rank: 1, name: "redwurm", passes: 105, score: 9012, medal: "🥇", ...bonus(12, 8, 6, 10) },
+    { rank: 2, name: "BECKHAM", passes: 82, score: 1350, medal: "🥈", ...bonus(9, 6, 5, 7) },
+    { rank: 3, name: "SCHOLES", passes: 78, score: 1120, medal: "🥉", ...bonus(8, 5, 4, 6) },
+    { rank: 4, name: "LAMPARD", passes: 70, score: 990, medal: "4", ...bonus(6, 4, 3, 5) },
+    { rank: 5, name: "GERRARD", passes: 64, score: 880, medal: "5", ...bonus(5, 3, 3, 4) },
+    { rank: 6, name: "ROONEY", passes: 58, score: 790, medal: "6", ...bonus(3, 2, 2, 2) },
   ],
   2: [
-    { rank: 1, name: "redwurm", passes: 115, score: 7947, medal: "🥇" },
-    { rank: 2, name: "MESSI", passes: 92, score: 1620, medal: "🥈" },
-    { rank: 3, name: "GUARDIOLA", passes: 85, score: 1310, medal: "🥉" },
-    { rank: 4, name: "INIESTA", passes: 80, score: 1140, medal: "4" },
-    { rank: 5, name: "XAVI", passes: 74, score: 960, medal: "5" },
-    { rank: 6, name: "PUYOL", passes: 66, score: 810, medal: "6" },
+    { rank: 1, name: "redwurm", passes: 115, score: 7947, medal: "🥇", ...bonus(13, 8, 7, 10) },
+    { rank: 2, name: "MESSI", passes: 92, score: 1620, medal: "🥈", ...bonus(10, 7, 6, 8) },
+    { rank: 3, name: "GUARDIOLA", passes: 85, score: 1310, medal: "🥉", ...bonus(9, 6, 5, 7) },
+    { rank: 4, name: "INIESTA", passes: 80, score: 1140, medal: "4", ...bonus(7, 5, 4, 6) },
+    { rank: 5, name: "XAVI", passes: 74, score: 960, medal: "5", ...bonus(6, 4, 3, 4) },
+    { rank: 6, name: "PUYOL", passes: 66, score: 810, medal: "6", ...bonus(4, 2, 2, 3) },
   ],
   3: [
-    { rank: 1, name: "redwurm", passes: 107, score: 6480, medal: "🥇" },
-    { rank: 2, name: "NAKATA", passes: 88, score: 1420, medal: "🥈" },
-    { rank: 3, name: "HONDA", passes: 80, score: 1190, medal: "🥉" },
-    { rank: 4, name: "ENDO", passes: 75, score: 1010, medal: "4" },
-    { rank: 5, name: "KAGAWA", passes: 69, score: 870, medal: "5" },
-    { rank: 6, name: "OKAZAKI", passes: 63, score: 750, medal: "6" },
+    { rank: 1, name: "redwurm", passes: 107, score: 6480, medal: "🥇", ...bonus(11, 7, 6, 9) },
+    { rank: 2, name: "NAKATA", passes: 88, score: 1420, medal: "🥈", ...bonus(9, 6, 5, 7) },
+    { rank: 3, name: "HONDA", passes: 80, score: 1190, medal: "🥉", ...bonus(8, 5, 4, 6) },
+    { rank: 4, name: "ENDO", passes: 75, score: 1010, medal: "4", ...bonus(6, 4, 3, 5) },
+    { rank: 5, name: "KAGAWA", passes: 69, score: 870, medal: "5", ...bonus(5, 3, 3, 3) },
+    { rank: 6, name: "OKAZAKI", passes: 63, score: 750, medal: "6", ...bonus(3, 2, 2, 2) },
   ],
   4: [
-    { rank: 1, name: "redwurm", passes: 95, score: 5820, medal: "🥇" },
-    { rank: 2, name: "PELE", passes: 90, score: 1550, medal: "🥈" },
-    { rank: 3, name: "ZICO", passes: 84, score: 1280, medal: "🥉" },
-    { rank: 4, name: "SOCRATES", passes: 78, score: 1040, medal: "4" },
-    { rank: 5, name: "RONALDINHO", passes: 72, score: 910, medal: "5" },
-    { rank: 6, name: "RIVALDO", passes: 65, score: 780, medal: "6" },
+    { rank: 1, name: "redwurm", passes: 95, score: 5820, medal: "🥇", ...bonus(10, 6, 6, 8) },
+    { rank: 2, name: "PELE", passes: 90, score: 1550, medal: "🥈", ...bonus(9, 6, 5, 7) },
+    { rank: 3, name: "ZICO", passes: 84, score: 1280, medal: "🥉", ...bonus(8, 5, 4, 6) },
+    { rank: 4, name: "SOCRATES", passes: 78, score: 1040, medal: "4", ...bonus(6, 4, 3, 5) },
+    { rank: 5, name: "RONALDINHO", passes: 72, score: 910, medal: "5", ...bonus(5, 3, 2, 3) },
+    { rank: 6, name: "RIVALDO", passes: 65, score: 780, medal: "6", ...bonus(3, 2, 2, 2) },
   ],
   5: [
-    { rank: 1, name: "redwurm", passes: 92, score: 5640, medal: "🥇" },
-    { rank: 2, name: "BERGKAMP", passes: 89, score: 1490, medal: "🥈" },
-    { rank: 3, name: "GULLIT", passes: 83, score: 1250, medal: "🥉" },
-    { rank: 4, name: "RIJKAARD", passes: 77, score: 1020, medal: "4" },
-    { rank: 5, name: "VAN BASTEN", passes: 71, score: 890, medal: "5" },
-    { rank: 6, name: "KLUIVERT", passes: 64, score: 760, medal: "6" },
+    { rank: 1, name: "redwurm", passes: 92, score: 5640, medal: "🥇", ...bonus(10, 6, 5, 8) },
+    { rank: 2, name: "BERGKAMP", passes: 89, score: 1490, medal: "🥈", ...bonus(8, 5, 5, 6) },
+    { rank: 3, name: "GULLIT", passes: 83, score: 1250, medal: "🥉", ...bonus(7, 5, 4, 6) },
+    { rank: 4, name: "RIJKAARD", passes: 77, score: 1020, medal: "4", ...bonus(6, 4, 3, 4) },
+    { rank: 5, name: "VAN BASTEN", passes: 71, score: 890, medal: "5", ...bonus(5, 3, 2, 3) },
+    { rank: 6, name: "KLUIVERT", passes: 64, score: 760, medal: "6", ...bonus(3, 2, 2, 2) },
   ],
 };
 
@@ -540,6 +543,18 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
   const list = $("home-leaderboard-list");
   if (!list) return;
   const statusEl = $("home-leaderboard-status");
+
+  // Bonus counts are secondary to score, so a bonus cell dims itself when it
+  // is zero — the same "nothing to see here" language the results modal
+  // uses for its own breakdown grid (.result-stat.is-zero).
+  function bonusCell(value, extraClass) {
+    const cell = document.createElement("span");
+    cell.className = `hl-cell-bonus ${extraClass || ""}`.trim();
+    const n = Number(value) || 0;
+    cell.textContent = String(n);
+    cell.classList.toggle("is-zero", n === 0);
+    return cell;
+  }
 
   function renderEntries(entries) {
     if (statusEl) {
@@ -564,15 +579,20 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
         player.className = "hl-cell-player";
         player.textContent = entry.name;
 
+        const triangles = bonusCell(entry.triangles);
+        const oles = bonusCell(entry.oles, "hl-cell-ole");
+        const splits = bonusCell(entry.splits);
+        const zones = bonusCell(entry.zones);
+
         const passes = document.createElement("span");
         passes.className = "hl-cell-passes";
-        passes.textContent = entry.passes != null ? `${Number(entry.passes).toLocaleString()} passes` : "—";
+        passes.textContent = entry.passes != null ? Number(entry.passes).toLocaleString() : "—";
 
         const score = document.createElement("span");
         score.className = "hl-cell-score";
         score.textContent = Number(entry.score).toLocaleString();
 
-        li.append(rank, player, passes, score);
+        li.append(rank, player, triangles, oles, splits, zones, passes, score);
         return li;
       }),
     );
@@ -581,7 +601,10 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
   function syncUserBest(entries) {
     let userBestScore = 0;
     let userBestPasses = null;
-    const courtName = COURTS[courtIdx]?.name?.toUpperCase() || "CIRCUIT";
+    let userBestTriangles = 0;
+    let userBestOles = 0;
+    let userBestSplits = 0;
+    let userBestZones = 0;
 
     if (progress?.records) {
       const directScore = progress.records[courtIdx] ?? progress.records[String(courtIdx)];
@@ -599,6 +622,10 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
           if (m.score > userBestScore) {
             userBestScore = m.score;
             userBestPasses = m.passes;
+            userBestTriangles = m.triangles || 0;
+            userBestOles = m.oles || 0;
+            userBestSplits = m.splits || 0;
+            userBestZones = m.zones || 0;
           }
         }
       }
@@ -606,12 +633,23 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
 
     const userRankEl = $("hl-user-rank");
     const userPlayerEl = $("hl-user-player") || $("hl-user-pilot");
-    const userVenueEl = $("hl-user-venue");
+    const userPassesEl = $("hl-user-passes");
     const userScoreEl = $("hl-user-score");
 
     if (userPlayerEl) userPlayerEl.textContent = profile?.username || "GUEST PLAYER";
-    if (userVenueEl) userVenueEl.textContent = userBestPasses != null ? `${userBestPasses} PASSES` : courtName;
+    if (userPassesEl) userPassesEl.textContent = userBestPasses != null ? Number(userBestPasses).toLocaleString() : "—";
     if (userScoreEl) userScoreEl.textContent = userBestScore > 0 ? Number(userBestScore).toLocaleString() : "—";
+    for (const [id, value] of [
+      ["hl-user-triangles", userBestTriangles],
+      ["hl-user-oles", userBestOles],
+      ["hl-user-splits", userBestSplits],
+      ["hl-user-zones", userBestZones],
+    ]) {
+      const el = $(id);
+      if (!el) continue;
+      el.textContent = String(value);
+      el.classList.toggle("is-zero", value === 0);
+    }
     if (userRankEl) {
       if (userBestScore === 0) {
         userRankEl.textContent = "—";
@@ -641,6 +679,10 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
           name: e.username,
           passes: e.passes,
           score: e.score,
+          triangles: e.triangles || 0,
+          oles: e.oles || 0,
+          splits: e.splits || 0,
+          zones: e.zones || 0,
           medal: idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : String(idx + 1),
         }));
         renderEntries(loadedEntries);
@@ -2389,7 +2431,7 @@ function syncAccountDialog() {
   $("profile-email").textContent = profile?.email || "";
   $("account-note").textContent = remoteDataUnavailable
     ? "Account data is temporarily unavailable. You are still playing locally; reconnect before relying on saved scores."
-    : "Your email stays private. Your username is public on the friendly leaderboard. Scores you submit are not independently verified — see the leaderboard for that note.";
+    : "Your email stays private. Your username is public on the friendly leaderboard. Scores you submit are not independently verified.";
   $("account-button").textContent = `◎ ${profile?.username || "Account"}`;
   // The bar says "Guest" until a profile is chosen, and never claims more
   // than the active adapter actually provides.
@@ -2568,56 +2610,6 @@ const unsubscribeAuthState = dataAdapter.onAuthStateChange?.((session) => {
 });
 window.addEventListener("pagehide", () => unsubscribeAuthState?.(), { once: true });
 window.addEventListener("online", () => void recoverRemoteDataContext());
-// Leaderboard: only the Supabase adapter can answer this (it feature-detects
-// getLeaderboard), and with no Supabase configuration — the everyday guest
-// case — the dialog says so honestly instead of pretending nothing changed.
-async function loadLeaderboard() {
-  if (!dataAdapter.getLeaderboard) return;
-  $("leaderboard-status").textContent = "Loading…";
-  $("leaderboard-list").replaceChildren();
-  try {
-    const mode = $("leaderboard-mode").value;
-    const courtValue = $("leaderboard-court").value;
-    const board = await dataAdapter.getLeaderboard({
-      mode,
-      court: courtValue === "" ? undefined : Number(courtValue),
-      limit: 10,
-    });
-    const entries = board?.entries || [];
-    $("leaderboard-status").textContent = entries.length ? "" : "No scores yet on this board.";
-    $("leaderboard-list").replaceChildren(
-      ...entries.map((entry, index) => {
-        const li = document.createElement("li");
-        const rank = document.createElement("span");
-        rank.className = "leaderboard-rank";
-        rank.textContent = `#${index + 1}`;
-        const name = document.createElement("span");
-        name.className = "leaderboard-name";
-        name.textContent = entry.username;
-        const score = document.createElement("span");
-        score.className = "leaderboard-score";
-        score.textContent = entry.score;
-        li.append(rank, name, score);
-        return li;
-      }),
-    );
-  } catch (error) {
-    $("leaderboard-status").textContent = error.message || "Leaderboard could not be loaded.";
-  }
-}
-function openLeaderboard() {
-  if (phase === "playing") pause();
-  clearInput();
-  const available = Boolean(dataAdapter.getLeaderboard);
-  $("leaderboard-unavailable").hidden = available;
-  $("leaderboard-available").hidden = !available;
-  $("leaderboard-dialog").showModal();
-  if (available) void loadLeaderboard();
-}
-$("leaderboard-button").addEventListener("click", openLeaderboard);
-$("close-leaderboard").addEventListener("click", () => $("leaderboard-dialog").close());
-$("leaderboard-mode").addEventListener("change", loadLeaderboard);
-$("leaderboard-court").addEventListener("change", loadLeaderboard);
 $("settings-button").addEventListener("click", openSettings);
 $("close-settings").addEventListener("click", () =>
   $("settings-dialog").close(),
@@ -3159,9 +3151,6 @@ function pollGamepad(dt) {
   } else if ($("account-dialog").open) {
     if (tap(1) || tap(9)) $("account-dialog").close();
     else nav($("account-dialog"));
-  } else if ($("leaderboard-dialog").open) {
-    if (tap(1) || tap(9)) $("leaderboard-dialog").close();
-    else nav($("leaderboard-dialog"));
   } else if ($("settings-dialog").open) {
     if (tap(1) || tap(9)) {
       if (capture) cancelCapture();

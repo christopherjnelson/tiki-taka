@@ -227,6 +227,10 @@
                 <div class="hl-head">
                   <span class="hl-cell hl-cell-rank">#</span>
                   <span class="hl-cell hl-cell-player">PLAYER</span>
+                  <span class="hl-cell hl-cell-bonus" title="Triangles" aria-label="Triangles">TRI</span>
+                  <span class="hl-cell hl-cell-bonus hl-cell-ole" title="Olés" aria-label="Olés">OLÉ</span>
+                  <span class="hl-cell hl-cell-bonus" title="Split the press" aria-label="Split the press">SPL</span>
+                  <span class="hl-cell hl-cell-bonus" title="Zone passes" aria-label="Zone passes">ZON</span>
                   <span class="hl-cell hl-cell-passes">PASSES</span>
                   <span class="hl-cell hl-cell-score">SCORE</span>
                 </div>
@@ -236,11 +240,17 @@
                 </ol>
               </div>
               <footer id="home-leaderboard-user" class="hl-user-row">
-                <span class="hl-user-tag">YOUR BEST</span>
-                <span id="hl-user-rank" class="hl-cell-rank hl-user-rank">#--</span>
-                <span id="hl-user-player" class="hl-cell-player hl-user-player">GUEST PLAYER</span>
-                <span id="hl-user-venue" class="hl-cell-venue hl-user-venue">LISBON</span>
-                <span id="hl-user-score" class="hl-cell-score hl-user-score">—</span>
+                <span class="hl-user-tag">YOUR<br />BEST</span>
+                <div class="hl-user-cells">
+                  <span id="hl-user-rank" class="hl-cell-rank hl-user-rank">#--</span>
+                  <span id="hl-user-player" class="hl-cell-player hl-user-player">GUEST PLAYER</span>
+                  <span id="hl-user-triangles" class="hl-cell-bonus hl-user-bonus">0</span>
+                  <span id="hl-user-oles" class="hl-cell-bonus hl-cell-ole hl-user-bonus">0</span>
+                  <span id="hl-user-splits" class="hl-cell-bonus hl-user-bonus">0</span>
+                  <span id="hl-user-zones" class="hl-cell-bonus hl-user-bonus">0</span>
+                  <span id="hl-user-passes" class="hl-cell-passes hl-user-passes">—</span>
+                  <span id="hl-user-score" class="hl-cell-score hl-user-score">—</span>
+                </div>
               </footer>
             </section>
           </div>
@@ -861,56 +871,6 @@
       </div>
       <p id="score-save-status" class="binding-status" role="status" aria-live="polite"></p>
     </dialog>
-    <dialog id="leaderboard-dialog" aria-labelledby="leaderboard-title">
-      <div class="dialog-top">
-        <p class="eyebrow">TOP FLOW</p>
-        <button
-          id="close-leaderboard"
-          type="button"
-          aria-label="Close leaderboard"
-        >
-          ×
-        </button>
-      </div>
-      <h2 id="leaderboard-title">Leaderboard.</h2>
-      <!-- Honesty over polish: every round is played and scored in the
-      browser, so nothing here is server-verified. Said once, plainly, and
-      left alone. -->
-      <p class="leaderboard-note">
-        Scores are reported by each player's game and are not verified by the
-        server — treat this as a friendly leaderboard, not a tamper-proof one.
-      </p>
-      <div id="leaderboard-unavailable" hidden>
-        <p class="leaderboard-note">
-          This deployment has no Supabase configuration, so there is no
-          account system and no leaderboard to show. Your progress still
-          saves on this device as a guest.
-        </p>
-      </div>
-      <div id="leaderboard-available">
-        <div class="leaderboard-controls">
-          <label
-            >Mode<select id="leaderboard-mode">
-              <option value="career">Career</option>
-              <option value="daily">Daily</option>
-              <option value="practice">Practice</option>
-            </select></label
-          ><label
-            >Court<select id="leaderboard-court">
-              <option value="">All courts</option>
-              <option value="0">1 · The Courtyard</option>
-              <option value="1">2</option>
-              <option value="2">3</option>
-              <option value="3">4</option>
-              <option value="4">5</option>
-              <option value="5">6</option>
-            </select></label
-          >
-        </div>
-        <ol id="leaderboard-list" class="leaderboard-list"></ol>
-        <p id="leaderboard-status" class="binding-status" role="status" aria-live="polite"></p>
-      </div>
-    </dialog>
     <!-- The old sidebar drawer is gone; every utility it held lives here, and
     both the title menu and the pause menu open this dialog. -->
     <dialog id="settings-dialog" aria-labelledby="settings-title">
@@ -936,9 +896,6 @@
         </button>
         <button id="account-button" type="button">
           <span aria-hidden="true">◎</span> Account
-        </button>
-        <button id="leaderboard-button" type="button" aria-haspopup="dialog">
-          <span aria-hidden="true">☰</span> Leaderboard
         </button>
       </div>
       <!-- Effects and soundtrack each get their own switch and trim. The
