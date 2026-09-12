@@ -122,9 +122,10 @@ await check(
       await page.evaluate(() => document.activeElement?.id),
       "title-play",
     );
-    // The demo, the courts, the modes and every earned statistic the old
+    // The circuit leaderboard, the courts, the modes and every earned statistic the old
     // dashboard showed are all on this one screen, with nothing clicked.
-    assert.equal(await page.locator("#attract-court").isVisible(), true);
+    assert.equal(await page.locator("#home-leaderboard").isVisible(), true);
+    assert.equal(await page.locator(".hl-tab").count(), 6);
     assert.equal(await page.locator("[data-home-mode]").count(), 4);
     assert.equal(await page.locator(".court-item").count(), 6);
     assert.match(await page.locator("#level-label").textContent(), /LEVEL 1/i);
@@ -698,7 +699,7 @@ await check(
         `home needs ${inner.scrollWidth}x${inner.scrollHeight} inside ${inner.clientWidth}x${inner.clientHeight} at ${width}x${height}`,
       );
       for (const selector of [
-        "#attract-court",
+        "#home-leaderboard",
         "#court-list",
         ".home-modes",
         ".home-progress",
@@ -910,7 +911,7 @@ await check(
 );
 
 await check(
-  "the home demo runs from the shell's one loop and is torn down on the way into a round",
+  "the home circuit leaderboard provides court filtering tabs and displays scores",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
@@ -920,69 +921,31 @@ await check(
       errors = errorsFor(page);
     await page.goto(`${baseURL}/`);
     await page.locator("#home-view").waitFor({ state: "visible" });
-    // Count updates per Game instance, split by whose they are. The demo marks
-    // itself with config.attract; a round the player started does not.
-    await page.evaluate(async () => {
-      const { Game } = await import("/src/game.js");
-      const update = Game.prototype.update;
-      window.__ticks = { attract: 0, round: 0, attractInstances: new Set() };
-      Game.prototype.update = function (...args) {
-        if (this.config.attract) {
-          window.__ticks.attract++;
-          window.__ticks.attractInstances.add(this);
-        } else window.__ticks.round++;
-        return update.apply(this, args);
-      };
-    });
-    await settled(page);
-    assert.ok(
-      await page.evaluate(() => window.__ticks.attract > 0),
-      "the demo must actually be running on home",
-    );
-    assert.equal(
-      await page.evaluate(() => window.__ticks.round),
-      0,
-      "nothing but the demo runs while home is on screen",
-    );
-    await page.locator("#title-play").click();
-    await page.locator("#arena-view").waitFor({ state: "visible" });
-    await page.locator("#start-button").click();
-    await settled(page);
-    await page.evaluate(() => {
-      window.__ticks.attract = 0;
-      window.__ticks.round = 0;
-    });
-    await page.waitForTimeout(400);
-    const ticks = await page.evaluate(() => ({
-      attract: window.__ticks.attract,
-      round: window.__ticks.round,
-    }));
-    assert.equal(
-      ticks.attract,
-      0,
-      `the demo must stop when a real round starts, got ${ticks.attract} demo updates`,
-    );
-    assert.ok(ticks.round > 0, "the round itself must be running");
-    // Back to home and out again: the demo restarts rather than leaking a
-    // second instance that would then be stepped alongside the first.
-    await leaveToHome(page);
-    await settled(page);
-    await page.evaluate(() => {
-      window.__ticks.attract = 0;
-    });
-    await page.waitForTimeout(400);
-    const restarted = await page.evaluate(() => ({
-      attract: window.__ticks.attract,
-      instances: window.__ticks.attractInstances.size,
-    }));
-    assert.ok(restarted.attract > 0, "the demo must come back on home");
-    // One demo Game per visit, never two alive at once: over ~400ms at 60fps a
-    // single stepped instance gives roughly one update per frame, so twice
-    // that would mean two loops.
-    assert.ok(
-      restarted.attract < 60,
-      `the demo must be stepped once a frame, got ${restarted.attract} updates in 400ms`,
-    );
+    await page.locator("#home-leaderboard").waitFor({ state: "visible" });
+
+    // Lisbon (court 0) is selected by default
+    const tab0 = page.locator("#hl-tab-0");
+    assert.equal(await tab0.getAttribute("aria-selected"), "true");
+    assert.ok((await tab0.getAttribute("class")).includes("active"));
+
+    // Leaderboard list renders entries
+    await page.locator("#home-leaderboard-list .hl-row").first().waitFor({ state: "visible" });
+    const rowCount = await page.locator("#home-leaderboard-list .hl-row").count();
+    assert.ok(rowCount > 0, "leaderboard should render ranked rows");
+
+    // Switching to London (court 1) updates tab and loads court 1 scores
+    const tab1 = page.locator("#hl-tab-1");
+    await tab1.click();
+    assert.equal(await tab1.getAttribute("aria-selected"), "true");
+    assert.equal(await tab0.getAttribute("aria-selected"), "false");
+    await page.waitForTimeout(100);
+
+    // Switching to Barcelona via keyboard arrow navigation
+    await tab1.focus();
+    await page.keyboard.press("ArrowRight");
+    const tab2 = page.locator("#hl-tab-2");
+    assert.equal(await tab2.getAttribute("aria-selected"), "true");
+
     assert.deepEqual(errors, []);
     await context.close();
   },

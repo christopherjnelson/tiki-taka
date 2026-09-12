@@ -471,97 +471,184 @@ function syncHome() {
   syncHomeLeaderboard();
 }
 
-const BENCHMARK_LEADERBOARD = [
-  { rank: 1, name: "CRUYFF", venue: "LISBON", score: 1480, medal: "🥇" },
-  { rank: 2, name: "XAVI", venue: "BARCELONA", score: 1210, medal: "🥈" },
-  { rank: 3, name: "INIESTA", venue: "TOKYO", score: 1050, medal: "🥉" },
-  { rank: 4, name: "PIRLO", venue: "MILAN", score: 920, medal: "4" },
-  { rank: 5, name: "BUSQUETS", venue: "LONDON", score: 840, medal: "5" },
-];
+const BENCHMARK_LEADERBOARDS = {
+  0: [
+    { rank: 1, name: "redwurm", passes: 116, score: 14567, medal: "🥇" },
+    { rank: 2, name: "CRUYFF", passes: 98, score: 1480, medal: "🥈" },
+    { rank: 3, name: "XAVI", passes: 84, score: 1210, medal: "🥉" },
+    { rank: 4, name: "INIESTA", passes: 76, score: 1050, medal: "4" },
+    { rank: 5, name: "PIRLO", passes: 68, score: 920, medal: "5" },
+    { rank: 6, name: "BUSQUETS", passes: 62, score: 840, medal: "6" },
+  ],
+  1: [
+    { rank: 1, name: "redwurm", passes: 105, score: 9012, medal: "🥇" },
+    { rank: 2, name: "BECKHAM", passes: 82, score: 1350, medal: "🥈" },
+    { rank: 3, name: "SCHOLES", passes: 78, score: 1120, medal: "🥉" },
+    { rank: 4, name: "LAMPARD", passes: 70, score: 990, medal: "4" },
+    { rank: 5, name: "GERRARD", passes: 64, score: 880, medal: "5" },
+    { rank: 6, name: "ROONEY", passes: 58, score: 790, medal: "6" },
+  ],
+  2: [
+    { rank: 1, name: "redwurm", passes: 115, score: 7947, medal: "🥇" },
+    { rank: 2, name: "MESSI", passes: 92, score: 1620, medal: "🥈" },
+    { rank: 3, name: "GUARDIOLA", passes: 85, score: 1310, medal: "🥉" },
+    { rank: 4, name: "INIESTA", passes: 80, score: 1140, medal: "4" },
+    { rank: 5, name: "XAVI", passes: 74, score: 960, medal: "5" },
+    { rank: 6, name: "PUYOL", passes: 66, score: 810, medal: "6" },
+  ],
+  3: [
+    { rank: 1, name: "redwurm", passes: 107, score: 6480, medal: "🥇" },
+    { rank: 2, name: "NAKATA", passes: 88, score: 1420, medal: "🥈" },
+    { rank: 3, name: "HONDA", passes: 80, score: 1190, medal: "🥉" },
+    { rank: 4, name: "ENDO", passes: 75, score: 1010, medal: "4" },
+    { rank: 5, name: "KAGAWA", passes: 69, score: 870, medal: "5" },
+    { rank: 6, name: "OKAZAKI", passes: 63, score: 750, medal: "6" },
+  ],
+  4: [
+    { rank: 1, name: "redwurm", passes: 95, score: 5820, medal: "🥇" },
+    { rank: 2, name: "PELE", passes: 90, score: 1550, medal: "🥈" },
+    { rank: 3, name: "ZICO", passes: 84, score: 1280, medal: "🥉" },
+    { rank: 4, name: "SOCRATES", passes: 78, score: 1040, medal: "4" },
+    { rank: 5, name: "RONALDINHO", passes: 72, score: 910, medal: "5" },
+    { rank: 6, name: "RIVALDO", passes: 65, score: 780, medal: "6" },
+  ],
+  5: [
+    { rank: 1, name: "redwurm", passes: 92, score: 5640, medal: "🥇" },
+    { rank: 2, name: "BERGKAMP", passes: 89, score: 1490, medal: "🥈" },
+    { rank: 3, name: "GULLIT", passes: 83, score: 1250, medal: "🥉" },
+    { rank: 4, name: "RIJKAARD", passes: 77, score: 1020, medal: "4" },
+    { rank: 5, name: "VAN BASTEN", passes: 71, score: 890, medal: "5" },
+    { rank: 6, name: "KLUIVERT", passes: 64, score: 760, medal: "6" },
+  ],
+};
 
-function syncHomeLeaderboard() {
+let homeLeaderboardCourt = 0;
+
+function selectHomeLeaderboardCourt(courtIdx) {
+  homeLeaderboardCourt = Math.max(0, Math.min(COURTS.length - 1, Number(courtIdx) || 0));
+  const tabs = document.querySelectorAll(".hl-tab");
+  tabs.forEach((tab) => {
+    const isActive = Number(tab.dataset.court) === homeLeaderboardCourt;
+    tab.classList.toggle("active", isActive);
+    tab.setAttribute("aria-selected", String(isActive));
+    tab.tabIndex = isActive ? 0 : -1;
+  });
+  void syncHomeLeaderboard(homeLeaderboardCourt);
+}
+
+async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt) {
   const list = $("home-leaderboard-list");
   if (!list) return;
+  const statusEl = $("home-leaderboard-status");
 
   function renderEntries(entries) {
+    if (statusEl) {
+      statusEl.textContent = entries.length ? "" : "No scores recorded yet for this court.";
+    }
     list.replaceChildren(
-      ...entries.map((entry) => {
+      ...entries.slice(0, 10).map((entry, idx) => {
         const li = document.createElement("li");
-        li.className = `hl-row ${entry.rank <= 3 ? "hl-row-top" : ""}`;
+        const rankNum = entry.rank ?? idx + 1;
+        const isTop3 = rankNum <= 3;
+        const isCurrentUser =
+          profile?.username &&
+          entry.name &&
+          entry.name.toLowerCase() === profile.username.toLowerCase();
+        li.className = `hl-row ${isTop3 ? "hl-row-top" : ""} ${isCurrentUser ? "hl-row-current-user" : ""}`;
 
         const rank = document.createElement("span");
         rank.className = "hl-cell-rank";
-        rank.textContent = entry.medal || String(entry.rank);
+        rank.textContent = entry.medal || (idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : String(idx + 1));
 
-        const pilot = document.createElement("span");
-        pilot.className = "hl-cell-pilot";
-        pilot.textContent = entry.name;
+        const player = document.createElement("span");
+        player.className = "hl-cell-player";
+        player.textContent = entry.name;
 
-        const venue = document.createElement("span");
-        venue.className = "hl-cell-venue";
-        venue.textContent = entry.venue.toUpperCase();
+        const passes = document.createElement("span");
+        passes.className = "hl-cell-passes";
+        passes.textContent = entry.passes != null ? `${Number(entry.passes).toLocaleString()} passes` : "—";
 
         const score = document.createElement("span");
         score.className = "hl-cell-score";
         score.textContent = Number(entry.score).toLocaleString();
 
-        li.append(rank, pilot, venue, score);
+        li.append(rank, player, passes, score);
         return li;
       }),
     );
   }
 
-  if (dataAdapter?.getLeaderboard) {
-    dataAdapter
-      .getLeaderboard({ mode: "world-tour", limit: 5 })
-      .then((board) => {
-        if (board?.entries?.length) {
-          renderEntries(
-            board.entries.map((e, idx) => ({
-              rank: idx + 1,
-              name: e.username,
-              venue: e.court ? (COURTS[e.court - 1]?.name || "CIRCUIT") : "CIRCUIT",
-              score: e.score,
-              medal: idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : String(idx + 1),
-            })),
-          );
-        } else {
-          renderEntries(BENCHMARK_LEADERBOARD);
-        }
-      })
-      .catch(() => renderEntries(BENCHMARK_LEADERBOARD));
-  } else {
-    renderEntries(BENCHMARK_LEADERBOARD);
-  }
+  function syncUserBest(entries) {
+    let userBestScore = 0;
+    let userBestPasses = null;
+    const courtName = COURTS[courtIdx]?.name?.toUpperCase() || "CIRCUIT";
 
-  let userBestScore = 0;
-  let userBestCourt = "LISBON";
-  if (progress?.records) {
-    for (const [courtId, score] of Object.entries(progress.records)) {
-      if (typeof score === "number" && score > userBestScore) {
-        userBestScore = score;
-        const courtObj = COURTS.find((c) => String(c.id) === String(courtId));
-        if (courtObj) userBestCourt = courtObj.name.toUpperCase();
+    if (progress?.records) {
+      const directScore = progress.records[courtIdx] ?? progress.records[String(courtIdx)];
+      if (typeof directScore === "number" && directScore > 0) {
+        userBestScore = directScore;
+      }
+    }
+
+    if (profile?.username && entries?.length) {
+      const userMatches = entries.filter(
+        (e) => e.name && e.name.toLowerCase() === profile.username.toLowerCase(),
+      );
+      if (userMatches.length) {
+        for (const m of userMatches) {
+          if (m.score > userBestScore) {
+            userBestScore = m.score;
+            userBestPasses = m.passes;
+          }
+        }
+      }
+    }
+
+    const userRankEl = $("hl-user-rank");
+    const userPlayerEl = $("hl-user-player") || $("hl-user-pilot");
+    const userVenueEl = $("hl-user-venue");
+    const userScoreEl = $("hl-user-score");
+
+    if (userPlayerEl) userPlayerEl.textContent = profile?.username || "GUEST PLAYER";
+    if (userVenueEl) userVenueEl.textContent = userBestPasses != null ? `${userBestPasses} PASSES` : courtName;
+    if (userScoreEl) userScoreEl.textContent = userBestScore > 0 ? Number(userBestScore).toLocaleString() : "—";
+    if (userRankEl) {
+      if (userBestScore === 0) {
+        userRankEl.textContent = "—";
+      } else {
+        const matchIdx = entries.findIndex(
+          (e) => e.score <= userBestScore,
+        );
+        userRankEl.textContent = matchIdx >= 0 ? `#${matchIdx + 1}` : `#${entries.length}+`;
       }
     }
   }
 
-  const userRankEl = $("hl-user-rank");
-  const userPilotEl = $("hl-user-pilot");
-  const userVenueEl = $("hl-user-venue");
-  const userScoreEl = $("hl-user-score");
+  const fallback = BENCHMARK_LEADERBOARDS[courtIdx] || BENCHMARK_LEADERBOARDS[0];
+  renderEntries(fallback);
+  syncUserBest(fallback);
 
-  if (userPilotEl) userPilotEl.textContent = profile?.username || "GUEST PILOT";
-  if (userVenueEl) userVenueEl.textContent = userBestCourt;
-  if (userScoreEl) userScoreEl.textContent = userBestScore > 0 ? `${userBestScore.toLocaleString()}` : "—";
-  if (userRankEl) {
-    if (userBestScore === 0) userRankEl.textContent = "—";
-    else if (userBestScore >= 1480) userRankEl.textContent = "#1";
-    else if (userBestScore >= 1210) userRankEl.textContent = "#2";
-    else if (userBestScore >= 1050) userRankEl.textContent = "#3";
-    else if (userBestScore >= 920) userRankEl.textContent = "#4";
-    else if (userBestScore >= 840) userRankEl.textContent = "#5";
-    else userRankEl.textContent = "#6+";
+  if (dataAdapter?.getLeaderboard) {
+    try {
+      const board = await dataAdapter.getLeaderboard({
+        mode: "career",
+        court: courtIdx,
+        limit: 10,
+      });
+      if (board?.entries?.length && courtIdx === homeLeaderboardCourt) {
+        const loadedEntries = board.entries.map((e, idx) => ({
+          rank: idx + 1,
+          name: e.username,
+          passes: e.passes,
+          score: e.score,
+          medal: idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : String(idx + 1),
+        }));
+        renderEntries(loadedEntries);
+        syncUserBest(loadedEntries);
+      }
+    } catch {
+      // Fallback is already displayed
+    }
   }
 }
 function applyView(next, { updateHash = true } = {}) {
@@ -592,131 +679,11 @@ function applyView(next, { updateHash = true } = {}) {
   }
 }
 // --- Home's attract demo -------------------------------------------------
-//
-// A second Game and a second Renderer, with the bots keeping the ball among
-// themselves, so the first thing a player sees is the game and not a
-// description of it. Three rules hold it in its place:
-//
-//   * one loop. It is stepped from the shell's existing rAF loop rather than
-//     starting a second one, so it cannot outlive the screen it belongs to or
-//     run alongside the arena;
-//   * it owns nothing. Its events feed its own renderer for the flourish and
-//     are then dropped: no progress, no records, no round stats, no sound;
-//   * it is invisible to input. The canvas is aria-hidden and not focusable,
-//     and nothing here touches `game`, `phase` or the key state.
-const attractCanvas = $("attract-court");
-let attractGame = null,
-  attractRenderer = null,
-  attractPassIn = 0,
-  // Wall passes are real gameplay the player has tuned by hand
-  // (bestTarget() picks the safest lane, which is never a bank), so the demo
-  // fakes an occasional one on top of bestTarget's normal choice rather than
-  // touching how passing itself works. attractBankEvery randomizes "every
-  // fourth to sixth pass" so it doesn't read as a metronome; the count only
-  // advances on a real reception (see updateAttract), so a turnover can't
-  // skip it early or make it lag behind.
-  attractPassCount = 0,
-  attractBankEvery = 4 + Math.floor(Math.random() * 3);
-function startAttract() {
-  if (!attractCanvas || attractGame) return;
-  attractRenderer ||= new Renderer(attractCanvas);
-  attractRenderer.effects.length = 0;
-  attractGame = new Game(
-    {
-      ...COURTS[1],
-      name: "Attract",
-      // Marks this instance as the demo. Two Games can be alive across a view
-      // change, and anything watching from outside — a test probe on
-      // Game.prototype.update, a debugging session — needs to be able to tell
-      // the player's round from the one running behind the menu.
-      attract: true,
-      // Practice rules: unlimited possessions, so a demo left running on the
-      // home screen can never stall on a turnover it has no way to dismiss.
-      practice: true,
-      target: 0,
-      time: 120,
-      speed: 74,
-      defenders: 3,
-      seed: (Date.now() >>> 0) || 1,
-    },
-    "balanced",
-  );
-  attractPassIn = 0.9;
-  attractPassCount = 0;
-  attractBankEvery = 4 + Math.floor(Math.random() * 3);
-  // The band over the demo names the venue the demo is actually painting.
-  // Read it back through getVenue() rather than from COURTS[1]: the config
-  // above carries practice rules and its own seed, and getVenue() weighs both
-  // before it settles on a venue, so the court's own entry is not the answer.
-  // Renderer does exactly this on its side, so the two can never disagree.
-  const band = document.querySelector(".stage-venue"),
-    venue = getVenue(attractGame.config);
-  if (band) band.textContent = `${venue.name} / ${venue.vibe}`.toUpperCase();
-}
-function stopAttract() {
-  attractGame = null;
-  if (attractRenderer) attractRenderer.effects.length = 0;
-}
-function updateAttract(dt) {
-  if (!attractGame || !attractRenderer) return;
-  const demo = attractGame,
-    carrier = demo.players[demo.carrier];
-  // Drift the carrier off the nearest defender and back towards the middle, so
-  // the demo reads as play rather than as four statues. The engine moves the
-  // teammates and the press on its own.
-  let x = 0,
-    y = 0;
-  const nearest = demo.defenders
-    .map((defender) => ({ defender, gap: distance(defender, carrier) }))
-    .sort((a, b) => a.gap - b.gap)[0];
-  if (nearest && nearest.gap > 0.001) {
-    x = (carrier.x - nearest.defender.x) / nearest.gap;
-    y = (carrier.y - nearest.defender.y) / nearest.gap;
-  }
-  x += (500 - carrier.x) / 900;
-  y += (310 - carrier.y) / 560;
-  demo.update(dt, { x, y, focus: false });
-  attractPassIn -= dt;
-  if (!demo.ball && attractPassIn <= 0) {
-    // bestTarget(null) is the same smart pass the pass button gives a player,
-    // so the demo plays the game the way the game means it to be played.
-    const target = demo.bestTarget(null);
-    attractPassCount++;
-    let bank = false;
-    if (attractPassCount >= attractBankEvery) {
-      const passer = demo.players[demo.carrier],
-        receiver = demo.players[target];
-      const waypoint = bankPoint(passer, receiver);
-      const direct = distance(passer, receiver);
-      // Perpendicular distance of the bounce point from the direct line: a
-      // bank whose waypoint sits almost on that line looks identical to a
-      // normal pass, so it isn't worth spending the "every 4-6th" slot on —
-      // skip banking this cycle and try again in another 4-6 passes.
-      const offset =
-        direct > 1
-          ? Math.abs(
-              (receiver.x - passer.x) * (waypoint.y - passer.y) -
-                (receiver.y - passer.y) * (waypoint.x - passer.x),
-            ) / direct
-          : 0;
-      bank = offset > 40;
-      attractPassCount = 0;
-      attractBankEvery = 4 + Math.floor(Math.random() * 3);
-    }
-    demo.pass(target, bank);
-    attractPassIn = 0.55 + Math.random() * 0.5;
-  }
-  for (const event of demo.events) attractRenderer.addEvent(event);
-  demo.events = [];
-  if (demo.status !== "playing") {
-    // The clock ran out. Nothing is scored or saved; another round simply
-    // starts, and the next frame renders that one instead.
-    attractGame = null;
-    startAttract();
-    return;
-  }
-  attractRenderer.render(demo, { preview: false });
-}
+// The attract demo canvas has been replaced by the expanded Circuit Leaderboard deck.
+// These no-op stubs preserve compatibility with external probes and lifecycle hooks.
+function startAttract() {}
+function stopAttract() {}
+function updateAttract() {}
 function config() {
   if (mode === "daily") return dailyConfig();
   if (mode === "endless")
@@ -1667,37 +1634,35 @@ function getVenueSpectrumTheme(venue) {
 function renderSpectrumCanvas(ctx, w, h, isLeft, dpr, reduced, theme) {
   ctx.clearRect(0, 0, w, h);
 
-  const topPad = Math.round(58 * dpr);
-  const botPad = Math.round(8 * dpr);
-  const availH = h - topPad - botPad;
-  if (availH <= 40 || w <= 10) return;
+  if (h <= 40 || w <= 10) return;
 
   const pad = Math.max(2, Math.round(3 * dpr));
   const barWidth = Math.max(4, Math.floor((w - (VIZ_BARS + 1) * pad) / VIZ_BARS));
   const totalW = VIZ_BARS * barWidth + (VIZ_BARS - 1) * pad;
   const startX = Math.floor((w - totalW) / 2);
 
-  const numSegs = 44;
-  const segGap = Math.max(2, Math.round(2.5 * dpr));
-  const segH = Math.max(2, Math.floor((availH - (numSegs + 1) * segGap) / numSegs));
+  const numSegs = 50;
+  const segGap = Math.max(2, Math.round(2 * dpr));
+  const segH = Math.max(2, Math.floor((h - (numSegs - 1) * segGap) / numSegs));
+  const totalSegsH = numSegs * segH + (numSegs - 1) * segGap;
+  const remY = Math.max(0, Math.floor((h - totalSegsH) / 2));
   const rx = Math.max(1, Math.round(1.5 * dpr));
 
   for (let c = 0; c < VIZ_BARS; c++) {
-    // Symmetrical frequency mapping: low bass on the outer edge (flanking the arena),
-    // high treble towards the court.
-    const bandIdx = isLeft ? c : (VIZ_BARS - 1 - c);
     const bx = startX + c * (barWidth + pad);
-    const val = vizBarHeights[bandIdx];
-    const peak = vizBarPeaks[bandIdx];
+    const dataIdx = isLeft ? c : VIZ_BARS - 1 - c;
+    const val = vizBarHeights[dataIdx] || 0;
+    const peak = vizBarPeaks[dataIdx] || 0;
+
     const litCount = Math.round(val * numSegs);
     const peakSeg = Math.min(numSegs - 1, Math.round(peak * numSegs));
 
-    // Subtle dark chassis channel behind each bar, tinted with venue tone
+    // Subtle dark chassis channel behind each bar, running full height from top to bottom
     ctx.fillStyle = theme.unlit;
-    drawRoundedSegment(ctx, bx - 1, topPad, barWidth + 2, availH, rx);
+    drawRoundedSegment(ctx, bx - 1, remY, barWidth + 2, totalSegsH, rx);
 
     for (let s = 0; s < numSegs; s++) {
-      const sy = (h - botPad) - (s + 1) * (segH + segGap);
+      const sy = (h - remY) - (s + 1) * segH - s * segGap;
       const frac = s / (numSegs - 1);
       const isLit = s < litCount;
       const isPeak = !reduced && s === peakSeg && peak > 0.05;
@@ -2718,6 +2683,23 @@ document.querySelectorAll("[data-home-mode]").forEach((button) => {
   button.addEventListener("click", () =>
     switchMode(button.dataset.homeMode, courtIndex),
   );
+});
+const courtLeaderboardTabs = Array.from(document.querySelectorAll(".hl-tab"));
+courtLeaderboardTabs.forEach((tab, index) => {
+  tab.addEventListener("click", () => selectHomeLeaderboardCourt(index));
+  tab.addEventListener("keydown", (e) => {
+    let nextIndex = -1;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      nextIndex = (index + 1) % courtLeaderboardTabs.length;
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      nextIndex = (index - 1 + courtLeaderboardTabs.length) % courtLeaderboardTabs.length;
+    }
+    if (nextIndex >= 0) {
+      e.preventDefault();
+      courtLeaderboardTabs[nextIndex].focus();
+      selectHomeLeaderboardCourt(nextIndex);
+    }
+  });
 });
 addEventListener("hashchange", () => {
   applyView(viewForHash(), { updateHash: false });
