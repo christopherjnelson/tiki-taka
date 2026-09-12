@@ -1,6 +1,7 @@
 import {
   WIDTH,
   HEIGHT,
+  PLAYER_RADIUS,
   bankPoint,
   segmentDistance,
 } from "../../engine/src/game.js";
@@ -1037,7 +1038,7 @@ export class Renderer {
       c.stroke();
     }
 
-    circle(c, p.x, p.y, 24);
+    circle(c, p.x, p.y, PLAYER_RADIUS);
     const g = c.createLinearGradient(p.x - 20, p.y - 20, p.x + 20, p.y + 20);
     g.addColorStop(0, "#71fff0");
     g.addColorStop(1, "#13aebe");

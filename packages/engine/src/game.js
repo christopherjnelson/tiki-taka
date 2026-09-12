@@ -5,6 +5,17 @@ export const FOCUS_REWARDS = { split: 4, triangle: 3, zone: 2, ole: 4, wall: 0 }
 export const TRIANGLE_WINDOW = 3.5;
 export const TRIANGLE_MAX_HOLD = 1.2;
 export const MAX_HOLD = 6;
+// Shared with the Canvas renderer so zone overlap exactly matches the visible
+// player disc.
+export const PLAYER_RADIUS = 24;
+export const TEAMMATE_RUN_SPEED = 58;
+export const SHOUT_RUN_SPEED_MULTIPLIER = 1.6;
+export const PASS_DISTANCE = {
+  near: 180,
+  far: 520,
+  maxPassMultiplier: 1.5,
+  splitInfluence: 0.5,
+};
 export const SPLIT_PRESS = {
   narrow: 70,
   wide: 200,
@@ -29,9 +40,9 @@ export const ONE_TOUCH = {
   milestoneFocus: 4,
 };
 // Boost spends the same earned Focus reserve as slow motion, but consumes energy
-// twice as fast (2 units/sec) while applying only to the carrier's movement.
+// three times as fast while applying only to the carrier's movement.
 export const BOOST_SPEED_MULTIPLIER = 1.75;
-export const BOOST_DRAIN_RATE = 2;
+export const BOOST_DRAIN_RATE = 3;
 export const TACTICS = {
   balanced: {
     name: "Playmaker",
@@ -139,6 +150,14 @@ export function seeded(seed) {
 }
 export const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+export function passDistanceMultiplier(length) {
+  const progress = clamp(
+    (length - PASS_DISTANCE.near) / (PASS_DISTANCE.far - PASS_DISTANCE.near),
+    0,
+    1,
+  );
+  return 1 + progress * (PASS_DISTANCE.maxPassMultiplier - 1);
+}
 export function segmentDistance(p, a, b) {
   const dx = b.x - a.x,
     dy = b.y - a.y;
@@ -422,6 +441,9 @@ export class Game {
       bank,
       bounced: false,
       waypoint,
+      // Distance rewards the actual passer-to-receiver progression, not an
+      // optional wall detour. Wall passes retain their separate flat bonus.
+      passDistance: distance(from, to),
       split: splitTightness(this.defenders, lane),
       focusUsed: false,
       oneTouch,
@@ -477,7 +499,9 @@ export class Game {
     this.bestCombo = Math.max(this.bestCombo, this.combo);
     const multiplier = 1 + Math.min(4, Math.floor(this.combo / 4));
     const repeat = this.history.at(-2) === this.carrier;
-    let points = (repeat ? 6 : 12) * multiplier;
+    const distanceMultiplier = passDistanceMultiplier(ball.passDistance);
+    let points =
+      Math.round((repeat ? 6 : 12) * distanceMultiplier) * multiplier;
     const bonuses = [];
     const p = this.players[this.carrier];
     let focusReward = 0;
@@ -486,36 +510,42 @@ export class Game {
       points += 18 * multiplier;
       bonuses.push("wall");
     }
-    if (ball.split !== null) {
-      // Splitting two of three is far harder than two of two, so the reward
-      // scales with how crowded the court is. Focus stays flat.
-      const countScale =
-        1 + SPLIT_PRESS.perDefender * (this.defenders.length - 2);
-      points +=
-        Math.round(
-          (SPLIT_PRESS.base + SPLIT_PRESS.tight * ball.split) * countScale,
-        ) * multiplier;
-      this.splits++;
-      bonuses.push("split");
-      focusReward += FOCUS_REWARDS.split;
-    }
     this.history.push(this.carrier);
     this.historyTimes.push(this.elapsed);
     if (this.history.length > 4) {
       this.history.shift();
       this.historyTimes.shift();
     }
-    let triangleCoords = null;
     const triangleElapsed =
       this.historyTimes.length >= 4
         ? this.elapsed - this.historyTimes.at(-4)
         : Infinity;
-    if (
+    const completesTriangle =
       this.history.length >= 4 &&
       this.history.at(-4) === this.carrier &&
       new Set(this.history.slice(-3)).size === 3 &&
-      triangleElapsed <= TRIANGLE_WINDOW
-    ) {
+      triangleElapsed <= TRIANGLE_WINDOW;
+    let triangleCoords = null;
+    if (ball.split !== null && !completesTriangle) {
+      // Splitting two of three is far harder than two of two, so the reward
+      // scales with how crowded the court is. Long passes add up to half of
+      // the ordinary pass-distance multiplier so the geometry matters without
+      // overwhelming the split's tightness. Focus stays flat.
+      const countScale =
+        1 + SPLIT_PRESS.perDefender * (this.defenders.length - 2);
+      const splitDistanceMultiplier =
+        1 + (distanceMultiplier - 1) * PASS_DISTANCE.splitInfluence;
+      points +=
+        Math.round(
+          (SPLIT_PRESS.base + SPLIT_PRESS.tight * ball.split) *
+            countScale *
+            splitDistanceMultiplier,
+        ) * multiplier;
+      this.splits++;
+      bonuses.push("split");
+      focusReward += FOCUS_REWARDS.split;
+    }
+    if (completesTriangle) {
       points += 35 * multiplier;
       this.triangles++;
       bonuses.push("triangle");
@@ -527,8 +557,15 @@ export class Game {
         x: this.players[id].x,
         y: this.players[id].y,
       }));
+      // A completed triangle starts a fresh passing sequence. This prevents
+      // A-B-C-A-B from paying another triangle on the very next reception.
+      this.history = [this.carrier];
+      this.historyTimes = [this.elapsed];
     }
-    if (distance(p, this.zone) < this.zone.r) {
+    if (
+      this.zone &&
+      distance(p, this.zone) <= this.zone.r + PLAYER_RADIUS
+    ) {
       points += 25 * multiplier;
       this.zones++;
       bonuses.push("zone");
@@ -735,7 +772,9 @@ export class Game {
       const t = this.motionTime * 0.55 + teammate.phase;
       let tx = teammate.home.x + Math.sin(t) * 65,
         ty = teammate.home.y + Math.cos(t * 0.8) * 42;
-      if (teammate.shoutTarget?.zoneIndex === this.zoneIndex && this.zone) {
+      const shouted =
+        teammate.shoutTarget?.zoneIndex === this.zoneIndex && this.zone;
+      if (shouted) {
         tx = this.zone.x;
         ty = this.zone.y;
       } else {
@@ -753,7 +792,9 @@ export class Game {
       }
       const gap = Math.hypot(tx - teammate.x, ty - teammate.y);
       if (gap > 2) {
-        const step = Math.min(gap, 58 * delta);
+        const runSpeed =
+          TEAMMATE_RUN_SPEED * (shouted ? SHOUT_RUN_SPEED_MULTIPLIER : 1);
+        const step = Math.min(gap, runSpeed * delta);
         teammate.x = clamp(
           teammate.x + ((tx - teammate.x) / gap) * step,
           90,
