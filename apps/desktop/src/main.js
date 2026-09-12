@@ -39,6 +39,20 @@ import { createMusic } from "./music.js";
 import { TRACKS } from "./playlist.js";
 import { SAMPLES } from "./samples.js";
 const $ = (id) => document.getElementById(id);
+// Vite replaces this allowlisted object during a build. The fallback keeps
+// source-served development and browser tests identifiable without exposing
+// process environment values to the client.
+const buildIdentity = typeof __TIKI_TAKA_BUILD__ !== "undefined"
+  ? __TIKI_TAKA_BUILD__
+  : { stage: "ALPHA", version: "dev", sha: "local", build: "local" };
+const buildIdentityText = `${buildIdentity.stage} · v${buildIdentity.version} · ${buildIdentity.sha}${
+  buildIdentity.build === "local" ? " · local" : ` · build ${buildIdentity.build}`
+}`;
+const buildIdentityElement = $("build-identity");
+if (buildIdentityElement) {
+  buildIdentityElement.textContent = buildIdentityText;
+  buildIdentityElement.setAttribute("aria-label", `Build identity: ${buildIdentityText}`);
+}
 let storage;
 try {
   storage = window.localStorage;
