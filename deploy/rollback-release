@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+readonly ROOT=/srv/tiki-taka DOMAIN=tiki-taka.chris.guru target=${1:-}
+[[ "$target" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-[0-9a-f]{12}-[1-9][0-9]*\.[1-9][0-9]*$ ]]
+test -d "$ROOT/releases/$target/desktop"
+previous=$(readlink "$ROOT/current")
+ln -s "releases/$target" "$ROOT/current.rollback"
+mv -Tf "$ROOT/current.rollback" "$ROOT/current"
+curl --fail --silent --show-error --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/" >/dev/null
+printf 'rolled back from %s to %s at %s\n' "$previous" "$target" "$(date --utc +%Y-%m-%dT%H:%M:%SZ)" >> "$ROOT/records/rollback.log"
+echo "active=$target previous=$previous"

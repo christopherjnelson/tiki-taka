@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 027
+readonly ROOT=/srv/tiki-taka
+readonly DOMAIN=tiki-taka.chris.guru
+readonly incoming=${1:-} tag=${2:-} sha=${3:-} run_id=${4:-} attempt=${5:-}
+[[ "$incoming" =~ ^run-[1-9][0-9]*-[1-9][0-9]*$ ]]
+[[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+[[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+[[ "$run_id" =~ ^[1-9][0-9]*$ && "$attempt" =~ ^[1-9][0-9]*$ ]]
+readonly upload="$ROOT/incoming/$incoming"
+readonly archive="$upload/tiki-taka-$tag.tar.gz" checksum="$archive.sha256"
+readonly name="$tag-${sha:0:12}-$run_id.$attempt" candidate="$ROOT/releases/$name"
+test -f "$archive" && test -f "$checksum" && test ! -e "$candidate"
+expected=$(awk 'NR == 1 { print $1 }' "$checksum")
+[[ "$expected" =~ ^[0-9a-fA-F]{64}$ ]]
+actual=$(sha256sum "$archive" | awk '{ print $1 }')
+[[ "${expected,,}" == "$actual" ]] || { echo "checksum mismatch" >&2; exit 1; }
+tar -tzf "$archive" | awk '/^desktop\/(|[^/].*)$/ && $0 !~ /(^|\/)\.\.?(\/|$)/ { next } { print "unsafe archive path: " $0 > "/dev/stderr"; exit 1 }'
+if tar -tvzf "$archive" | awk 'substr($1,1,1) ~ /[lh]/ { found=1 } END { exit !found }'; then
+  echo "archive links are not allowed" >&2; exit 1
+fi
+staging=$(mktemp -d "$ROOT/releases/.staging-$name-XXXXXX")
+cleanup() { rm -rf -- "$staging"; }
+trap cleanup EXIT
+tar -xzf "$archive" -C "$staging" --no-same-owner --no-same-permissions
+test -f "$staging/desktop/index.html"
+test -f "$staging/desktop/sw.js"
+test -f "$staging/desktop/manifest.webmanifest"
+test -d "$staging/desktop/assets"
+find "$staging/desktop" -type f -name '*.woff2' -print -quit | grep -q .
+find "$staging/desktop/audio" -type f \( -name '*.ogg' -o -name '*.mp3' -o -name '*.m4a' \) -print -quit | grep -q .
+if find "$staging/desktop" \( -name '.env' -o -name '.env.*' -o -name '.git' -o -name '.github' -o -name node_modules -o -name src -o -name '*.map' -o -name 'package*.json' \) -print -quit | grep -q .; then
+  echo "candidate contains forbidden files" >&2; exit 1
+fi
+if grep -RIlE 'sb_secret_|service_role' "$staging/desktop" >/dev/null; then
+  echo "candidate contains a forbidden Supabase secret marker" >&2; exit 1
+fi
+# Static files are world-readable so nginx's unprivileged workers can traverse
+# releases. Incoming artifacts and private records remain mode 0750.
+chmod -R u=rwX,go=rX "$staging"
+mv "$staging" "$candidate"
+trap - EXIT
+previous=""
+[[ ! -L "$ROOT/current" ]] || previous=$(readlink "$ROOT/current")
+ln -s "releases/$name" "$ROOT/current.next"
+mv -Tf "$ROOT/current.next" "$ROOT/current"
+if ! curl --fail --silent --show-error --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/" >/dev/null; then
+  if [[ -n "$previous" ]]; then ln -s "$previous" "$ROOT/current.rollback"; mv -Tf "$ROOT/current.rollback" "$ROOT/current"; fi
+  echo "health check failed; previous release restored" >&2; exit 1
+fi
+deployed_at=$(date --utc +%Y-%m-%dT%H:%M:%SZ)
+printf '{"tag":"%s","sha":"%s","run_id":"%s","attempt":"%s","deployed_at":"%s","release":"%s","previous":"%s"}\n' "$tag" "$sha" "$run_id" "$attempt" "$deployed_at" "$name" "$previous" > "$ROOT/records/$name.json"
+chmod 0640 "$ROOT/records/$name.json"
+rm -rf -- "$upload"
+active=$(readlink -f "$ROOT/current")
+mapfile -t releases < <(find "$ROOT/releases" -mindepth 1 -maxdepth 1 -type d ! -name '.staging-*' -printf '%T@ %p\n' | sort -nr | cut -d' ' -f2-)
+for ((i=5; i<${#releases[@]}; i++)); do [[ "$(readlink -f "${releases[$i]}")" == "$active" ]] || rm -rf -- "${releases[$i]}"; done
+echo "active=$name previous=${previous:-none}"
