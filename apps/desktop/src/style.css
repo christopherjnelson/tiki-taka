@@ -2841,12 +2841,12 @@ body.play-view .arena-view .below-court {
        best" footer, so the numbers line up top to bottom. Narrower desktop
        widths shrink the shared gap and bonus-column width together (see
        the max-width tier below) rather than letting any one row diverge. */
-    --hl-cols: 34px 1fr 30px 30px 30px 30px 64px 78px;
-    --hl-gap: 7px;
+    --hl-cols: 32px 1fr 68px 42px 116px 78px 62px 74px;
+    --hl-gap: 8px;
   }
   @media (max-width: 1180px) {
     .home-leaderboard {
-      --hl-cols: 28px 1fr 24px 24px 24px 24px 48px 62px;
+      --hl-cols: 28px 1fr 60px 36px 102px 70px 54px 66px;
       --hl-gap: 5px;
     }
   }
@@ -2955,9 +2955,9 @@ body.play-view .arena-view .below-court {
     display: grid;
     grid-template-columns: var(--hl-cols);
     gap: var(--hl-gap);
-    padding: 7px 10px;
-    font: 700 10.5px/1 var(--sign);
-    letter-spacing: 1.5px;
+    padding: 8px 10px;
+    font: 700 11px/1 var(--sign);
+    letter-spacing: 1.2px;
     color: var(--muted);
     border-bottom: 1px solid color-mix(in srgb, var(--line), transparent 50%);
   }
@@ -2989,8 +2989,8 @@ body.play-view .arena-view .below-court {
     grid-template-columns: var(--hl-cols);
     gap: var(--hl-gap);
     align-items: center;
-    padding: 7px 10px;
-    font-size: 13px;
+    padding: 8px 10px;
+    font-size: 14px;
     line-height: 1.25;
     border-radius: 3px;
     transition: background 0.15s ease;
@@ -3010,25 +3010,25 @@ body.play-view .arena-view .below-court {
   }
   .hl-cell-rank {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     color: var(--muted);
   }
   .hl-row:nth-child(1) .hl-cell-rank {
     color: #ffd700;
-    font-size: 15px;
+    font-size: 16px;
   }
   .hl-row:nth-child(2) .hl-cell-rank {
     color: #c0c0c0;
-    font-size: 15px;
+    font-size: 16px;
   }
   .hl-row:nth-child(3) .hl-cell-rank {
     color: #cd7f32;
-    font-size: 15px;
+    font-size: 16px;
   }
   .hl-cell-player,
   .hl-cell-pilot {
-    font-size: 13.5px;
+    font-size: 14.5px;
     font-weight: 700;
     letter-spacing: 0.5px;
     white-space: nowrap;
@@ -3038,7 +3038,8 @@ body.play-view .arena-view .below-court {
   }
   .hl-cell-passes {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 600;
     letter-spacing: 0.5px;
     color: var(--muted);
     text-align: right;
@@ -3046,46 +3047,55 @@ body.play-view .arena-view .below-court {
   }
   .hl-cell-score {
     font-family: var(--mono);
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 800;
     text-align: right;
     color: var(--accent);
     letter-spacing: 0.5px;
     font-variant-numeric: tabular-nums;
   }
-  /* ── Bonus columns (TRI / OLÉ / SPL / ZON) ───────────────────────────
-     Secondary to score by design: smaller, dimmer, right-aligned so the
-     digits line up under the header. A zero dims further still, echoing
-     .result-stat.is-zero in the results modal — the same "nothing to see
-     here" language, reused rather than reinvented. */
+  /* ── Bonus columns (TRIANGLE / OLÉ / SPLIT THE PRESS / ZONE PASS) ─────────
+     Matched in text size to passes, right-aligned so digits align cleanly.
+     Headers match in-game colors (yellow for triangles, splits and zones;
+     pink for olés). */
   .hl-cell-bonus {
     font-family: var(--mono);
-    font-size: 10.5px;
+    font-size: 13px;
     font-weight: 600;
     text-align: right;
     color: var(--muted);
-    opacity: 0.75;
+    opacity: 0.88;
     letter-spacing: 0.3px;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
   .hl-cell-bonus.hl-cell-ole {
-    color: var(--accent);
-    opacity: 0.85;
+    color: var(--pink);
+    opacity: 0.95;
   }
   .hl-cell-bonus.is-zero {
-    opacity: 0.35;
+    opacity: 0.3;
   }
   .hl-head .hl-cell-bonus {
-    font-size: 9.5px;
+    font-size: 10px;
     font-weight: 700;
     opacity: 1;
     text-align: right;
     color: var(--muted);
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
+    white-space: nowrap;
+  }
+  .hl-head .hl-cell-bonus.hl-cell-tri {
+    color: #ffd043;
   }
   .hl-head .hl-cell-bonus.hl-cell-ole {
-    color: var(--accent);
+    color: var(--pink);
+  }
+  .hl-head .hl-cell-bonus.hl-cell-split {
+    color: #ffd043;
+  }
+  .hl-head .hl-cell-bonus.hl-cell-zone {
+    color: #ffd043;
   }
   /* ── User Best Footer ──────────────────────────────────────────────── */
   /* The tag ("YOUR BEST") is a decorative label, not a data column, so it

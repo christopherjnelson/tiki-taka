@@ -613,10 +613,10 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
         player.className = "hl-cell-player";
         player.textContent = entry.name;
 
-        const triangles = bonusCell(entry.triangles);
+        const triangles = bonusCell(entry.triangles, "hl-cell-tri");
         const oles = bonusCell(entry.oles, "hl-cell-ole");
-        const splits = bonusCell(entry.splits);
-        const zones = bonusCell(entry.zones);
+        const splits = bonusCell(entry.splits, "hl-cell-split");
+        const zones = bonusCell(entry.zones, "hl-cell-zone");
 
         const passes = document.createElement("span");
         passes.className = "hl-cell-passes";
