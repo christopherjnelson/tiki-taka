@@ -786,9 +786,23 @@ function showRoundResults({
   overlay.dataset.result = cleared ? "victory" : "defeat";
   overlay.dataset.actions = "waiting";
   $("result-score").textContent = String(game.score);
-  $("result-passes").textContent = String(game.passes);
-  $("result-streak").textContent = String(game.bestOneTouch || 0);
   $("result-xp").textContent = `+${xp}`;
+  const breakdown = {
+    triangles: game.triangles || 0,
+    oles: game.oles || 0,
+    splits: game.splits || 0,
+    zones: game.zones || 0,
+    banks: game.banks || 0,
+    passes: game.passes || 0,
+    streak: game.bestOneTouch || 0,
+    turnovers: game.turnovers || 0,
+  };
+  for (const [key, value] of Object.entries(breakdown)) {
+    $(`result-${key}`).textContent = String(value);
+    $(`result-${key}-cell`).classList.toggle("is-zero", value === 0);
+  }
+  const flowPeak = 1 + Math.min(4, Math.floor((game.bestCombo || 0) / 4));
+  $("result-combo").textContent = `x${flowPeak}`;
   $("result-burst").hidden = false;
   $("result-stats").hidden = false;
   $("result-cheer").hidden = false;
@@ -1983,6 +1997,10 @@ function finish() {
     score: game.score,
     passes: game.passes,
     bestOneTouch: game.bestOneTouch,
+    triangles: game.triangles || 0,
+    oles: game.oles || 0,
+    splits: game.splits || 0,
+    zones: game.zones || 0,
   };
   if (dataAdapter.kind !== "supabase") {
     void recordRound(completedRound).then((saved) => {
