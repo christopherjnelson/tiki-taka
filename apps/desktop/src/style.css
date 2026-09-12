@@ -1481,6 +1481,20 @@ body.play-view .ambience {
   font: 700 11px var(--sign);
   letter-spacing: 1px;
 }
+.music-player .bar-button {
+  justify-content: center;
+  padding: 0;
+  letter-spacing: 0;
+}
+.music-player .bar-button span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+#music-toggle[aria-pressed="false"] span {
+  margin-left: 1px;
+}
 .top-brand {
   grid-column: 2;
   display: flex;
@@ -1543,13 +1557,19 @@ body.play-view .ambience {
   border-color: var(--cyan);
   outline: none;
 }
-/* Only a live round has a pause menu to reach, so the Menu button is only
-   there while one is on screen. display:none also takes it out of
+.bar-icon {
+  display: block;
+  flex-shrink: 0;
+}
+/* Only a live round has a pause menu or quick home exit in the top bar, so these buttons
+   are only shown while in the arena. display:none also takes them out of
    padFocusables(), so the d-pad never lands on a control that does nothing. */
-.top-pause {
+.top-pause,
+.top-home {
   display: none;
 }
-body[data-view="arena"] .top-pause {
+body[data-view="arena"] .top-pause,
+body[data-view="arena"] .top-home {
   display: inline-flex;
 }
 /* Local demo data, and the chip says so. It opens the same #account-dialog
@@ -2305,6 +2325,24 @@ body.play-view #bank-button {
 }
 .home-modes button:nth-child(even) {
   border-top-color: var(--pink);
+}
+.home-modes button:disabled,
+.home-modes button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: saturate(0.7);
+}
+.home-modes button:disabled::after,
+.home-modes button[aria-disabled="true"]::after {
+  opacity: 0.35;
+}
+.home-modes button:disabled .mode-copy span,
+.home-modes button[aria-disabled="true"] .mode-copy span {
+  font: 700 10px var(--sign);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--pink);
+  opacity: 0.85;
 }
 /* Line-art icon, coloured by the same accent as the card's top border —
    currentColor so one rule covers both the shape's stroke and the

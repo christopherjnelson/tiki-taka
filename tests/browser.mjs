@@ -331,8 +331,9 @@ await check('desktop gameplay, controls, progression, help, and full run', async
   await page.clock.runFor(1200);
   // Both buttons on this overlay replay the court; they must say which is
   // which rather than leaving the player to guess.
-  await expectText(page.locator('#start-button'), /^Play (the next court|this court again|today’s circuit again)$|^Start a new run$|^Practise this court again$/);
-  await expectText(page.locator('#secondary-button'), /^Back to the round intro$/);
+  await expectText(page.locator('#start-button'), /^Retry$/);
+  await expectText(page.locator('#secondary-button'), /^Change difficulty$/);
+  await expectText(page.locator('#tertiary-button'), /^Home$/);
   assert.equal(
     await page.evaluate(() => [...document.querySelectorAll('#game-overlay button')].some(el => /courts/i.test(el.textContent))),
     false,
@@ -370,7 +371,8 @@ await check('a complete playable career run clears and unlocks the next court', 
   // replay, advance or abandon?" the old "Next court"/"Back to court" pair
   // left the player guessing at.
   await expectText(page.locator('#start-button'), /^Play the next court$/);
-  await expectText(page.locator('#secondary-button'), /^Back to the round intro$/);
+  await expectText(page.locator('#secondary-button'), /^Change difficulty$/);
+  await expectText(page.locator('#tertiary-button'), /^Home$/);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tiki-taka.progress.v1')));
   assert.equal(saved.unlocked, 1);
   // Stars and bests are tracked per difficulty tier now; the default
