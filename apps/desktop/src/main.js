@@ -966,7 +966,7 @@ function syncProgress() {
   });
   syncHome();
 }
-function setOverlay(kicker, title, copy, primary, secondary = "") {
+function setOverlay(kicker, title, copy, primary, secondary = "", tertiary = "") {
   clearTimeout(resultRevealTimeout);
   resultActionsReady = true;
   const overlay = $("game-overlay");
@@ -982,6 +982,11 @@ function setOverlay(kicker, title, copy, primary, secondary = "") {
   $("overlay-actions").hidden = false;
   $("start-button").disabled = false;
   $("secondary-button").disabled = false;
+  if ($("tertiary-button")) {
+    $("tertiary-button").disabled = false;
+    $("tertiary-button").textContent = tertiary;
+    $("tertiary-button").hidden = !tertiary;
+  }
   $("game-overlay").hidden = false;
   $("overlay-kicker").textContent = kicker;
   $("overlay-title").textContent = title;
@@ -997,10 +1002,11 @@ function showRoundResults({
   copy,
   primary,
   secondary,
+  tertiary = "",
   stars,
   xp,
 }) {
-  setOverlay(kicker, title, copy, primary, secondary);
+  setOverlay(kicker, title, copy, primary, secondary, tertiary);
   const overlay = $("game-overlay"),
     actions = $("overlay-actions");
   overlay.dataset.result = cleared ? "victory" : "defeat";
@@ -1033,6 +1039,7 @@ function showRoundResults({
   actions.hidden = true;
   $("start-button").disabled = true;
   $("secondary-button").disabled = true;
+  if ($("tertiary-button")) $("tertiary-button").disabled = true;
   resultActionsReady = false;
   $("overlay-card").focus({ preventScroll: true });
   resultRevealTimeout = setTimeout(() => {
@@ -1041,6 +1048,7 @@ function showRoundResults({
     actions.hidden = false;
     $("start-button").disabled = false;
     $("secondary-button").disabled = false;
+    if ($("tertiary-button")) $("tertiary-button").disabled = false;
     if (
       view === "arena" &&
       phase === "finished" &&
@@ -2297,14 +2305,17 @@ function finish() {
     primary:
       mode === "career" && result.cleared && courtIndex < COURTS.length - 1
         ? "Play the next court"
-        : mode === "daily"
-          ? "Play today’s circuit again"
-          : mode === "endless"
-            ? "Start a new run"
-            : mode === "practice"
-              ? "Practise this court again"
-              : "Play this court again",
-    secondary: "Back to the round intro",
+        : !result.cleared
+          ? "Retry"
+          : mode === "daily"
+            ? "Play today’s circuit again"
+            : mode === "endless"
+              ? "Start a new run"
+              : mode === "practice"
+                ? "Practise this court again"
+                : "Play this court again",
+    secondary: "Change difficulty",
+    tertiary: "Home",
     stars: result.stars,
     xp: result.xp,
   });
@@ -2358,6 +2369,10 @@ $("secondary-button").addEventListener("click", () => {
     return;
   }
   prepare();
+});
+$("tertiary-button").addEventListener("click", () => {
+  if (phase === "finished" && !resultActionsReady) return;
+  applyView("home");
 });
 $("pause-button").addEventListener("click", togglePause);
 $("pass-button").addEventListener("click", () => doPass());
