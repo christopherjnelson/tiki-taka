@@ -106,11 +106,16 @@ jobs:
       - name: Package static site
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
-        run: tar -C dist -czf "tiki-taka-${RELEASE_TAG}.tar.gz" desktop
+        run: |
+          ARCHIVE="tiki-taka-${RELEASE_TAG}.tar.gz"
+          tar -C dist -czf "$ARCHIVE" desktop
+          sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
       - name: Upload immutable release artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ steps.release.outputs.artifact_name }}
-          path: tiki-taka-${{ github.event.release.tag_name || inputs.release_tag }}.tar.gz
+          path: |
+            tiki-taka-${{ github.event.release.tag_name || inputs.release_tag }}.tar.gz
+            tiki-taka-${{ github.event.release.tag_name || inputs.release_tag }}.tar.gz.sha256
           if-no-files-found: error
           retention-days: 90
