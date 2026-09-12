@@ -159,8 +159,54 @@ test("Supabase adapter's leaderboard selects and maps the bonus-counter columns"
     oles: 2,
     splits: 3,
     zones: 4,
+    difficulty: "standard",
     createdAt: "now",
   });
+});
+
+test("Supabase adapter threads difficulty into the round payload and defaults an invalid value to standard", async () => {
+  const writes = [];
+  const user = { id: "user-1", email: "player@example.com", user_metadata: { username: "player" } };
+  const client = {
+    auth: { getSession: async () => ({ data: { session: { user } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from(table) {
+      if (table === "round_scores") return {
+        upsert: async (row) => { writes.push(row); return { error: null }; },
+        select: () => ({ eq: () => thenable({ data: [], error: null }) }),
+      };
+      throw new Error(`unexpected table ${table}`);
+    },
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  await adapter.recordRound({ score: 1, difficulty: "ruthless" });
+  assert.equal(writes[0].difficulty, "ruthless");
+  await adapter.recordRound({ score: 1, difficulty: "nightmare" });
+  assert.equal(writes[1].difficulty, "standard");
+  await adapter.recordRound({ score: 1 });
+  assert.equal(writes[2].difficulty, "standard");
+});
+
+test("getLeaderboard selects and maps difficulty, and accepts an optional difficulty filter", async () => {
+  const filters = [];
+  const user = { id: "user-1", email: "player@example.com", user_metadata: { username: "player" } };
+  const row = { username: "player", mode: "career", court: 0, score: 900, passes: 12, best_one_touch: 4, difficulty: "ruthless", created_at: "2026-09-11T00:00:00Z" };
+  function queryFor(rows) {
+    const query = {
+      eq(field, value) { filters.push([field, value]); return query; },
+      order() { return query; },
+      limit: async () => ({ data: rows, error: null }),
+    };
+    return query;
+  }
+  const client = {
+    auth: { getSession: async () => ({ data: { session: { user } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from: (table) => table === "leaderboard_entries" ? { select: () => queryFor([row]) } : (() => { throw new Error(`unexpected table ${table}`); })(),
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  const result = await adapter.getLeaderboard({ mode: "career", court: 0, difficulty: "ruthless" });
+  assert.deepEqual(filters, [["mode", "career"], ["court", 0], ["difficulty", "ruthless"]]);
+  assert.equal(result.difficulty, "ruthless");
+  assert.deepEqual(result.entries[0], { username: "player", score: 900, passes: 12, bestOneTouch: 4, triangles: 0, oles: 0, splits: 0, zones: 0, difficulty: "ruthless", createdAt: "2026-09-11T00:00:00Z" });
 });
 
 test("Supabase adapter generates a UUIDv4 retry id without crypto.randomUUID", async () => {

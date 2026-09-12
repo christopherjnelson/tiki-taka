@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross } from '../src/game.js';
+import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -58,6 +58,108 @@ test('daily circuit uses a reproducible UTC day and changes tomorrow', () => {
   assert.deepEqual(morning, dailyConfig(new Date('2026-09-06T23:59:00Z')));
   assert.notEqual(morning.seed, dailyConfig(new Date('2026-09-07T00:01:00Z')).seed);
   assert.equal(morning.key, '2026-09-06');
+});
+
+test('the daily circuit is always standard, regardless of what applyDifficulty is asked for', () => {
+  const daily = dailyConfig(new Date('2026-09-06T00:01:00Z'));
+  assert.equal(daily.difficulty, 'standard');
+  assert.equal(daily.possessions, 3);
+  for (const tier of ['relaxed', 'standard', 'ruthless', 'nonsense']) {
+    const applied = applyDifficulty(daily, tier);
+    assert.equal(applied.difficulty, 'standard', tier);
+    assert.equal(applied.target, daily.target, tier);
+    assert.equal(applied.speed, daily.speed, tier);
+    assert.equal(applied.defenders, daily.defenders, tier);
+  }
+});
+
+test('DIFFICULTIES describes the three tiers in order for the UI to render directly', () => {
+  assert.deepEqual(DIFFICULTIES.map(d => d.id), ['relaxed', 'standard', 'ruthless']);
+  for (const tier of DIFFICULTIES) {
+    assert.equal(typeof tier.name, 'string');
+    assert.ok(tier.name.length > 0);
+    assert.equal(typeof tier.label, 'string');
+    assert.ok(tier.label.length > 0);
+  }
+  assert.equal(DIFFICULTIES.find(d => d.id === 'relaxed').name, 'Relaxed');
+  assert.equal(DIFFICULTIES.find(d => d.id === 'standard').name, 'Standard');
+  assert.equal(DIFFICULTIES.find(d => d.id === 'ruthless').name, 'Ruthless');
+});
+
+test('applyDifficulty is pure and produces the documented values for every tier', () => {
+  const court = COURTS[0]; // target 600, speed 76, defenders 2
+  const frozen = JSON.parse(JSON.stringify(court));
+
+  const relaxed = applyDifficulty(court, 'relaxed');
+  assert.deepEqual(court, frozen, 'applyDifficulty must not mutate its input');
+  assert.equal(relaxed.target, 400); // 600 * 0.7 = 420, rounded to nearest 50
+  assert.equal(relaxed.possessions, 4);
+  assert.equal(relaxed.speed, 76 * 0.9);
+  assert.equal(relaxed.defenders, 2);
+  assert.equal(relaxed.difficulty, 'relaxed');
+
+  const standard = applyDifficulty(court, 'standard');
+  assert.equal(standard.target, 600);
+  assert.equal(standard.possessions, 3);
+  assert.equal(standard.speed, 76);
+  assert.equal(standard.defenders, 2);
+  assert.equal(standard.difficulty, 'standard');
+
+  const ruthless = applyDifficulty(court, 'ruthless');
+  assert.equal(ruthless.target, 800); // 600 * 1.3 = 780, rounded to nearest 50
+  assert.equal(ruthless.possessions, 2);
+  assert.equal(ruthless.speed, 76 * 1.12);
+  assert.equal(ruthless.defenders, 3);
+  assert.equal(ruthless.difficulty, 'ruthless');
+});
+
+test('applyDifficulty caps total defenders and falls back to standard on an unknown tier', () => {
+  const crowded = { ...COURTS[4], defenders: 4 }; // ruthless would add one more: 5, at the cap
+  assert.equal(applyDifficulty(crowded, 'ruthless').defenders, MAX_DEFENDERS);
+  const alreadyAtCap = { ...COURTS[4], defenders: 5 };
+  assert.equal(applyDifficulty(alreadyAtCap, 'ruthless').defenders, MAX_DEFENDERS);
+
+  const unknown = applyDifficulty(COURTS[0], 'nightmare');
+  const standard = applyDifficulty(COURTS[0], 'standard');
+  assert.deepEqual(unknown, standard);
+
+  const missing = applyDifficulty(COURTS[0], undefined);
+  assert.deepEqual(missing, standard);
+});
+
+test('standard is byte-equivalent to the pre-tier court behavior', () => {
+  for (const court of COURTS) {
+    const standard = applyDifficulty(court, 'standard');
+    assert.equal(standard.target, court.target, court.name);
+    assert.equal(standard.speed, court.speed, court.name);
+    assert.equal(standard.defenders, court.defenders, court.name);
+    assert.equal(standard.possessions, 3, court.name);
+  }
+});
+
+test('the possessions limit ends a round after the tier-specific number of turnovers', () => {
+  for (const [tier, expected] of [['relaxed', 4], ['standard', 3], ['ruthless', 2]]) {
+    const config = applyDifficulty({ ...COURTS[0], defenders: 0 }, tier);
+    const game = new Game(config);
+    for (let i = 0; i < expected - 1; i++) {
+      game.turnover('TEST');
+      assert.equal(game.status, 'playing', `${tier} turnover ${i + 1}`);
+    }
+    game.turnover('TEST');
+    assert.equal(game.status, 'finished', tier);
+    assert.equal(game.turnovers, expected, tier);
+  }
+});
+
+test('the same seed and tier reproduce an identical run deterministically', () => {
+  const config = applyDifficulty(COURTS[2], 'ruthless');
+  const first = playAssisted(config, config.seed);
+  const second = playAssisted(config, config.seed);
+  assert.deepEqual(first.game.history, second.game.history);
+  assert.equal(first.game.score, second.game.score);
+  assert.equal(first.game.turnovers, second.game.turnovers);
+  assert.equal(first.attempts, second.attempts);
+  assert.deepEqual(first.game.players, second.game.players);
 });
 
 test('all tactics start with empty focus at their advertised capacities and fallback is safe', () => {

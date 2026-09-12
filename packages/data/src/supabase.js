@@ -1,4 +1,4 @@
-import { defaultSettings, normalizeProgress, normalizeSettings } from "../../engine/src/index.js";
+import { defaultSettings, normalizeProgress, normalizeSettings, DIFFICULTIES } from "../../engine/src/index.js";
 
 import {
   LocalDataError,
@@ -19,6 +19,8 @@ const isEmail = (value) => /^\S+@\S+\.\S+$/.test(String(value || "").trim());
 const USERNAME_RE = /^[A-Za-z0-9_.-]{2,24}$/;
 const number = (value) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
 const integer = (value) => Math.floor(number(value));
+const DIFFICULTY_IDS = DIFFICULTIES.map((tier) => tier.id);
+const difficulty = (value) => (DIFFICULTY_IDS.includes(value) ? value : "standard");
 
 function normalizePreferences(value) {
   const choice = value?.scoreSaveChoice ?? value?.score_save_choice;
@@ -267,18 +269,20 @@ export function createSupabaseDataAdapter({
           id: round.id ?? newRoundId(crypto), user_id: user.id, mode: round.mode ?? "career", court: round.court ?? null,
           score: integer(round.score), passes: integer(round.passes), best_one_touch: integer(round.bestOneTouch),
           triangles: integer(round.triangles), oles: integer(round.oles), splits: integer(round.splits), zones: integer(round.zones),
+          difficulty: difficulty(round.difficulty),
         }, { onConflict: "id", ignoreDuplicates: true });
         throwIfError(result.error, "Supabase could not record that round.");
         return statsFor(user);
       }, () => guest.recordRound(round));
     },
-    async getLeaderboard({ mode = "career", court, limit = 10 } = {}) {
+    async getLeaderboard({ mode = "career", court, difficulty: tier, limit = 10 } = {}) {
       try {
-        let query = supabase.from("leaderboard_entries").select("username, mode, court, score, passes, best_one_touch, triangles, oles, splits, zones, created_at").eq("mode", mode);
+        let query = supabase.from("leaderboard_entries").select("username, mode, court, score, passes, best_one_touch, triangles, oles, splits, zones, difficulty, created_at").eq("mode", mode);
         if (court !== undefined && court !== null) query = query.eq("court", court);
+        if (tier !== undefined && tier !== null) query = query.eq("difficulty", difficulty(tier));
         const result = await query.order("score", { ascending: false }).order("created_at", { ascending: true }).limit(Math.min(Math.max(integer(limit), 1), 100));
         throwIfError(result.error, "Supabase could not load the leaderboard.");
-        return { mode, court: court ?? null, entries: (result.data ?? []).map((row) => ({ username: row.username ?? "Player", score: number(row.score), passes: integer(row.passes), bestOneTouch: integer(row.best_one_touch), triangles: integer(row.triangles), oles: integer(row.oles), splits: integer(row.splits), zones: integer(row.zones), createdAt: row.created_at })) };
+        return { mode, court: court ?? null, difficulty: tier ?? null, entries: (result.data ?? []).map((row) => ({ username: row.username ?? "Player", score: number(row.score), passes: integer(row.passes), bestOneTouch: integer(row.best_one_touch), triangles: integer(row.triangles), oles: integer(row.oles), splits: integer(row.splits), zones: integer(row.zones), difficulty: difficulty(row.difficulty), createdAt: row.created_at })) };
       } catch (error) {
         throw errorFrom(error, "Supabase could not load the leaderboard.");
       }

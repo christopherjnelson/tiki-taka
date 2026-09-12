@@ -352,6 +352,20 @@ input:focus-visible {
   margin-left: auto;
   color: var(--gold);
   font-size: 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Names the tier the star count belongs to, since progress.courts is now
+   tracked per difficulty and a bare star count would otherwise silently
+   read as "the" score for a court that actually has up to three. */
+.court-tier-tag {
+  color: var(--muted);
+  font: 700 7px var(--sign);
+  letter-spacing: 0.5px;
+  border: 1px solid var(--line);
+  padding: 1px 3px;
+  border-radius: 2px;
 }
 .progress-track,
 .goal-track {
@@ -950,7 +964,7 @@ kbd {
 }
 .below-court {
   display: grid;
-  grid-template-columns: 1.35fr 1fr;
+  grid-template-columns: 1.15fr 1fr 1fr;
   gap: 14px;
   margin-top: 14px;
 }
@@ -988,6 +1002,106 @@ kbd {
   margin: 3px 0;
   color: var(--muted);
   font-size: 10px;
+}
+.difficulty-target {
+  color: var(--pink);
+  font: 700 8px var(--sign);
+  white-space: nowrap;
+}
+#difficulty-description {
+  margin: 3px 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.difficulty-card select:disabled {
+  opacity: 0.6;
+}
+/* ── Segmented difficulty toggle ─────────────────────────────────────────
+   Shared by the home leaderboard's filter (in its header) and the pre-round
+   invitation card (the actually-visible "before a round" surface — the
+   below-court panel above sits behind the full-bleed Play view once the
+   arena is on screen, matching the pre-existing tactic selector's fate). One
+   set of rules, not scoped to either caller, so both stay visually
+   identical and both keep working at every desktop width. */
+.hl-difficulty-toggle {
+  display: flex;
+  gap: 3px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--surface), #000 45%);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  flex: none;
+}
+.hl-diff-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--muted);
+  font: 700 8.5px/1 var(--sign);
+  letter-spacing: 0.6px;
+  padding: 5px 8px;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.hl-diff-btn:hover {
+  color: var(--ink);
+}
+.hl-diff-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.hl-diff-btn.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 85%);
+  border-color: color-mix(in srgb, var(--accent), transparent 45%);
+  font-weight: 800;
+}
+.hl-diff-btn[data-tier="relaxed"].active {
+  color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan), transparent 85%);
+  border-color: color-mix(in srgb, var(--cyan), transparent 45%);
+}
+.hl-diff-btn[data-tier="ruthless"].active {
+  color: var(--pink);
+  background: color-mix(in srgb, var(--pink), transparent 85%);
+  border-color: color-mix(in srgb, var(--pink), transparent 45%);
+}
+.hl-diff-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* ── Pre-round invitation card's difficulty block ───────────────────────
+   This is the one difficulty control a player actually sees before a round
+   starts: the below-court .difficulty-card sits in the same permanently
+   hidden panel the existing .tactic-card already lived in (see
+   body.play-view .below-court), so it mirrors that pattern structurally and
+   stays in sync, but this card is what is actually on screen. */
+.overlay-difficulty {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  text-align: left;
+  background: color-mix(in srgb, var(--panel, var(--surface)), transparent 20%);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.overlay-difficulty .card-heading {
+  margin-bottom: 7px;
+}
+.overlay-difficulty .hl-difficulty-toggle {
+  width: 100%;
+}
+.overlay-difficulty .hl-diff-btn {
+  flex: 1 1 0;
+  text-align: center;
+}
+.overlay-difficulty-description {
+  margin: 7px 0 0;
+  color: #d0c4dd;
+  font-size: 9.5px;
+  line-height: 1.5;
 }
 .game-footer {
   display: flex;
@@ -2660,8 +2774,10 @@ body.play-view .arena-view .below-court {
   }
   .hl-header {
     display: flex;
+    flex-wrap: nowrap;
     align-items: center;
     justify-content: space-between;
+    gap: 10px;
     padding: 7px 14px;
     background: linear-gradient(
       180deg,
@@ -2675,22 +2791,25 @@ body.play-view .arena-view .below-court {
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
+    flex: 1 1 auto;
     font: 800 13px/1 var(--sign);
     letter-spacing: 1.5px;
     color: var(--accent);
     text-transform: uppercase;
   }
+  /* The title is the flexible side of this header; the toggle keeps its
+     natural (abbreviated-label) width and never wraps to a second line —
+     the title truncates first if the deck ever gets narrower than both can
+     hold at once. */
+  .hl-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
   .hl-icon {
     font-size: 15px;
-  }
-  .hl-badge {
-    font: 700 9.5px/1 var(--sign);
-    letter-spacing: 1px;
-    color: var(--ink);
-    background: color-mix(in srgb, var(--line), transparent 40%);
-    padding: 3px 8px;
-    border-radius: 2px;
-    border: 1px solid var(--line);
   }
   /* ── Court selection tabs ─────────────────────────────────────────── */
   .hl-tabs {
