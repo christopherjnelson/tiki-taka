@@ -1158,6 +1158,7 @@ function prepare() {
   // menu, so it stays live for the whole time the arena is on screen rather
   // than only while a round is running. Touch players need it before kickoff.
   $("pause-button").disabled = false;
+  shoutVisual = null;
   setPauseState(false);
   setControlsEnabled(false);
   $("bank-button").setAttribute("aria-pressed", "false");
@@ -1600,14 +1601,13 @@ function syncBoostButtons() {
 function selectedPassTarget() {
   return game.queuedPass?.id ?? queuedSmartTarget();
 }
+let shoutVisual = null;
 function shoutTarget() {
   if (phase !== "playing" || awaitingResume) return;
   triggerActionHighlight("shout");
   const target = selectedPassTarget();
   if (game.shout(target)) {
-    toast(`Player ${target + 1} is moving to the bonus zone.`);
-  } else {
-    toast("No selected teammate can move to the bonus zone.");
+    shoutVisual = { playerId: target, start: performance.now(), duration: 2000 };
   }
 }
 // THE COURT'S OWN BOX
@@ -3579,6 +3579,7 @@ function frame(now) {
       aim,
       bank: bank || actionDown(settings.bindings, keys, "wallHold"),
       paused: phase === "paused" || phase === "finished" || awaitingResume,
+      shoutVisual,
     });
     drawTargetHighlight(target);
     const courtTargetStr = Number.isInteger(target) ? String(target) : "";
