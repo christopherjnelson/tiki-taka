@@ -476,9 +476,9 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   const nextFocus = await page.evaluate(() => document.activeElement?.textContent?.trim());
   assert.notEqual(nextFocus, firstFocus, 'D-pad should move menu focus');
   assert.equal(
-    await page.evaluate(() => Boolean(document.querySelector('#title-menu')?.contains(document.activeElement))),
+    await page.evaluate(() => Boolean(document.querySelector('#home-view')?.contains(document.activeElement))),
     true,
-    'title-screen navigation should stay inside the title menu',
+    'title-screen navigation should stay inside the home view',
   );
   assert.equal(
     await page.evaluate(() => document.activeElement?.classList.contains('pad-focus')),

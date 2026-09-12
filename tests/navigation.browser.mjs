@@ -114,8 +114,8 @@ await check(
           .filter((el) => !el.hidden)
           .map((el) => el.id),
       ),
-      ["title-play", "settings-button"],
-      "the home menu offers Play and Settings and nothing else",
+      ["title-play"],
+      "the home menu offers Play and nothing else",
     );
     // Keyboard and controller both start on the menu with no clicking first.
     assert.equal(

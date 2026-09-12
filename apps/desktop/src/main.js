@@ -454,7 +454,7 @@ function dismissPauseMenu() {
 }
 function syncTitle() {
   const resumable = phase === "paused" || phase === "playing";
-  const court = COURTS[resumable ? courtIndex : progress.lastCourt];
+  const court = COURTS[resumable ? courtIndex : progress.lastCourt] || COURTS[0];
   $("title-play").lastChild.textContent = resumable
     ? " Resume"
     : progress.xp > 0
@@ -463,6 +463,11 @@ function syncTitle() {
   $("title-play-copy").textContent = resumable
     ? `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`
     : `${court.name} · ${court.place}`;
+  const preview = $("home-court-preview");
+  if (preview) {
+    preview.src = renderer.courtPreview(court);
+    preview.alt = `${court.name} court preview`;
+  }
 }
 // progress.courts[i] is sparse and per-tier now: {relaxed?, standard?,
 // ruthless?}, each {stars, best}. These three helpers are the one place that
@@ -963,10 +968,46 @@ function syncProgress() {
       "aria-current",
       i === courtIndex && mode === "career" ? "true" : "false",
     );
-    btn.innerHTML = `<span class="court-number">${String(i + 1).padStart(2, "0")}</span><span><span class="court-name">${court.name}</span><span class="court-meta">${court.short}</span></span><span class="court-stars">${btn.disabled ? "↗" : `<span class="court-tier-tag">${listedTierTag}</span>${stars ? "★".repeat(stars) : "○"}`}</span>`;
+    btn.innerHTML = `<img class="court-thumb" src="${renderer.courtPreview(court, 120, 75)}" alt="" width="48" height="30" loading="lazy" /><span class="court-number">${String(i + 1).padStart(2, "0")}</span><span><span class="court-name">${court.name}</span><span class="court-meta">${court.place}</span></span><span class="court-stars">${btn.disabled ? "↗" : `<span class="court-tier-tag">${listedTierTag}</span>${stars ? "★".repeat(stars) : "○"}`}</span>`;
+    const previewHover = () => {
+      const preview = $("home-court-preview");
+      if (preview) {
+        preview.src = renderer.courtPreview(court);
+        preview.alt = `${court.name} court preview`;
+      }
+      const copy = $("title-play-copy");
+      if (copy && phase !== "paused" && phase !== "playing") {
+        copy.textContent = `${court.name} · ${court.place}`;
+      }
+      document.querySelectorAll("#court-list .court-item").forEach((b, idx) => {
+        b.classList.toggle("hover-preview", idx === i);
+      });
+    };
+    const previewLeave = () => {
+      document.querySelectorAll("#court-list .court-item").forEach((b) => {
+        b.classList.remove("hover-preview");
+      });
+      syncTitle();
+    };
+    btn.addEventListener("mouseenter", previewHover);
+    btn.addEventListener("focus", previewHover);
+    btn.addEventListener("blur", (e) => {
+      if (!e.relatedTarget || !$("court-list")?.contains(e.relatedTarget)) {
+        previewLeave();
+      }
+    });
     btn.addEventListener("click", () => switchMode("career", i));
     $("court-list").append(btn);
   });
+  if (!$("court-list")._hoverPreviewBound) {
+    $("court-list")._hoverPreviewBound = true;
+    $("court-list").addEventListener("mouseleave", () => {
+      document.querySelectorAll("#court-list .court-item").forEach((b) => {
+        b.classList.remove("hover-preview");
+      });
+      syncTitle();
+    });
+  }
   document.querySelectorAll("[data-home-mode]").forEach((btn) => {
     const active = view === "arena" && btn.dataset.homeMode === mode;
     btn.classList.toggle("active", active);

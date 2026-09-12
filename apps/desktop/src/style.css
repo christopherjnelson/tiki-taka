@@ -208,11 +208,26 @@ input:focus-visible {
   border-radius: 4px;
   text-align: left;
 }
-.court-list button:nth-child(2n) {
-  --a: var(--pink);
+.court-list button {
+  --a: var(--cyan);
 }
-.court-list button:nth-child(3n) {
-  --a: var(--gold);
+.court-list button:nth-child(1) {
+  --a: #21f3df;
+}
+.court-list button:nth-child(2) {
+  --a: #ffaa3b;
+}
+.court-list button:nth-child(3) {
+  --a: #ff6b4a;
+}
+.court-list button:nth-child(4) {
+  --a: #ff3c9c;
+}
+.court-list button:nth-child(5) {
+  --a: #6dff8a;
+}
+.court-list button:nth-child(6) {
+  --a: #40efff;
 }
 .court-list button.active,
 .court-list button.selected,
@@ -221,65 +236,48 @@ input:focus-visible {
   background: color-mix(in srgb, var(--panel), var(--a) 16%);
   box-shadow: 0 0 15px color-mix(in srgb, var(--a), transparent 75%);
 }
-/* Thumbnail stand-in: a per-venue gradient plus a thin horizon line, not
-   art. --thumb-a/--thumb-b are the real venue accent/secondary hex pulled
-   from packages/engine/src/venues.js (CSS can't import JS, so they're
-   copied here) — six distinct colours in the same Lisbon → Amsterdam order
-   COURTS uses, rather than the generic cyan/pink/gold cycle --a already
-   runs for the left rail. */
-.court-list button {
-  --thumb-a: var(--cyan);
-  --thumb-b: var(--pink);
+.court-list:has(.hover-preview) button.active:not(.hover-preview),
+.court-list:has(.hover-preview) button[aria-current="true"]:not(.hover-preview) {
+  border-color: var(--line);
+  border-left-color: var(--a);
+  background: var(--panel);
+  box-shadow: none;
 }
-.court-list button:nth-child(1) {
-  --thumb-a: #21f3df;
-  --thumb-b: #ff587f;
+.court-list:has(.hover-preview) button.active:not(.hover-preview) .court-thumb,
+.court-list:has(.hover-preview) button[aria-current="true"]:not(.hover-preview) .court-thumb {
+  border-color: var(--line);
 }
-.court-list button:nth-child(2) {
-  --thumb-a: #34e5ed;
-  --thumb-b: #ff4f73;
+.court-list button.hover-preview,
+.court-list:not(:has(.hover-preview)) button:hover {
+  border-color: var(--a);
+  background: color-mix(in srgb, var(--panel), var(--a) 16%);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--a), transparent 75%);
 }
-.court-list button:nth-child(3) {
-  --thumb-a: #2debd2;
-  --thumb-b: #ff5d68;
+.court-list button.hover-preview .court-thumb,
+.court-list:not(:has(.hover-preview)) button:hover .court-thumb {
+  border-color: var(--a);
 }
-.court-list button:nth-child(4) {
-  --thumb-a: #38f5e5;
-  --thumb-b: #ff3c9c;
-}
-.court-list button:nth-child(5) {
-  --thumb-a: #6dff8a;
-  --thumb-b: #ff4e8b;
-}
-.court-list button:nth-child(6) {
-  --thumb-a: #40efff;
-  --thumb-b: #ff4ba8;
-}
-/* Dark base → accent (horizon/sky) → secondary (warm lower band): three
-   stops instead of a flat two-colour diagonal, so the thumbnail reads as a
-   small sunset/skyline rather than a smudge. The horizon line (first
-   layer) still sits near the bottom, now over a gradient with real
-   structure to cross. */
 .court-list button::before {
-  content: "";
+  content: none;
+}
+.court-thumb {
   flex: none;
-  width: 46px;
-  height: 38px;
-  background:
-    linear-gradient(
-        0deg,
-        transparent calc(50% - 1px),
-        #100b2380 calc(50% - 1px) calc(50% + 1px),
-        transparent calc(50% + 1px)
-      )
-      100% 100% / 100% 100% no-repeat,
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--thumb-a), #05030f 60%) 0%,
-      var(--thumb-a) 45%,
-      var(--thumb-b) 100%
-    );
+  width: 48px;
+  height: 30px;
+  aspect-ratio: 1000 / 620;
+  object-fit: cover;
   border: 1px solid var(--line);
+  border-radius: 2px;
+  background: #080414;
+}
+.court-list button:disabled .court-thumb {
+  opacity: 0.55;
+  filter: grayscale(40%);
+}
+.court-list button:hover .court-thumb,
+.court-list button.hover-preview .court-thumb,
+.court-list button.active .court-thumb {
+  border-color: var(--a);
 }
 /* Chevron pushed to the row's right edge, after .court-stars — the two sit
    in the same trailing group (the flex gap already spaces them) rather than
@@ -1626,9 +1624,18 @@ body.play-view .ambience {
 .top-home {
   display: none;
 }
-body[data-view="arena"] .top-pause,
-body[data-view="arena"] .top-home {
+.top-settings {
   display: inline-flex;
+}
+body[data-view="arena"] .top-pause,
+body[data-view="arena"] .top-home,
+body.play-view .top-pause,
+body.play-view .top-home {
+  display: inline-flex;
+}
+body[data-view="arena"] .top-settings,
+body.play-view .top-settings {
+  display: none;
 }
 /* Local demo data, and the chip says so. It opens the same #account-dialog
    the Settings dialog has always opened; nothing here is an online account. */
@@ -2669,7 +2676,7 @@ body.play-view .arena-view .below-court {
 .home-stage,
 .home-courts,
 .home-modes,
-.home-sunset {
+.home-court-card {
   display: none;
 }
 /* ── Console panel chrome ─────────────────────────────────────────────────
@@ -2748,7 +2755,7 @@ body.play-view .arena-view .below-court {
      align-self: center shrink-wrapping it to its content) so it matches
      .home-stage and .home-courts to the pixel. A column flex rather than a
      fixed row template: the brand block, the menu and the hint lines stay
-     grouped and top-aligned in their natural sizes, .home-sunset (below) is
+     grouped and top-aligned in their natural sizes, .home-court-card (below) is
      the one flexible child that soaks up whatever height the panel gained,
      and the progress card keeps its natural size pinned under it at the
      bottom edge. */
@@ -2799,15 +2806,24 @@ body.play-view .arena-view .below-court {
      is also, deliberately, the first thing to lose height if the panel
      gets short; the menu and the progress card around it don't have
      flex-grow/shrink at all, so they never move. */
-  .home-sunset {
+  .home-court-card {
     display: flex;
     flex: 1 1 auto;
     min-height: 0;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    margin: 6px 0;
     overflow: hidden;
+  }
+  .home-court-preview {
+    width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1000 / 620;
+    object-fit: contain;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #080414;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
   /* ── Home Leaderboard Deck ─────────────────────────────────────────── */
   .home-leaderboard {
@@ -3256,56 +3272,6 @@ body.play-view .arena-view .below-court {
     background: var(--pink);
     transform: rotate(45deg);
   }
-}
-/* ── Home sunset emblem ──────────────────────────────────────────────────
-   A restrained stand-in for the mockup's full sunset/palms/skyline
-   illustration (the user's steer was "maybe not as much artwork"): a disc,
-   a few scanlines across its lower half, a horizon rule through its
-   middle, and a script-style tagline underneath. All CSS, no image. */
-.home-sunset-emblem {
-  position: relative;
-  flex: none;
-  width: 88px;
-  height: 64px;
-}
-.home-sunset-disc {
-  position: absolute;
-  left: 50%;
-  top: 0;
-  width: 64px;
-  height: 64px;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  overflow: hidden;
-  /* Scanlines are a second background layer sized to half the disc's
-     height and anchored to its bottom edge, so the stripes only ever fall
-     across the lower half — the "horizon" reads as light striking the
-     curve rather than banding the whole disc. */
-  background:
-    repeating-linear-gradient(
-        0deg,
-        transparent 0 3px,
-        #100b2359 3px 5px
-      )
-      bottom / 100% 50% no-repeat,
-    linear-gradient(180deg, var(--gold), var(--pink) 75%);
-  box-shadow: 0 0 22px color-mix(in srgb, var(--pink), transparent 65%);
-}
-.home-sunset-horizon {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 50%;
-  height: 1px;
-  background: var(--line);
-}
-.home-sunset-tagline {
-  margin: 0;
-  color: var(--muted);
-  font: 700 10px var(--sign);
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  text-align: center;
 }
 /* The wordmark is in the top bar on every screen now, so home's copy of it no
    longer has to carry the branding on its own — and it has a 24% column to sit
