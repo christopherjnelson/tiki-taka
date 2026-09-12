@@ -78,7 +78,12 @@ Browser automation does not replace testing with a real gamepad.
 
 ## Version numbers
 
-The release version lives in root `package.json` only.
+The release version has one manually maintained source of truth: root
+`package.json`. `package-lock.json` mirrors that value mechanically and the
+unit suite checks that it has not drifted. PRs do not bump the version unless
+they are intentionally preparing a deployment. The adjacent `releaseStage`
+controls the build badge independently: leave it at `alpha` for the 0.3 and
+0.4 lines, then change it to `beta` when that product milestone is reached.
 
 ## Local data and generated output
 
@@ -91,3 +96,11 @@ This is a commercial game repository. No license grant is provided.
 ## Continuous integration
 
 [GitHub Actions CI](.github/workflows/ci.yml) runs one required desktop job on pushes to `main` and pull requests: unit tests, the production build, and the desktop browser suites. Mobile-layout regression coverage is intentionally optional and non-blocking. Failed runs retain browser screenshots as workflow artifacts for 7 days.
+
+## Releases
+
+PRs do not receive release versions or deployments. When a tested `main` commit is ready to ship, change the root `package.json` version in a release PR, merge it, and create a matching immutable Git tag and published GitHub Release: `v0.3.0` for package version `0.3.0`. Never move or reuse a release tag.
+
+Publishing the release runs [Release artifact](.github/workflows/release.yml). It checks out that exact tag, rejects a tag that is not exactly `vX.Y.Z` or does not match `package.json`, runs unit and required desktop-browser tests, builds the production site, verifies the generated service-worker contract and bundle budgets, and uploads `tiki-taka-vX.Y.Z.tar.gz`. The archive contains `dist/desktop/` and is the sole input for production deployment. A manual run is available only to rebuild an existing tag; enter that tag exactly.
+
+The current workflow verifies and produces an artifact only: it makes no deployment record and has no Droplet credentials or SSH command. When the Droplet deployment procedure is agreed, add a real deployment job that downloads this artifact and is the only job that uses the GitHub `production` environment. Configure that environment's protection rules and deployment secrets before enabling the job.

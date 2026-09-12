@@ -44,6 +44,25 @@
   white-space: nowrap;
   border: 0;
 }
+.build-identity {
+  position: fixed;
+  right: max(10px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 110;
+  margin: 0;
+  color: color-mix(in srgb, var(--muted), transparent 28%);
+  font: 700 8px/1 var(--sign);
+  letter-spacing: 0.06em;
+  pointer-events: none;
+  user-select: none;
+}
+/* Touch controls deliberately own the mobile corners; keeping this desktop
+   diagnostic out of coarse-pointer layouts avoids painting over that frozen UI. */
+@media (pointer: coarse) {
+  .build-identity {
+    display: none;
+  }
+}
 
 * {
   box-sizing: border-box;

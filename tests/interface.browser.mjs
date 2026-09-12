@@ -134,6 +134,29 @@ async function closePauseMenu(page) {
     await page.locator("#pause-menu").waitFor({ state: "hidden" });
   }
 }
+await check(
+  "Build identity is visible and remains available on home and arena views",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage();
+    await page.goto(`${baseURL}/`);
+    const identity = page.locator("#build-identity");
+    await identity.waitFor({ state: "visible" });
+    assert.match(
+      await identity.textContent(),
+      /^(?:ALPHA|BETA) · v(?:dev|\d+\.\d+\.\d+) · (?:local|[0-9a-f]{7,12}(?:-dirty)?) · (?:local|build \d+\.\d+)$/i,
+    );
+    assert.match(await identity.getAttribute("aria-label"), /^Build identity: (?:ALPHA|BETA)/);
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    assert.equal(await identity.isVisible(), true);
+    assert.equal(await identity.evaluate((element) => getComputedStyle(element).pointerEvents), "none");
+    await context.close();
+  },
+);
 // The utility buttons the sidebar used to hold now live in the settings
 // dialog, so reaching one means opening settings first.
 async function useSettingsControl(page, selector) {
