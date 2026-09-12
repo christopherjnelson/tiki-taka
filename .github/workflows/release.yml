@@ -27,6 +27,8 @@ jobs:
     outputs:
       version: ${{ steps.release.outputs.version }}
       artifact_name: ${{ steps.release.outputs.artifact_name }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      release_sha: ${{ steps.release.outputs.release_sha }}
     steps:
       - name: Check out the release tag
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -60,6 +62,8 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "artifact_name=tiki-taka-$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Install dependencies
         run: npm ci
       - name: Run unit tests
@@ -119,3 +123,77 @@ jobs:
             tiki-taka-${{ github.event.release.tag_name || inputs.release_tag }}.tar.gz.sha256
           if-no-files-found: error
           retention-days: 90
+
+  deploy:
+    name: Deploy verified release to production
+    needs: build
+    # Manual dispatch rebuilds an artifact; only publishing a Release deploys.
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    concurrency:
+      group: tiki-taka-production
+      cancel-in-progress: false
+    steps:
+      - name: Download artifact produced by this run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: release-artifact
+      - name: Verify artifact and configure pinned SSH host
+        env:
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          RELEASE_SHA: ${{ needs.build.outputs.release_sha }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.:-]*$ ]]
+          [[ "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          [[ "$DEPLOY_PORT" =~ ^[0-9]{1,5}$ ]] && (( DEPLOY_PORT >= 1 && DEPLOY_PORT <= 65535 ))
+          ARCHIVE="release-artifact/tiki-taka-${RELEASE_TAG}.tar.gz"
+          CHECKSUM="${ARCHIVE}.sha256"
+          test -f "$ARCHIVE" && test -f "$CHECKSUM"
+          (cd release-artifact && sha256sum --check --strict "$(basename "$CHECKSUM")")
+          install -d -m 700 "$RUNNER_TEMP/tiki-taka-ssh"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$RUNNER_TEMP/tiki-taka-ssh/known_hosts"
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/tiki-taka-ssh/id_ed25519"
+          chmod 600 "$RUNNER_TEMP/tiki-taka-ssh/known_hosts" "$RUNNER_TEMP/tiki-taka-ssh/id_ed25519"
+          ssh-keygen -y -f "$RUNNER_TEMP/tiki-taka-ssh/id_ed25519" >/dev/null
+          KNOWN_HOST="$DEPLOY_HOST"
+          [[ "$DEPLOY_PORT" == 22 ]] || KNOWN_HOST="[$DEPLOY_HOST]:$DEPLOY_PORT"
+          ssh-keygen -F "$KNOWN_HOST" -f "$RUNNER_TEMP/tiki-taka-ssh/known_hosts" >/dev/null || {
+            echo "DEPLOY_KNOWN_HOSTS has no entry for DEPLOY_HOST" >&2
+            exit 1
+          }
+          printf 'DEPLOY_PORT=%s\nARCHIVE=%s\nCHECKSUM=%s\n' "$DEPLOY_PORT" "$ARCHIVE" "$CHECKSUM" >> "$GITHUB_ENV"
+      - name: Upload verified artifact to isolated incoming directory
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          SSH=(ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/tiki-taka-ssh/id_ed25519" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/tiki-taka-ssh/known_hosts")
+          SCP=(scp -P "$DEPLOY_PORT" -i "$RUNNER_TEMP/tiki-taka-ssh/id_ed25519" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/tiki-taka-ssh/known_hosts")
+          INCOMING="run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" /srv/tiki-taka/bin/prepare-incoming "$INCOMING"
+          "${SCP[@]}" "$ARCHIVE" "$CHECKSUM" "$DEPLOY_USER@$DEPLOY_HOST:/srv/tiki-taka/incoming/$INCOMING/"
+      - name: Atomically activate release
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          RELEASE_SHA: ${{ needs.build.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          SSH=(ssh -p "$DEPLOY_PORT" -i "$RUNNER_TEMP/tiki-taka-ssh/id_ed25519" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$RUNNER_TEMP/tiki-taka-ssh/known_hosts")
+          INCOMING="run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" /srv/tiki-taka/bin/activate-release \
+            "$INCOMING" "$RELEASE_TAG" "$RELEASE_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
