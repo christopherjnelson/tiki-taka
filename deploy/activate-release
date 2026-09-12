@@ -3,6 +3,11 @@ set -euo pipefail
 umask 027
 readonly ROOT=/srv/tiki-taka
 readonly DOMAIN=tiki-taka.chris.guru
+contains_forbidden_supabase_secret() {
+  # The Supabase JS SDK contains the bare `sb_secret_` prefix in its client-side
+  # key validation code. Reject it only when a token character follows.
+  grep -RIlE 'sb_secret_[A-Za-z0-9_-]+|service_role' "$1" >/dev/null
+}
 readonly incoming=${1:-} tag=${2:-} sha=${3:-} run_id=${4:-} attempt=${5:-}
 [[ "$incoming" =~ ^run-[1-9][0-9]*-[1-9][0-9]*$ ]]
 [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
@@ -35,7 +40,7 @@ find "$staging/desktop/audio" -type f \( -name '*.ogg' -o -name '*.mp3' -o -name
 if find "$staging/desktop" \( -name '.env' -o -name '.env.*' -o -name '.git' -o -name '.github' -o -name node_modules -o -name src -o -name '*.map' -o -name 'package*.json' \) -print -quit | grep -q .; then
   echo "candidate contains forbidden files" >&2; exit 1
 fi
-if grep -RIlE 'sb_secret_|service_role' "$staging/desktop" >/dev/null; then
+if contains_forbidden_supabase_secret "$staging/desktop"; then
   echo "candidate contains a forbidden Supabase secret marker" >&2; exit 1
 fi
 # Static files are world-readable so nginx's unprivileged workers can traverse
