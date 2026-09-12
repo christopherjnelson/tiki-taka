@@ -49,6 +49,13 @@
             >—</span
           >
           <button
+            id="music-prev"
+            type="button"
+            class="bar-button"
+            title="Previous track"
+          >
+            <span aria-hidden="true">◀◀</span></button
+          ><button
             id="music-toggle"
             type="button"
             class="bar-button"
@@ -97,7 +104,6 @@
         Back and no Courts entry any more — there is nowhere behind this. -->
         <section id="home-view" class="home-view" aria-labelledby="title-heading">
           <div class="home-intro console-panel console-panel-notch-tr">
-            <p class="eyebrow">THE POSSESSION CLUB</p>
             <h1 id="title-heading" class="game-title">
               tiki<span>-</span>taka
             </h1>
@@ -268,15 +274,6 @@
           <div class="home-courts console-panel console-panel-notch-tr">
             <header class="courts-bar">
               <h2 id="courts-title">Choose your court.</h2>
-              <p class="courts-count-block">
-                <span class="courts-count">06 COURTS</span>
-                <!-- Static flavor line under the live count — decorative,
-                so it is hidden from the accessibility tree rather than
-                read as a second, redundant count. -->
-                <span class="courts-count-sub" aria-hidden="true"
-                  >Around the world</span
-                >
-              </p>
             </header>
             <div
               id="court-list"
@@ -370,17 +367,6 @@
               </div>
             </button>
           </div>
-          <!-- Decorative sign-off closing the composition; duplicates no
-          navigation, so it is pulled out of the accessibility tree rather
-          than given a landmark role. -->
-          <footer class="home-footer" aria-hidden="true">
-            <p class="home-footer-left">
-              <span>TIKI-TAKA SOCIAL CLUB</span>
-              <span class="home-footer-rule"></span>
-              <span>PLAY / PRACTICE / IMPROVE / BELONG</span>
-            </p>
-            <p class="home-footer-right">POSSESSION CHANGES EVERYTHING.</p>
-          </footer>
         </section>
 
         <section id="arena-view" class="arena-view" hidden>
@@ -926,9 +912,6 @@
       <div class="utility-buttons settings-utilities">
         <button id="sound-button" aria-pressed="false" title="Toggle sound">
           Sound off
-        </button>
-        <button id="theme-button" type="button" aria-pressed="false">
-          <span aria-hidden="true">◐</span> Light
         </button>
         <button id="fullscreen-button" type="button">
           <span aria-hidden="true">⌗</span> Fullscreen

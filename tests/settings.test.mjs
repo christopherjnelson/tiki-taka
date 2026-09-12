@@ -34,7 +34,6 @@ test("settings save and load round trip independently under their versioned key"
   };
   const settings = {
     ...defaultSettings(),
-    theme: "light",
     playView: true,
     sidebarCollapsed: true,
     mobileWallMode: "instant",
@@ -44,9 +43,9 @@ test("settings save and load round trip independently under their versioned key"
   assert.deepEqual(loadSettings(storage), settings);
 });
 
-test("invalid stored values normalize themes, booleans, actions, lengths, and duplicate codes", () => {
+test("invalid or legacy stored values normalize themes, booleans, actions, lengths, and duplicate codes", () => {
   const normalized = normalizeSettings({
-    theme: "neon",
+    theme: "light",
     playView: 1,
     preset: "nope",
     bindings: {

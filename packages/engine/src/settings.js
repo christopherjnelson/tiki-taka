@@ -123,7 +123,7 @@ export function normalizeSettings(value) {
     }
   }
   return {
-    theme: value.theme === "light" ? "light" : "dark",
+    theme: "dark",
     playView: value.playView === true,
     sidebarCollapsed: value.sidebarCollapsed === true,
     mobileWallMode: value.mobileWallMode === "instant" ? "instant" : "armed",

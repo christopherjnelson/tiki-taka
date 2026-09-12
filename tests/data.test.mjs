@@ -44,7 +44,7 @@ test("guest imports legacy progress and settings on first load", async () => {
   const adapter = createLocalDataAdapter({ storage });
   const guest = await adapter.loadUserData();
   assert.equal(guest.progress.xp, 91);
-  assert.equal(guest.settings.theme, "light");
+  assert.equal(guest.settings.theme, "dark");
   assert.equal(guest.settings.playView, true);
   assert.ok(storage.getItem(LOCAL_DATA_KEYS.guest));
 });

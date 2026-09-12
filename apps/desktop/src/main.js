@@ -484,60 +484,7 @@ function syncHome() {
   syncHomeLeaderboard();
 }
 
-// Bonus counts are made up for the offline fallback, but kept internally
-// plausible: they scale down roughly with passes/score down the table, and
-// olés (one per ten-pass one-touch streak) never outrun passes / 10.
-const bonus = (triangles, oles, splits, zones) => ({ triangles, oles, splits, zones });
-const BENCHMARK_LEADERBOARDS = {
-  0: [
-    { rank: 1, name: "redwurm", passes: 116, score: 14567, medal: "🥇", ...bonus(14, 9, 7, 11) },
-    { rank: 2, name: "CRUYFF", passes: 98, score: 1480, medal: "🥈", ...bonus(11, 7, 6, 9) },
-    { rank: 3, name: "XAVI", passes: 84, score: 1210, medal: "🥉", ...bonus(9, 5, 5, 7) },
-    { rank: 4, name: "INIESTA", passes: 76, score: 1050, medal: "4", ...bonus(7, 4, 4, 6) },
-    { rank: 5, name: "PIRLO", passes: 68, score: 920, medal: "5", ...bonus(6, 3, 3, 4) },
-    { rank: 6, name: "BUSQUETS", passes: 62, score: 840, medal: "6", ...bonus(4, 2, 2, 3) },
-  ],
-  1: [
-    { rank: 1, name: "redwurm", passes: 105, score: 9012, medal: "🥇", ...bonus(12, 8, 6, 10) },
-    { rank: 2, name: "BECKHAM", passes: 82, score: 1350, medal: "🥈", ...bonus(9, 6, 5, 7) },
-    { rank: 3, name: "SCHOLES", passes: 78, score: 1120, medal: "🥉", ...bonus(8, 5, 4, 6) },
-    { rank: 4, name: "LAMPARD", passes: 70, score: 990, medal: "4", ...bonus(6, 4, 3, 5) },
-    { rank: 5, name: "GERRARD", passes: 64, score: 880, medal: "5", ...bonus(5, 3, 3, 4) },
-    { rank: 6, name: "ROONEY", passes: 58, score: 790, medal: "6", ...bonus(3, 2, 2, 2) },
-  ],
-  2: [
-    { rank: 1, name: "redwurm", passes: 115, score: 7947, medal: "🥇", ...bonus(13, 8, 7, 10) },
-    { rank: 2, name: "MESSI", passes: 92, score: 1620, medal: "🥈", ...bonus(10, 7, 6, 8) },
-    { rank: 3, name: "GUARDIOLA", passes: 85, score: 1310, medal: "🥉", ...bonus(9, 6, 5, 7) },
-    { rank: 4, name: "INIESTA", passes: 80, score: 1140, medal: "4", ...bonus(7, 5, 4, 6) },
-    { rank: 5, name: "XAVI", passes: 74, score: 960, medal: "5", ...bonus(6, 4, 3, 4) },
-    { rank: 6, name: "PUYOL", passes: 66, score: 810, medal: "6", ...bonus(4, 2, 2, 3) },
-  ],
-  3: [
-    { rank: 1, name: "redwurm", passes: 107, score: 6480, medal: "🥇", ...bonus(11, 7, 6, 9) },
-    { rank: 2, name: "NAKATA", passes: 88, score: 1420, medal: "🥈", ...bonus(9, 6, 5, 7) },
-    { rank: 3, name: "HONDA", passes: 80, score: 1190, medal: "🥉", ...bonus(8, 5, 4, 6) },
-    { rank: 4, name: "ENDO", passes: 75, score: 1010, medal: "4", ...bonus(6, 4, 3, 5) },
-    { rank: 5, name: "KAGAWA", passes: 69, score: 870, medal: "5", ...bonus(5, 3, 3, 3) },
-    { rank: 6, name: "OKAZAKI", passes: 63, score: 750, medal: "6", ...bonus(3, 2, 2, 2) },
-  ],
-  4: [
-    { rank: 1, name: "redwurm", passes: 95, score: 5820, medal: "🥇", ...bonus(10, 6, 6, 8) },
-    { rank: 2, name: "PELE", passes: 90, score: 1550, medal: "🥈", ...bonus(9, 6, 5, 7) },
-    { rank: 3, name: "ZICO", passes: 84, score: 1280, medal: "🥉", ...bonus(8, 5, 4, 6) },
-    { rank: 4, name: "SOCRATES", passes: 78, score: 1040, medal: "4", ...bonus(6, 4, 3, 5) },
-    { rank: 5, name: "RONALDINHO", passes: 72, score: 910, medal: "5", ...bonus(5, 3, 2, 3) },
-    { rank: 6, name: "RIVALDO", passes: 65, score: 780, medal: "6", ...bonus(3, 2, 2, 2) },
-  ],
-  5: [
-    { rank: 1, name: "redwurm", passes: 92, score: 5640, medal: "🥇", ...bonus(10, 6, 5, 8) },
-    { rank: 2, name: "BERGKAMP", passes: 89, score: 1490, medal: "🥈", ...bonus(8, 5, 5, 6) },
-    { rank: 3, name: "GULLIT", passes: 83, score: 1250, medal: "🥉", ...bonus(7, 5, 4, 6) },
-    { rank: 4, name: "RIJKAARD", passes: 77, score: 1020, medal: "4", ...bonus(6, 4, 3, 4) },
-    { rank: 5, name: "VAN BASTEN", passes: 71, score: 890, medal: "5", ...bonus(5, 3, 2, 3) },
-    { rank: 6, name: "KLUIVERT", passes: 64, score: 760, medal: "6", ...bonus(3, 2, 2, 2) },
-  ],
-};
+
 
 const DIFFICULTY_IDS = DIFFICULTIES.map((tier) => tier.id);
 // A three-letter abbreviation for space-constrained UI (the leaderboard
@@ -613,10 +560,13 @@ function selectHomeLeaderboardCourt(courtIdx) {
   void syncHomeLeaderboard(homeLeaderboardCourt);
 }
 
+let leaderboardFetchId = 0;
+
 async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeLeaderboardDifficulty) {
   const list = $("home-leaderboard-list");
   if (!list) return;
   const statusEl = $("home-leaderboard-status");
+  const fetchId = ++leaderboardFetchId;
 
   // Bonus counts are secondary to score, so a bonus cell dims itself when it
   // is zero — the same "nothing to see here" language the results modal
@@ -633,6 +583,7 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
   function renderEntries(entries) {
     if (statusEl) {
       statusEl.textContent = entries.length ? "" : "No scores recorded yet for this court.";
+      statusEl.classList.remove("is-error");
     }
     list.replaceChildren(
       ...entries.slice(0, 10).map((entry, idx) => {
@@ -725,7 +676,7 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
       el.classList.toggle("is-zero", value === 0);
     }
     if (userRankEl) {
-      if (userBestScore === 0) {
+      if (userBestScore === 0 || !entries?.length) {
         userRankEl.textContent = "—";
       } else {
         const matchIdx = entries.findIndex(
@@ -736,56 +687,63 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
     }
   }
 
-  // BENCHMARK_LEADERBOARDS is illustrative offline/fallback data, not real
-  // per-tier records — there's only one sample table per court, not one per
-  // tier. Rather than leave the deck blank for two of the three tiers while
-  // offline, the same sample rows are shown under every tier selection and
-  // stamped with the tier actually selected, so "your best" stays internally
-  // consistent; the difficulty toggle and badge still say plainly which tier
-  // is "showing", which is what matters once a live board is available.
-  const fallback = (BENCHMARK_LEADERBOARDS[courtIdx] || BENCHMARK_LEADERBOARDS[0]).map(
-    (entry) => ({ ...entry, difficulty: tier }),
-  );
-  renderEntries(fallback);
-  syncUserBest(fallback);
-
-  if (dataAdapter?.getLeaderboard) {
-    try {
-      const board = await dataAdapter.getLeaderboard({
-        mode: "career",
-        court: courtIdx,
-        difficulty: tier,
-        limit: 10,
-      });
-      if (
-        board?.entries?.length &&
-        courtIdx === homeLeaderboardCourt &&
-        tier === homeLeaderboardDifficulty
-      ) {
-        const loadedEntries = board.entries.map((e, idx) => ({
-          rank: idx + 1,
-          name: e.username,
-          passes: e.passes,
-          score: e.score,
-          triangles: e.triangles || 0,
-          oles: e.oles || 0,
-          splits: e.splits || 0,
-          zones: e.zones || 0,
-          difficulty: e.difficulty || tier,
-          medal: idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : String(idx + 1),
-        }));
-        renderEntries(loadedEntries);
-        syncUserBest(loadedEntries);
-      } else if (courtIdx === homeLeaderboardCourt && tier === homeLeaderboardDifficulty) {
-        // A real query that came back empty means no one has a score on this
-        // tier yet — that is real information and must replace the sample
-        // rows rather than leaving demo data looking like a live result.
-        renderEntries([]);
-        syncUserBest([]);
-      }
-    } catch {
-      // Fallback is already displayed
+  if (!dataAdapter?.getLeaderboard) {
+    if (statusEl) {
+      statusEl.textContent = "Leaderboard unavailable offline.";
+      statusEl.classList.add("is-error");
     }
+    list.replaceChildren();
+    syncUserBest([]);
+    return;
+  }
+
+  if (statusEl) {
+    statusEl.textContent = "Loading scores…";
+    statusEl.classList.remove("is-error");
+  }
+  list.replaceChildren();
+  syncUserBest([]);
+
+  try {
+    const board = await dataAdapter.getLeaderboard({
+      mode: "career",
+      court: courtIdx,
+      difficulty: tier,
+      limit: 10,
+    });
+    if (fetchId !== leaderboardFetchId) return;
+
+    if (
+      board?.entries?.length &&
+      courtIdx === homeLeaderboardCourt &&
+      tier === homeLeaderboardDifficulty
+    ) {
+      const loadedEntries = board.entries.map((e, idx) => ({
+        rank: idx + 1,
+        name: e.username,
+        passes: e.passes,
+        score: e.score,
+        triangles: e.triangles || 0,
+        oles: e.oles || 0,
+        splits: e.splits || 0,
+        zones: e.zones || 0,
+        difficulty: e.difficulty || tier,
+        medal: idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : String(idx + 1),
+      }));
+      renderEntries(loadedEntries);
+      syncUserBest(loadedEntries);
+    } else if (courtIdx === homeLeaderboardCourt && tier === homeLeaderboardDifficulty) {
+      renderEntries([]);
+      syncUserBest([]);
+    }
+  } catch {
+    if (fetchId !== leaderboardFetchId) return;
+    if (statusEl) {
+      statusEl.textContent = "Unable to load leaderboard scores.";
+      statusEl.classList.add("is-error");
+    }
+    list.replaceChildren();
+    syncUserBest([]);
   }
 }
 function applyView(next, { updateHash = true } = {}) {
@@ -2494,6 +2452,7 @@ $("music-button").addEventListener("click", toggleMusic);
 // "music on" and the volume and on/off settings keep governing it.
 function syncMusicRail() {
   const toggle = $("music-toggle"),
+    prev = $("music-prev"),
     skip = $("music-skip");
   if (!toggle) return;
   toggle.setAttribute("aria-pressed", String(settings.musicOn));
@@ -2502,8 +2461,14 @@ function syncMusicRail() {
     "aria-label",
     settings.musicOn ? "Pause the soundtrack" : "Play the soundtrack",
   );
-  skip.setAttribute("aria-label", "Skip to the next track");
-  skip.disabled = music.trackCount < 2;
+  if (prev) {
+    prev.setAttribute("aria-label", "Skip to the previous track");
+    prev.disabled = music.trackCount < 2;
+  }
+  if (skip) {
+    skip.setAttribute("aria-label", "Skip to the next track");
+    skip.disabled = music.trackCount < 2;
+  }
   const title = music.trackTitle;
   $("music-track").textContent = title || "—";
   $("music-track").title = title
@@ -2518,6 +2483,12 @@ function returnFocusToCourt() {
   if (phase === "playing" && !menuBlocking())
     $("court").focus({ preventScroll: true });
 }
+$("music-prev")?.addEventListener("click", () => {
+  unlockAudio();
+  music.skip(-1);
+  syncMusicRail();
+  returnFocusToCourt();
+});
 $("music-toggle").addEventListener("click", () => {
   toggleMusic();
   syncMusicRail();
@@ -2592,16 +2563,10 @@ function setInputSource(source) {
 }
 function syncSettingChrome() {
   syncAudioChrome();
-  document.documentElement.dataset.theme = settings.theme;
+  document.documentElement.dataset.theme = "dark";
   document.body.classList.toggle("play-view", view === "arena");
   document.body.dataset.view = view;
   publishScoreboardHeight();
-  $("theme-button").setAttribute(
-    "aria-pressed",
-    String(settings.theme === "light"),
-  );
-  $("theme-button").innerHTML =
-    `<span aria-hidden="true">◐</span> ${settings.theme === "dark" ? "Light" : "Dark"}`;
   if ($("preset-select")) $("preset-select").value = settings.preset;
   refreshToolbarChips();
   // The court's own aria-label stays keyboard-phrased: it is read once by a
@@ -2893,11 +2858,7 @@ $("reset-bindings").addEventListener("click", () => {
   renderBindings();
   syncSettingChrome();
 });
-$("theme-button").addEventListener("click", () => {
-  settings.theme = settings.theme === "dark" ? "light" : "dark";
-  persistSettings();
-  syncSettingChrome();
-});
+
 function syncFullscreen() {
   const active = document.fullscreenElement === document.documentElement;
   document.body.classList.toggle("fullscreen-game", active);
@@ -2908,8 +2869,6 @@ function syncFullscreen() {
 $("fullscreen-button").addEventListener("click", async () => {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
-    else if (shellFullscreen())
-      toast("Already fullscreen. Press F11 to play in a window.");
     else await document.documentElement.requestFullscreen();
   } catch {
     toast("Fullscreen is not available in this browser.");
@@ -2917,8 +2876,6 @@ $("fullscreen-button").addEventListener("click", async () => {
   syncFullscreen();
 });
 document.addEventListener("fullscreenchange", syncFullscreen);
-// F11 is handled by the shell, which only tells the page by resizing it.
-window.addEventListener("resize", syncFullscreen);
 function playFromMenu() {
   const resumeRound = phase === "paused";
   if (!resumeRound) {

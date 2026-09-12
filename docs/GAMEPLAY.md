@@ -60,7 +60,7 @@ Finished rounds grant XP, with a new level and rank title every 300 XP.
 
 Home offers four modes, local progress, and the six World Tour courts. Opening Home during a round pauses it. Choosing another mode or court asks before abandoning unfinished play.
 
-The game offers remappable keyboard controls, light and dark themes, Play view, and fullscreen.
+The game offers remappable keyboard controls, Play view, and fullscreen.
 
 The production build caches assets after an initial online load, so it keeps working offline. Service workers require localhost or HTTPS. Decorative effects honor reduced-motion preferences, while gameplay remains visual and real time.
 

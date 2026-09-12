@@ -499,7 +499,7 @@ await check(
 );
 
 await check(
-  "theme and Play view persist with exact canvas geometry and accurate pointer passing",
+  "Play view persists with exact canvas geometry and accurate pointer passing",
   async () => {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -510,31 +510,12 @@ await check(
       errors = errorsFor(page);
     await gotoArena(page, baseURL);
     assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
-    const dark = await page
-      .locator("html")
-      .evaluate((el) => getComputedStyle(el).getPropertyValue("--bg"));
-    await useSettingsControl(page, "#theme-button");
-    assert.equal(
-      await page.locator("html").getAttribute("data-theme"),
-      "light",
-    );
-    const light = await page
-      .locator("html")
-      .evaluate((el) => getComputedStyle(el).getPropertyValue("--bg"));
-    assert.notEqual(light, dark);
+    assert.equal(await page.locator("#theme-button").count(), 0);
     await page.reload();
-    // The theme is remembered across the reload; the view is not, because a
-    // cold load always opens the title screen. Walk back to the arena for the
-    // Play-view assertions below.
-    assert.equal(
-      await page.locator("html").getAttribute("data-theme"),
-      "light",
-    );
     await page.locator("#home-view").waitFor({ state: "visible" });
+    assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
     await page.locator("#title-play").click();
     await page.locator("#arena-view").waitFor({ state: "visible" });
-    await useSettingsControl(page, "#theme-button");
-    assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
 
     assert.equal(
       await page
@@ -824,22 +805,6 @@ if (includeMobileLayouts) await check(
         Math.abs(court.width / court.height - 1000 / 620) < 0.01,
         `${viewport.width}x${viewport.height} Play view court aspect`,
       );
-      if (!(await page.locator("#theme-button").isVisible())) {
-        await page.locator("#pause-button").tap();
-        await page.locator("#pause-menu").waitFor({ state: "visible" });
-        await page.locator("#pause-settings").tap();
-        await page.locator("#settings-dialog").waitFor({ state: "visible" });
-      }
-      await page.locator("#theme-button").tap();
-      assert.equal(
-        await page.locator("html").getAttribute("data-theme"),
-        "light",
-      );
-      if (viewport.width === 390)
-        await page.screenshot({
-          path: new URL("interface-mobile-light.png", outputDir).pathname,
-          fullPage: true,
-        });
       assert.deepEqual(errors, []);
       await context.close();
     }

@@ -299,7 +299,6 @@ await check(
     // there is no account system to open it onto.
     for (const id of [
       "sound-button",
-      "theme-button",
       "fullscreen-button",
       "help-button",
     ])
@@ -816,7 +815,7 @@ await check(
     // There is exactly one player in the document. The side rail this replaced
     // was a second implementation of the same three controls, and it only
     // existed while a round was on screen.
-    for (const selector of ["#music-toggle", "#music-skip", "#music-track"])
+    for (const selector of ["#music-prev", "#music-toggle", "#music-skip", "#music-track"])
       assert.equal(
         await page.locator(selector).count(),
         1,
@@ -831,7 +830,7 @@ await check(
         true,
         `the top bar must be on screen on ${where}`,
       );
-      for (const selector of ["#music-toggle", "#music-skip", ".top-brand-mark"])
+      for (const selector of ["#music-prev", "#music-toggle", "#music-skip", ".top-brand-mark"])
         assert.equal(
           await page.locator(selector).isVisible(),
           true,
@@ -917,6 +916,45 @@ await check(
       viewport: { width: 1280, height: 720 },
       serviceWorkers: "block",
     });
+    await context.addInitScript(() => {
+      const bindings = {
+        moveUp: ["KeyW", "ArrowUp"], moveDown: ["KeyS", "ArrowDown"],
+        moveLeft: ["KeyA", "ArrowLeft"], moveRight: ["KeyD", "ArrowRight"],
+        smartPass: ["Space"], direct1: ["Digit1"], direct2: ["Digit2"],
+        direct3: ["Digit3"], direct4: ["Digit4"], wallToggle: ["KeyB"],
+        wallHold: ["ShiftLeft"], focusHold: ["KeyE"], boostHold: ["KeyR"],
+        shout: ["KeyF"], pause: ["Escape"],
+      };
+      window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
+        kind: "local",
+        async getSession() { return null; },
+        async loadUserData() {
+          return {
+            progress: {
+              version: 1, xp: 0, unlocked: 5, courts: {}, records: {},
+              sound: true, tactic: "balanced", difficulty: "standard", lastCourt: 0,
+            },
+            settings: {
+              theme: "dark", effectsOn: false, effectsVolume: 0, musicOn: false,
+              musicVolume: 0, audioMigrated: true, preset: "wasd", bindings,
+            },
+            stats: { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 },
+            preferences: { scoreSaveChoice: "ask" },
+          };
+        },
+        async saveUserData() { return {}; },
+        async recordRound() { return { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 }; },
+        async getLeaderboard({ court = 0, difficulty = "standard" } = {}) {
+          return {
+            entries: [{
+              username: `court-${court}-player`, score: 5000 - court * 100, passes: 50,
+              triangles: 5, oles: 2, splits: 3, zones: 4, difficulty,
+            }],
+          };
+        },
+        onAuthStateChange() { return () => {}; },
+      });
+    });
     const page = await context.newPage(),
       errors = errorsFor(page);
     await page.goto(`${baseURL}/`);
@@ -932,19 +970,53 @@ await check(
     await page.locator("#home-leaderboard-list .hl-row").first().waitFor({ state: "visible" });
     const rowCount = await page.locator("#home-leaderboard-list .hl-row").count();
     assert.ok(rowCount > 0, "leaderboard should render ranked rows");
+    assert.equal(
+      await page.locator("#home-leaderboard-list .hl-row .hl-cell-player").first().textContent(),
+      "court-0-player",
+    );
 
     // Switching to London (court 1) updates tab and loads court 1 scores
     const tab1 = page.locator("#hl-tab-1");
     await tab1.click();
     assert.equal(await tab1.getAttribute("aria-selected"), "true");
     assert.equal(await tab0.getAttribute("aria-selected"), "false");
-    await page.waitForTimeout(100);
+    await page.waitForFunction(
+      () => document.querySelector("#home-leaderboard-list .hl-row .hl-cell-player")?.textContent === "court-1-player",
+    );
 
     // Switching to Barcelona via keyboard arrow navigation
     await tab1.focus();
     await page.keyboard.press("ArrowRight");
     const tab2 = page.locator("#hl-tab-2");
     assert.equal(await tab2.getAttribute("aria-selected"), "true");
+    await page.waitForFunction(
+      () => document.querySelector("#home-leaderboard-list .hl-row .hl-cell-player")?.textContent === "court-2-player",
+    );
+
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
+  "the circuit leaderboard shows an offline error when no remote adapter is configured and does not render hardcoded data",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(`${baseURL}/`);
+    await page.locator("#home-view").waitFor({ state: "visible" });
+    await page.locator("#home-leaderboard").waitFor({ state: "visible" });
+
+    // Without a remote adapter, status shows the offline message and no rows render
+    const status = page.locator("#home-leaderboard-status");
+    await status.waitFor({ state: "visible" });
+    assert.match(await status.textContent(), /unavailable offline/i);
+    const rowCount = await page.locator("#home-leaderboard-list .hl-row").count();
+    assert.equal(rowCount, 0, "no hardcoded rows should render when offline");
 
     assert.deepEqual(errors, []);
     await context.close();
