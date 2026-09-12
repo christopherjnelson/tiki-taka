@@ -105,14 +105,14 @@ test('three turnovers cannot clear a court even after reaching the timer and sco
 });
 
 test('the possessions limit from config governs the clear check, not a hardcoded three', () => {
-  // Relaxed allows 4 turnovers: the 4th ends the run, but 3 turnovers still clears.
+  // Relaxed allows 5 turnovers: the 5th ends the run, but 4 turnovers still clears.
   const relaxedProgress = freshProgress();
-  const relaxedResult = awardMatch(relaxedProgress, finishedGame({ score: 999, turnovers: 3, difficulty: 'relaxed', possessions: 4 }), 'career', 0);
+  const relaxedResult = awardMatch(relaxedProgress, finishedGame({ score: 999, turnovers: 4, difficulty: 'relaxed', possessions: 5 }), 'career', 0);
   assert.equal(relaxedResult.cleared, true);
 
-  // Ruthless allows only 2 turnovers: the 2nd ends the run and blocks the clear.
+  // Ruthless allows only 1 turnover: the 1st ends the run and blocks the clear.
   const ruthlessProgress = freshProgress();
-  const ruthlessResult = awardMatch(ruthlessProgress, finishedGame({ score: 999, turnovers: 2, difficulty: 'ruthless', possessions: 2 }), 'career', 0);
+  const ruthlessResult = awardMatch(ruthlessProgress, finishedGame({ score: 999, turnovers: 1, difficulty: 'ruthless', possessions: 1 }), 'career', 0);
   assert.equal(ruthlessResult.cleared, false);
 });
 

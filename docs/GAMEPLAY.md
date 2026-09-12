@@ -42,7 +42,7 @@ World Tour has six courts from Lisbon to Amsterdam. Meet the target and survive 
 | ★★ | Reach 1.5x the target |
 | ★★★ | Reach 2.2x the target with no turnovers |
 
-Difficulty rises from two to four defenders, base defender speed from 76 to 123 court units per second, targets from 600 to 2,400, and timers from 75 to 90 seconds.
+Difficulty rises from two to four defenders, base defender speed from 76 to 123 court units per second, targets from 600 to 2,400, and 90 seconds to complete each court.
 
 - **Free practice:** gentler press, unlimited recoveries, 90 seconds.
 - **Endless:** starts at 60 seconds; triangles add five seconds, the press intensifies, and three turnovers end the run.
