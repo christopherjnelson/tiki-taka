@@ -66,9 +66,101 @@ test("Supabase adapter preserves a caller round id for idempotent score retries"
     },
   };
   const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
-  await adapter.recordRound({ id: "f2402978-1b50-4b8c-9dca-65b82ba2c8a3", score: 12, passes: 3, bestOneTouch: 2 });
+  await adapter.recordRound({ id: "f2402978-1b50-4b8c-9dca-65b82ba2c8a3", score: 12, passes: 3, bestOneTouch: 2, triangles: 1, oles: 2, splits: 3, zones: 4 });
   assert.equal(writes[0].row.id, "f2402978-1b50-4b8c-9dca-65b82ba2c8a3");
   assert.deepEqual(writes[0].options, { onConflict: "id", ignoreDuplicates: true });
+  assert.equal(writes[0].row.triangles, 1);
+  assert.equal(writes[0].row.oles, 2);
+  assert.equal(writes[0].row.splits, 3);
+  assert.equal(writes[0].row.zones, 4);
+});
+
+test("Supabase adapter defaults missing bonus counters to zero, never NaN or null (columns are NOT NULL)", async () => {
+  const writes = [];
+  const user = { id: "user-1", email: "player@example.com", user_metadata: { username: "player" } };
+  const client = {
+    auth: { getSession: async () => ({ data: { session: { user } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from(table) {
+      if (table === "round_scores") return {
+        upsert: async (row, options) => { writes.push({ row, options }); return { error: null }; },
+        select: () => ({ eq: () => thenable({ data: [], error: null }) }),
+      };
+      throw new Error(`unexpected table ${table}`);
+    },
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  // Simulates a round object queued for retry before these fields existed.
+  await adapter.recordRound({ score: 12, passes: 3, bestOneTouch: 2 });
+  assert.equal(writes[0].row.triangles, 0);
+  assert.equal(writes[0].row.oles, 0);
+  assert.equal(writes[0].row.splits, 0);
+  assert.equal(writes[0].row.zones, 0);
+  await adapter.recordRound({ score: 5, passes: 1, bestOneTouch: 1, triangles: "bad", oles: null, splits: NaN, zones: undefined });
+  assert.equal(writes[1].row.triangles, 0);
+  assert.equal(writes[1].row.oles, 0);
+  assert.equal(writes[1].row.splits, 0);
+  assert.equal(writes[1].row.zones, 0);
+});
+
+test("Supabase adapter aggregates bonus-counter totals across rounds and normalizes malformed rows", async () => {
+  const user = { id: "user-1", email: "player@example.com", user_metadata: { username: "player" } };
+  const rows = [
+    { score: 10, passes: 2, best_one_touch: 1, triangles: 1, oles: 1, splits: 0, zones: 2 },
+    { score: 20, passes: 4, best_one_touch: 3, triangles: "bad", oles: null, splits: NaN, zones: undefined },
+  ];
+  const client = {
+    auth: { getSession: async () => ({ data: { session: { user } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from(table) {
+      if (table === "round_scores") return {
+        select: () => ({ eq: () => thenable({ data: rows, error: null }) }),
+        upsert: async () => ({ error: null }),
+      };
+      throw new Error(`unexpected table ${table}`);
+    },
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  const stats = await adapter.recordRound({ score: 0, passes: 0, bestOneTouch: 0 });
+  assert.equal(stats.totalTriangles, 1);
+  assert.equal(stats.totalOles, 1);
+  assert.equal(stats.totalSplits, 0);
+  assert.equal(stats.totalZones, 2);
+});
+
+test("Supabase adapter's leaderboard selects and maps the bonus-counter columns", async () => {
+  let selected;
+  const client = {
+    auth: { getSession: async () => ({ data: { session: null }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from(table) {
+      if (table !== "leaderboard_entries") throw new Error(`unexpected table ${table}`);
+      const query = {
+        select: (columns) => { selected = columns; return query; },
+        eq: () => query,
+        order: () => query,
+        limit: async () => ({
+          data: [{ username: "player", score: 10, passes: 3, best_one_touch: 2, triangles: 1, oles: 2, splits: 3, zones: 4, created_at: "now" }],
+          error: null,
+        }),
+      };
+      return query;
+    },
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  const board = await adapter.getLeaderboard({ mode: "career" });
+  assert.match(selected, /\btriangles\b/);
+  assert.match(selected, /\boles\b/);
+  assert.match(selected, /\bsplits\b/);
+  assert.match(selected, /\bzones\b/);
+  assert.deepEqual(board.entries[0], {
+    username: "player",
+    score: 10,
+    passes: 3,
+    bestOneTouch: 2,
+    triangles: 1,
+    oles: 2,
+    splits: 3,
+    zones: 4,
+    createdAt: "now",
+  });
 });
 
 test("Supabase adapter generates a UUIDv4 retry id without crypto.randomUUID", async () => {

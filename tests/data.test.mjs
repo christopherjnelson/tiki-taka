@@ -59,7 +59,16 @@ test("round stats aggregate and malformed values normalize", async () => {
     JSON.stringify({
       progress: { version: 1, xp: -4, unlocked: 999 },
       settings: { theme: "purple", bindings: {} },
-      stats: { games: -2, bestScore: "bad", totalPasses: 3.9, bestOneTouch: 4.8 },
+      stats: {
+        games: -2,
+        bestScore: "bad",
+        totalPasses: 3.9,
+        bestOneTouch: 4.8,
+        totalTriangles: "nope",
+        totalOles: null,
+        totalSplits: -1,
+        totalZones: undefined,
+      },
     }),
   );
   const normalized = await adapter.loadUserData();
@@ -70,14 +79,38 @@ test("round stats aggregate and malformed values normalize", async () => {
     bestScore: 0,
     totalPasses: 3,
     bestOneTouch: 4,
+    totalTriangles: 0,
+    totalOles: 0,
+    totalSplits: 0,
+    totalZones: 0,
   });
-  await adapter.recordRound({ score: 120, passes: 17, bestOneTouch: 8 });
-  const stats = await adapter.recordRound({ score: 80, passes: 9, bestOneTouch: 3 });
+  await adapter.recordRound({ score: 120, passes: 17, bestOneTouch: 8, triangles: 2, oles: 1, splits: 3, zones: 1 });
+  const stats = await adapter.recordRound({ score: 80, passes: 9, bestOneTouch: 3, triangles: 1, oles: 0, splits: 0, zones: 2 });
   assert.deepEqual(stats, {
     games: 2,
     bestScore: 120,
     totalPasses: 29,
     bestOneTouch: 8,
+    totalTriangles: 3,
+    totalOles: 1,
+    totalSplits: 3,
+    totalZones: 3,
+  });
+});
+
+test("round stats missing the bonus counters (rounds recorded before they existed) normalize to zero", async () => {
+  const storage = memoryStorage();
+  const adapter = createLocalDataAdapter({ storage });
+  const stats = await adapter.recordRound({ score: 50, passes: 5, bestOneTouch: 2 });
+  assert.deepEqual(stats, {
+    games: 1,
+    bestScore: 50,
+    totalPasses: 5,
+    bestOneTouch: 2,
+    totalTriangles: 0,
+    totalOles: 0,
+    totalSplits: 0,
+    totalZones: 0,
   });
 });
 
@@ -85,7 +118,7 @@ test("concurrent round writes against the same guest scope are lossless", async 
   const storage = memoryStorage();
   const adapter = createLocalDataAdapter({ storage });
   const writes = Array.from({ length: 20 }, (_, index) =>
-    adapter.recordRound({ score: index, passes: 2, bestOneTouch: index }),
+    adapter.recordRound({ score: index, passes: 2, bestOneTouch: index, triangles: 1, oles: 1, splits: 1, zones: 1 }),
   );
   await Promise.all(writes);
 
@@ -94,6 +127,10 @@ test("concurrent round writes against the same guest scope are lossless", async 
     bestScore: 19,
     totalPasses: 40,
     bestOneTouch: 19,
+    totalTriangles: 20,
+    totalOles: 20,
+    totalSplits: 20,
+    totalZones: 20,
   });
 });
 

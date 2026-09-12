@@ -246,6 +246,7 @@ export class Game {
     this.banks = 0;
     this.zones = 0;
     this.splits = 0;
+    this.oles = 0;
     this.focus = 0;
     this.focusActive = false;
     this.focusNeedsRelease = false;
@@ -494,6 +495,7 @@ export class Game {
       bonuses.push("one-touch");
       if (milestone) {
         bonuses.push("ole");
+        this.oles++;
         focusReward += ONE_TOUCH.milestoneFocus;
       }
     }

@@ -23,6 +23,10 @@ const statsDefaults = () => ({
   bestScore: 0,
   totalPasses: 0,
   bestOneTouch: 0,
+  totalTriangles: 0,
+  totalOles: 0,
+  totalSplits: 0,
+  totalZones: 0,
 });
 
 function cleanPreferences(value) {
@@ -38,6 +42,10 @@ const cleanStats = (value) => ({
   bestScore: number(value?.bestScore),
   totalPasses: integer(value?.totalPasses),
   bestOneTouch: integer(value?.bestOneTouch),
+  totalTriangles: integer(value?.totalTriangles),
+  totalOles: integer(value?.totalOles),
+  totalSplits: integer(value?.totalSplits),
+  totalZones: integer(value?.totalZones),
 });
 
 function number(value) {
@@ -130,6 +138,10 @@ export function createLocalDataAdapter({ storage } = {}) {
         bestScore: Math.max(current.stats.bestScore, number(round.score)),
         totalPasses: current.stats.totalPasses + integer(round.passes),
         bestOneTouch: Math.max(current.stats.bestOneTouch, integer(round.bestOneTouch)),
+        totalTriangles: current.stats.totalTriangles + integer(round.triangles),
+        totalOles: current.stats.totalOles + integer(round.oles),
+        totalSplits: current.stats.totalSplits + integer(round.splits),
+        totalZones: current.stats.totalZones + integer(round.zones),
       };
       write(GUEST_KEY, current);
       return current.stats;

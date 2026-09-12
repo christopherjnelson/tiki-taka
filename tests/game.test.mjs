@@ -171,6 +171,7 @@ test('one-touch milestone adds its flat bonus exactly once every ten passes', ()
   for (let index = 0; index < 20; index++) completePass(game, index % 2 ? 1 : 2);
   assert.equal(game.oneTouchStreak, 20);
   assert.equal(game.bestOneTouch, 20);
+  assert.equal(game.oles, 2);
   const events = game.events.filter(event => event.type === 'one-touch');
   assert.equal(events.length, 20);
   assert.equal(events.filter(event => event.milestone).length, 2);

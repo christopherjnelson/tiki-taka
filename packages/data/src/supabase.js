@@ -5,7 +5,16 @@ import {
   createLocalDataAdapter,
 } from "./index.js";
 
-const DEFAULT_STATS = () => ({ games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 });
+const DEFAULT_STATS = () => ({
+  games: 0,
+  bestScore: 0,
+  totalPasses: 0,
+  bestOneTouch: 0,
+  totalTriangles: 0,
+  totalOles: 0,
+  totalSplits: 0,
+  totalZones: 0,
+});
 const isEmail = (value) => /^\S+@\S+\.\S+$/.test(String(value || "").trim());
 const USERNAME_RE = /^[A-Za-z0-9_.-]{2,24}$/;
 const number = (value) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
@@ -145,7 +154,7 @@ export function createSupabaseDataAdapter({
   async function statsFor(user) {
     const result = await supabase
       .from("round_scores")
-      .select("score, passes, best_one_touch")
+      .select("score, passes, best_one_touch, triangles, oles, splits, zones")
       .eq("user_id", user.id);
     throwIfError(result.error, "Supabase could not load your round history.");
     return (result.data ?? []).reduce((stats, round) => ({
@@ -153,6 +162,10 @@ export function createSupabaseDataAdapter({
       bestScore: Math.max(stats.bestScore, number(round.score)),
       totalPasses: stats.totalPasses + integer(round.passes),
       bestOneTouch: Math.max(stats.bestOneTouch, integer(round.best_one_touch)),
+      totalTriangles: stats.totalTriangles + integer(round.triangles),
+      totalOles: stats.totalOles + integer(round.oles),
+      totalSplits: stats.totalSplits + integer(round.splits),
+      totalZones: stats.totalZones + integer(round.zones),
     }), DEFAULT_STATS());
   }
 
@@ -253,6 +266,7 @@ export function createSupabaseDataAdapter({
         const result = await supabase.from("round_scores").upsert({
           id: round.id ?? newRoundId(crypto), user_id: user.id, mode: round.mode ?? "career", court: round.court ?? null,
           score: integer(round.score), passes: integer(round.passes), best_one_touch: integer(round.bestOneTouch),
+          triangles: integer(round.triangles), oles: integer(round.oles), splits: integer(round.splits), zones: integer(round.zones),
         }, { onConflict: "id", ignoreDuplicates: true });
         throwIfError(result.error, "Supabase could not record that round.");
         return statsFor(user);
@@ -260,11 +274,11 @@ export function createSupabaseDataAdapter({
     },
     async getLeaderboard({ mode = "career", court, limit = 10 } = {}) {
       try {
-        let query = supabase.from("leaderboard_entries").select("username, mode, court, score, passes, best_one_touch, created_at").eq("mode", mode);
+        let query = supabase.from("leaderboard_entries").select("username, mode, court, score, passes, best_one_touch, triangles, oles, splits, zones, created_at").eq("mode", mode);
         if (court !== undefined && court !== null) query = query.eq("court", court);
         const result = await query.order("score", { ascending: false }).order("created_at", { ascending: true }).limit(Math.min(Math.max(integer(limit), 1), 100));
         throwIfError(result.error, "Supabase could not load the leaderboard.");
-        return { mode, court: court ?? null, entries: (result.data ?? []).map((row) => ({ username: row.username ?? "Player", score: number(row.score), passes: integer(row.passes), bestOneTouch: integer(row.best_one_touch), createdAt: row.created_at })) };
+        return { mode, court: court ?? null, entries: (result.data ?? []).map((row) => ({ username: row.username ?? "Player", score: number(row.score), passes: integer(row.passes), bestOneTouch: integer(row.best_one_touch), triangles: integer(row.triangles), oles: integer(row.oles), splits: integer(row.splits), zones: integer(row.zones), createdAt: row.created_at })) };
       } catch (error) {
         throw errorFrom(error, "Supabase could not load the leaderboard.");
       }
