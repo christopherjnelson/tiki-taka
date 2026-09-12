@@ -4,6 +4,7 @@ import {
   SETTINGS_KEY,
   ACTIONS,
   PRESETS,
+  DEFAULT_GAMEPAD_BINDINGS,
   defaultSettings,
   normalizeSettings,
   loadSettings,
@@ -24,6 +25,11 @@ test("defaults retain WASD and arrows and define every playable action", () => {
   assert.deepEqual(settings.bindings.moveUp, ["KeyW", "ArrowUp"]);
   assert.deepEqual(Object.keys(settings.bindings), Object.keys(ACTIONS));
   assert.deepEqual(Object.keys(PRESETS), ["wasd", "arrows", "left-hand"]);
+  assert.equal(settings.gamepadBindings.shout, 5, "default shout button should be RB/R1 (button 5)");
+  assert.equal(settings.gamepadBindings.smartPass, 0);
+  assert.equal(settings.gamepadBindings.wallToggle, 2);
+  assert.equal(settings.gamepadBindings.focusHold, 6);
+  assert.equal(settings.gamepadBindings.boostHold, 7);
 });
 
 test("settings save and load round trip independently under their versioned key", () => {

@@ -81,6 +81,36 @@ export function presetBindings(name = "wasd") {
   return cloneBindings(PRESETS[name] || PRESETS.wasd);
 }
 
+export const DEFAULT_GAMEPAD_BINDINGS = {
+  smartPass: 0,
+  wallToggle: 2,
+  shout: 5,
+  focusHold: 6,
+  boostHold: 7,
+};
+
+export const GAMEPAD_BUTTON_LABELS = {
+  0: "A / ✕ (Cross)",
+  1: "B / ○ (Circle)",
+  2: "X / □ (Square)",
+  3: "Y / △ (Triangle)",
+  4: "LB / L1 (Left Bumper)",
+  5: "RB / R1 (Right Bumper)",
+  6: "LT / L2 (Left Trigger)",
+  7: "RT / R2 (Right Trigger)",
+};
+
+export const GAMEPAD_SHORT_LABELS = {
+  0: "A",
+  1: "B",
+  2: "X",
+  3: "Y",
+  4: "LB",
+  5: "RB",
+  6: "LT",
+  7: "RT",
+};
+
 export function defaultSettings() {
   return {
     theme: "dark",
@@ -93,6 +123,7 @@ export function defaultSettings() {
     audioMigrated: false,
     preset: "wasd",
     bindings: presetBindings(),
+    gamepadBindings: { ...DEFAULT_GAMEPAD_BINDINGS },
   };
 }
 
@@ -103,6 +134,12 @@ function normalizeVolume(value, fallback) {
   const volume = Number(value);
   if (!Number.isFinite(volume)) return fallback;
   return Math.min(1, Math.max(0, volume));
+}
+
+function normalizeGamepadButton(value, fallback) {
+  const num = Number(value);
+  if (Number.isInteger(num) && num >= 0 && num <= 7) return num;
+  return fallback;
 }
 
 export function normalizeSettings(value) {
@@ -134,6 +171,28 @@ export function normalizeSettings(value) {
     audioMigrated: value.audioMigrated === true,
     preset: Object.hasOwn(PRESETS, value.preset) ? value.preset : "custom",
     bindings,
+    gamepadBindings: {
+      smartPass: normalizeGamepadButton(
+        value.gamepadBindings?.smartPass,
+        DEFAULT_GAMEPAD_BINDINGS.smartPass,
+      ),
+      wallToggle: normalizeGamepadButton(
+        value.gamepadBindings?.wallToggle,
+        DEFAULT_GAMEPAD_BINDINGS.wallToggle,
+      ),
+      shout: normalizeGamepadButton(
+        value.gamepadBindings?.shout,
+        DEFAULT_GAMEPAD_BINDINGS.shout,
+      ),
+      focusHold: normalizeGamepadButton(
+        value.gamepadBindings?.focusHold,
+        DEFAULT_GAMEPAD_BINDINGS.focusHold,
+      ),
+      boostHold: normalizeGamepadButton(
+        value.gamepadBindings?.boostHold,
+        DEFAULT_GAMEPAD_BINDINGS.boostHold,
+      ),
+    },
   };
 }
 

@@ -442,9 +442,9 @@ await check('Boost and Shout work through remappable keyboard controls and analo
     const value = document.querySelector('#court-wrap')?.dataset.target;
     return /^\d$/.test(value || '') ? Number(value) : null;
   });
-  await page.evaluate(() => window.__setAbilityPad({ button: 4, value: 1 }));
+  await page.evaluate(() => window.__setAbilityPad({ button: 5, value: 1 }));
   await page.waitForFunction(id => Boolean(window.__observedGame.game.players[id]?.shoutTarget), await target.jsonValue());
-  await page.evaluate(() => window.__setAbilityPad({ button: 4, value: 0 }));
+  await page.evaluate(() => window.__setAbilityPad({ button: 5, value: 0 }));
   await page.evaluate(id => { window.__observedGame.game.players[id].shoutTarget = null; }, await target.jsonValue());
   await page.keyboard.press('KeyF');
   await page.waitForFunction(id => Boolean(window.__observedGame.game.players[id]?.shoutTarget), await target.jsonValue());

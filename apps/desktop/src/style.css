@@ -1267,6 +1267,52 @@ dialog::backdrop {
 .audio-hint {
   color: var(--cyan);
 }
+.settings-gamepad {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.gamepad-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+@media (min-width: 901px) {
+  .gamepad-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+.gamepad-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border-left: 3px solid var(--cyan);
+}
+.gamepad-field:nth-child(even) {
+  border-left-color: var(--pink);
+}
+.gamepad-field label {
+  font: 700 10px var(--sign);
+  text-transform: uppercase;
+  color: var(--ink);
+  letter-spacing: 0.5px;
+}
+.gamepad-field select {
+  min-height: 32px;
+  padding: 4px 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font: 700 11px var(--sign);
+  cursor: pointer;
+}
+.gamepad-field select:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
 .settings-preset {
   display: flex;
   align-items: center;
