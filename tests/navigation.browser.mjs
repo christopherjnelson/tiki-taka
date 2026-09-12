@@ -231,7 +231,7 @@ await check(
       true,
       "leaving the arena must freeze the active round",
     );
-    await page.locator('[data-home-mode="daily"]').click();
+    await page.locator('[data-home-mode="endless"]').click();
     // The confirmation names both outcomes plainly, and neither button says
     // anything a player would have to guess at.
     assert.match(
@@ -262,9 +262,9 @@ await check(
       "resume keeps the same round time",
     );
     await leaveToHome(page);
-    await page.locator('[data-home-mode="daily"]').click();
+    await page.locator('[data-home-mode="endless"]').click();
     await page.locator("#secondary-button").click();
-    assert.match(await page.locator("#mode-label").textContent(), /DAILY/i);
+    assert.match(await page.locator("#mode-label").textContent(), /ENDLESS/i);
     // The arena still pushes its own history entry, so Back leaves the court.
     await page.goBack();
     await page.waitForFunction(() => location.hash !== "#play");
@@ -1236,7 +1236,6 @@ await check(
     // The card that opens a round names the round it is about to open, so the
     // button is never just a generic "Play" the player has to interpret.
     for (const [mode, primary] of [
-      ["daily", /^Play today’s circuit$/],
       ["endless", /^Start the run$/],
       ["practice", /^Start the warm-up$/],
       ["career", /^Play the court$/],
@@ -1256,6 +1255,14 @@ await check(
       await page.locator("#pause-home").click();
       await page.locator("#home-view").waitFor({ state: "visible" });
     }
+    // King of the Court is coming soon and clicking it does nothing
+    const kingBtn = page.locator('[data-home-mode="daily"]');
+    assert.match(await kingBtn.locator("strong").textContent(), /King of the Court/i);
+    assert.match(await kingBtn.locator("span").textContent(), /Coming soon/i);
+    assert.equal(await kingBtn.getAttribute("disabled"), "");
+    await kingBtn.click({ force: true });
+    assert.equal(await page.locator("#home-view").isVisible(), true);
+    assert.equal(await page.locator("#arena-view").isHidden(), true);
     // Nowhere in the shell still calls home "Courts".
     const strays = await page.evaluate(() =>
       [...document.querySelectorAll("button")]

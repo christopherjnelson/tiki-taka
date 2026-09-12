@@ -2326,6 +2326,24 @@ body.play-view #bank-button {
 .home-modes button:nth-child(even) {
   border-top-color: var(--pink);
 }
+.home-modes button:disabled,
+.home-modes button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: saturate(0.7);
+}
+.home-modes button:disabled::after,
+.home-modes button[aria-disabled="true"]::after {
+  opacity: 0.35;
+}
+.home-modes button:disabled .mode-copy span,
+.home-modes button[aria-disabled="true"] .mode-copy span {
+  font: 700 10px var(--sign);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--pink);
+  opacity: 0.85;
+}
 /* Line-art icon, coloured by the same accent as the card's top border —
    currentColor so one rule covers both the shape's stroke and the
    cyan/pink alternation. */

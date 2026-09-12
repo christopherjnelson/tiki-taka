@@ -1206,6 +1206,7 @@ function prepare() {
   syncHud();
 }
 function switchMode(next, index = courtIndex) {
+  if (next === "daily") return;
   closePauseMenu({ restoreFocus: false });
   if (phase === "playing" || phase === "paused") {
     pause();
@@ -2917,9 +2918,10 @@ $("pause-home").addEventListener("click", () => {
 });
 $("pause-settings").addEventListener("click", openSettings);
 document.querySelectorAll("[data-home-mode]").forEach((button) => {
-  button.addEventListener("click", () =>
-    switchMode(button.dataset.homeMode, courtIndex),
-  );
+  button.addEventListener("click", () => {
+    if (button.disabled || button.dataset.homeMode === "daily") return;
+    switchMode(button.dataset.homeMode, courtIndex);
+  });
 });
 const courtLeaderboardTabs = Array.from(document.querySelectorAll(".hl-tab"));
 courtLeaderboardTabs.forEach((tab, index) => {
