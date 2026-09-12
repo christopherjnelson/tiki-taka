@@ -511,12 +511,8 @@ function shortTierLabel(id) {
 }
 let homeLeaderboardCourt = 0;
 // Scores are not comparable across tiers, so the deck always shows exactly
-// one tier at a time rather than an "all" blend. It defaults to whatever the
-// player currently has selected for their own next round (progress.difficulty)
-// so the board they land on matches the challenge they are about to play.
-let homeLeaderboardDifficulty = DIFFICULTY_IDS.includes(progress.difficulty)
-  ? progress.difficulty
-  : "standard";
+// one tier at a time rather than an "all" blend. Defaults to standard.
+let homeLeaderboardDifficulty = "standard";
 
 // Built once from DIFFICULTIES — never hardcoded — so the toggle always
 // matches whatever tiers the engine defines. Labels are abbreviated (REL /
