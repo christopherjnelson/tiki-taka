@@ -2452,6 +2452,7 @@ $("music-button").addEventListener("click", toggleMusic);
 // "music on" and the volume and on/off settings keep governing it.
 function syncMusicRail() {
   const toggle = $("music-toggle"),
+    prev = $("music-prev"),
     skip = $("music-skip");
   if (!toggle) return;
   toggle.setAttribute("aria-pressed", String(settings.musicOn));
@@ -2460,8 +2461,14 @@ function syncMusicRail() {
     "aria-label",
     settings.musicOn ? "Pause the soundtrack" : "Play the soundtrack",
   );
-  skip.setAttribute("aria-label", "Skip to the next track");
-  skip.disabled = music.trackCount < 2;
+  if (prev) {
+    prev.setAttribute("aria-label", "Skip to the previous track");
+    prev.disabled = music.trackCount < 2;
+  }
+  if (skip) {
+    skip.setAttribute("aria-label", "Skip to the next track");
+    skip.disabled = music.trackCount < 2;
+  }
   const title = music.trackTitle;
   $("music-track").textContent = title || "—";
   $("music-track").title = title
@@ -2476,6 +2483,12 @@ function returnFocusToCourt() {
   if (phase === "playing" && !menuBlocking())
     $("court").focus({ preventScroll: true });
 }
+$("music-prev")?.addEventListener("click", () => {
+  unlockAudio();
+  music.skip(-1);
+  syncMusicRail();
+  returnFocusToCourt();
+});
 $("music-toggle").addEventListener("click", () => {
   toggleMusic();
   syncMusicRail();

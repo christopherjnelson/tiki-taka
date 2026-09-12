@@ -816,7 +816,7 @@ await check(
     // There is exactly one player in the document. The side rail this replaced
     // was a second implementation of the same three controls, and it only
     // existed while a round was on screen.
-    for (const selector of ["#music-toggle", "#music-skip", "#music-track"])
+    for (const selector of ["#music-prev", "#music-toggle", "#music-skip", "#music-track"])
       assert.equal(
         await page.locator(selector).count(),
         1,
@@ -831,7 +831,7 @@ await check(
         true,
         `the top bar must be on screen on ${where}`,
       );
-      for (const selector of ["#music-toggle", "#music-skip", ".top-brand-mark"])
+      for (const selector of ["#music-prev", "#music-toggle", "#music-skip", ".top-brand-mark"])
         assert.equal(
           await page.locator(selector).isVisible(),
           true,

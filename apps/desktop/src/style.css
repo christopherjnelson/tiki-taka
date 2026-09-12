@@ -1486,8 +1486,8 @@ body.play-view .ambience {
   opacity: 0.85;
 }
 .music-track {
-  min-width: 0;
-  max-width: 22ch;
+  width: 18ch;
+  flex: 0 0 18ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1650,7 +1650,8 @@ body[data-view="arena"] .top-pause {
     display: none;
   }
   .music-track {
-    max-width: 12ch;
+    width: 12ch;
+    flex: 0 0 12ch;
   }
   .top-brand-mark {
     font-size: 18px;
