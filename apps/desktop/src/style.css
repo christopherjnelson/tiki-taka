@@ -2890,6 +2890,9 @@ body.play-view .arena-view .below-court {
     letter-spacing: 1px;
     color: var(--muted);
   }
+  .hl-status.is-error {
+    color: var(--gold);
+  }
   .hl-status:empty {
     display: none;
   }
