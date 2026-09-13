@@ -1586,29 +1586,24 @@ body.play-view .ambience {
   align-items: center;
   justify-content: center;
   justify-self: center;
-  gap: 7px;
   margin: 0;
   min-width: 0;
   overflow: hidden;
   text-align: center;
 }
-.top-brand-symbol {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-  flex-shrink: 0;
-  filter: drop-shadow(0 0 6px rgba(39, 234, 216, 0.45));
-}
 .top-brand-mark {
-  color: #fff;
-  text-transform: lowercase;
-  white-space: nowrap;
-  font: italic 800 22px/1 var(--display);
-  letter-spacing: -1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
-
-.top-brand-mark span {
-  color: var(--cyan);
+.top-brand-wordmark {
+  display: block;
+  height: 24px;
+  width: auto;
+  max-width: 105px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(39, 234, 216, 0.35));
 }
 .top-brand-sub {
   color: var(--muted);
@@ -1775,21 +1770,9 @@ body.play-view .top-settings {
   .top-bar {
     gap: 6px;
   }
-  .top-brand {
-    gap: 5px;
-  }
-  .top-brand-symbol {
-    width: 14px;
-    height: 14px;
-  }
-  .music-player {
-    gap: 4px;
-  }
-  .music-player .bar-button {
-    min-width: 32px;
-  }
-  .top-brand-mark {
-    font-size: 15px;
+  .top-brand-wordmark {
+    height: 18px;
+    max-width: 72px;
   }
   /* The transport-button shrink above clears 320px for the home screen's
      top bar, which only carries Settings + the profile chip on its right.
@@ -4094,7 +4077,8 @@ body.play-view .arena-view .below-court {
   margin: 4px 0 0;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
+  text-align: center;
   color: var(--ink);
   text-transform: lowercase;
   font: italic 800 clamp(38px, 4.4vw, 76px) / 0.86 var(--display);
@@ -4106,6 +4090,7 @@ body.play-view .arena-view .below-court {
   width: 100%;
   max-width: clamp(200px, 22vw, 290px);
   height: auto;
+  margin: 0 auto;
   object-fit: contain;
   filter: drop-shadow(0 4px 14px rgba(16, 11, 37, 0.55));
 }
