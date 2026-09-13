@@ -4256,10 +4256,11 @@ body.play-view .arena-view .below-court {
     overflow: hidden;
   }
   .home-court-preview {
+    display: block;
     width: 100%;
+    max-width: 100%;
     max-height: 100%;
     aspect-ratio: 1000 / 620;
-    object-fit: contain;
     border: 1px solid var(--line);
     border-radius: 4px;
     background: #080414;

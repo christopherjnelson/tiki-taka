@@ -246,8 +246,14 @@
             <p id="audio-hint" class="title-hint audio-hint" role="status" hidden>
               Press any key or click once to enable sound.
             </p>
-            <div class="home-court-card">
-              <img id="home-court-preview" class="home-court-preview" src="" alt="Court preview" />
+            <!-- A real Game instance with the bots in possession, so home shows
+            the game rather than a still image of it. Presentational only:
+            aria-hidden and not focusable, so it can never take a tab stop or a
+            d-pad step away from the controls around it. It is driven from the
+            shell's single rAF loop and torn down on the way into a real round;
+            see startAttract()/stopAttract() in src/main.js. -->
+            <div class="home-court-card" aria-hidden="true">
+              <canvas id="attract-court" class="home-court-preview" width="1000" height="620"></canvas>
             </div>
             <!-- Progress lives with the menu rather than under the demo: the
             menu column has the vertical slack, and the demo column's height is

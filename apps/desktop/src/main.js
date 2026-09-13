@@ -7,6 +7,11 @@ import {
   distance,
   clamp,
   bankPoint,
+  splitTightness,
+  segmentDistance,
+  TRIANGLE_WINDOW,
+  PLAYER_RADIUS,
+  ONE_TOUCH,
 } from "../../../packages/engine/src/game.js";
 import { Renderer } from "../../../packages/presentation/src/renderer.js";
 import {
@@ -539,11 +544,6 @@ function syncTitle() {
     : selectedHomeMode === "practice"
       ? `${court.name} · Free Practice`
       : `${court.name} · ${court.place}`;
-  const preview = $("home-court-preview");
-  if (preview) {
-    preview.src = renderer.courtPreview(court);
-    preview.alt = `${court.name} court preview`;
-  }
 }
 function selectCourt(i) {
   if (i < 0 || i >= COURTS.length || i > progress.unlocked) return;
@@ -559,6 +559,7 @@ function selectCourt(i) {
     btn.setAttribute("aria-pressed", String(active));
   });
   syncTitle();
+  setAttractVenue(attractVenueForCourt(i));
   selectHomeLeaderboardCourt(i);
   // A gamepad player's cursor was just sitting in the courts zone; follow the
   // flow into modes rather than leaving it stranded on the list. Mouse and
@@ -929,11 +930,470 @@ function applyView(next, { updateHash = true } = {}) {
   }
 }
 // --- Home's attract demo -------------------------------------------------
-// The attract demo canvas has been replaced by the expanded Circuit Leaderboard deck.
-// These no-op stubs preserve compatibility with external probes and lifecycle hooks.
-function startAttract() {}
-function stopAttract() {}
-function updateAttract() {}
+//
+// A second Game and a second Renderer, with the bots keeping the ball among
+// themselves, so the first thing a player sees is the game and not a
+// description of it. Three rules hold it in its place:
+//
+//   * one loop. It is stepped from the shell's existing rAF loop rather than
+//     starting a second one, so it cannot outlive the screen it belongs to or
+//     run alongside the arena;
+//   * it owns nothing. Its events feed its own renderer for the flourish and
+//     are then dropped: no progress, no records, no round stats, no sound;
+//   * it is invisible to input. The canvas is aria-hidden and not focusable,
+//     and nothing here touches `game`, `phase` or the key state.
+const attractCanvas = $("attract-court");
+let attractGame = null,
+  attractRenderer = null,
+  attractPassIn = 0,
+  // Wall passes are real gameplay the player has tuned by hand
+  // (bestTarget() picks the safest lane, which is never a bank), so the demo
+  // fakes an occasional one on top of bestTarget's normal choice rather than
+  // touching how passing itself works. attractBankEvery randomizes "every
+  // fourth to sixth pass" so it doesn't read as a metronome; the count only
+  // advances on a real reception (see updateAttract), so a turnover can't
+  // skip it early or make it lag behind.
+  attractPassCount = 0,
+  attractBankEvery = 4 + Math.floor(Math.random() * 3),
+  // Set whenever the demo's venue changes (or the demo is (re)started) so a
+  // reduced-motion viewer — who never runs the per-frame sim/paint below —
+  // still gets exactly one repainted frame reflecting the new court, rather
+  // than either a stale one or a redraw on every tick.
+  attractNeedsRepaint = false,
+  // Tracks demo.turnovers so a turnover (an interception, holding too long)
+  // can be noticed from the outside and used to reset the choreography
+  // below to its first set piece - the engine already resets its own
+  // history and positions when this happens, so this only has to forget
+  // which set piece it was mid-way through.
+  attractTurnovers = 0;
+// Court -> venue is read through the engine's own venue data rather than a
+// hardcoded id list: getVenue() resolves a config by its seed, and COURTS[i]
+// carries the same seed venues.js keys off, so the two can never disagree.
+function attractVenueForCourt(i) {
+  return getVenue(COURTS[i] || COURTS[0]).id;
+}
+// Re-skins the demo in place: background, accent and secondary colors only.
+// Never touches seed, defenders, speed or target, so the rally already in
+// progress keeps doing whatever it was doing — see Renderer.render(), which
+// re-derives `this.venue` from `game.config` every frame.
+function setAttractVenue(venueId) {
+  if (!attractGame || attractGame.config.venue === venueId) return;
+  attractGame.config.venue = venueId;
+  attractNeedsRepaint = true;
+}
+// --- Choreographed rally --------------------------------------------------
+//
+// bestTarget() alone plays it safe - that's what makes it good for a real
+// player - so left to its own devices the demo rarely produces a split, a
+// triangle or a one-touch chain against three defenders. This is a
+// showcase meant to demonstrate the game to someone who has never played
+// it, not a simulation, so the sequence below is deliberately scripted and
+// non-random: a small, reorderable table of set pieces cycles through the
+// mechanics in a fixed order. Each one is scored with the exact same pure
+// engine math the engine itself uses to award the bonus (splitTightness,
+// TRIANGLE_WINDOW, PLAYER_RADIUS, ONE_TOUCH) rather than reimplementing the
+// geometry here. When a set piece can't be executed on a given decision -
+// no lane threads a defender pair, no teammate is standing in the zone -
+// the demo keeps possession with an ordinary safe pass and simply tries
+// that step again next time; it never stalls, forces a bad pass, or hangs
+// on one step forever (see SET_PIECE_PATIENCE). Losing the ball resets the
+// whole sequence back to "split" - see attractTurnovers above.
+const SET_PIECES = ["split", "triangle", "onetouch", "zone"];
+// Decision points (for split/zone) or passes thrown (for onetouch) a set
+// piece gets before the demo gives up on it for this lap and moves on.
+const SET_PIECE_PATIENCE = { split: 6, zone: 6, onetouch: 20 };
+let choreoStep = 0;
+let choreoAttempts = 0;
+// Persists across the three forced passes of a triangle: { sequence, stage }.
+let choreoTriangle = null;
+// Count of passes thrown so far in the current one-touch chain.
+let choreoOneTouch = 0;
+function currentSetPiece() {
+  return SET_PIECES[choreoStep % SET_PIECES.length];
+}
+function resetChoreography() {
+  choreoStep = 0;
+  choreoAttempts = 0;
+  choreoTriangle = null;
+  choreoOneTouch = 0;
+}
+// The same lane a direct (non-bank) pass is scored with in Game#pass.
+function directLane(from, to) {
+  return [
+    { x: from.x, y: from.y },
+    { x: to.x, y: to.y },
+  ];
+}
+// Mirrors the triangle check in Game#receive without mutating anything, so
+// a candidate pass can be tested before it's committed to.
+function wouldCompleteTriangle(demo, target) {
+  const history = [...demo.history, target].slice(-4);
+  const times = [...demo.historyTimes, demo.elapsed].slice(-4);
+  return (
+    history.length >= 4 &&
+    history.at(-4) === target &&
+    new Set(history.slice(-3)).size === 3 &&
+    demo.elapsed - times.at(-4) <= TRIANGLE_WINDOW
+  );
+}
+// Split the press: thread the tightest defender pair a direct lane can
+// cross. Skips any candidate that would also close a triangle on the same
+// pass - only one of the two ever pays out (see Game#receive), so
+// choreographing both at once would silently show just the triangle.
+function chooseSplit(demo) {
+  const from = demo.players[demo.carrier];
+  let best = null;
+  for (const p of demo.players) {
+    if (p.id === demo.carrier || wouldCompleteTriangle(demo, p.id)) continue;
+    const tightness = splitTightness(demo.defenders, directLane(from, p));
+    if (tightness !== null && (!best || tightness > best.tightness)) {
+      best = { id: p.id, tightness };
+    }
+  }
+  return best ? best.id : null;
+}
+// A pass the engine intercepts (a defender within 20 of the ball's actual
+// path - see Game#update) never reaches the target at all, triangle or not,
+// so every lane a set piece throws is checked against this margin before
+// it's thrown. Wider than the engine's own 20: defenders actively chase the
+// ball once it's within 145 of them (see the press loop in Game#update), so
+// a lane that's merely clear right now can still be run down mid-flight.
+const LANE_CLEARANCE = 45;
+function laneIsClear(demo, lane) {
+  for (let s = 0; s < lane.length - 1; s++) {
+    for (const d of demo.defenders) {
+      if (segmentDistance(d, lane[s], lane[s + 1]) < LANE_CLEARANCE) return false;
+    }
+  }
+  return true;
+}
+// Close a triangle purely from the bot's own pass history - it doesn't
+// involve the defenders at all. Anchor on whoever currently has the ball
+// and cycle it out to the other two teammates and back: exactly the
+// A-B-C-A the engine's history check is looking for. The history math
+// doesn't care whether the pass is direct or banked, so a route straight
+// through a defender banks off the wall instead rather than getting
+// intercepted before it ever completes the triangle.
+function chooseTriangleTarget(demo) {
+  if (!choreoTriangle) {
+    const anchor = demo.carrier;
+    const others = demo.players.map((p) => p.id).filter((id) => id !== anchor);
+    choreoTriangle = { sequence: [others[0], others[1], anchor], stage: 0 };
+  }
+  const target = choreoTriangle.sequence[choreoTriangle.stage];
+  const from = demo.players[demo.carrier],
+    to = demo.players[target];
+  // Prefer whichever route is actually clear; if neither is, still throw the
+  // direct pass rather than stalling the sequence - an occasional
+  // interception here is no worse than the one a real player risks.
+  const bank =
+    !laneIsClear(demo, directLane(from, to)) &&
+    laneIsClear(demo, [from, bankPoint(from, to), to]);
+  return { target, bank };
+}
+// A one-touch pass is just a release with no hold and no movement since the
+// last reception - the demo already controls both, it just has to stop
+// waiting between passes (see the immediate pacing in updateAttract).
+// Cycling the ball around the four players reads as a quick give-and-go.
+function chooseOneTouchTarget(demo) {
+  return (demo.carrier + 1) % 4;
+}
+// Hit the bonus zone: pass to whichever teammate is currently standing in
+// it, if any are. The zone drifts on its own schedule so this often isn't
+// available the moment the step starts - SET_PIECE_PATIENCE.zone covers it.
+function chooseZoneTarget(demo) {
+  if (!demo.zone) return null;
+  for (const p of demo.players) {
+    if (p.id === demo.carrier) continue;
+    if (distance(p, demo.zone) <= demo.zone.r + PLAYER_RADIUS) return p.id;
+  }
+  return null;
+}
+// Advances the choreography's own state once a chosen pass has actually
+// been thrown (demo.pass() returned true) - never on a decision that fell
+// back to a normal pass, and never on one blocked by the engine's own pass
+// cooldown, so a rapid one-touch retry can't silently burn through its
+// patience budget before it ever gets to fire.
+function advanceChoreography(demo, piece) {
+  if (piece === "triangle") {
+    choreoTriangle.stage++;
+    if (choreoTriangle.stage >= choreoTriangle.sequence.length) {
+      choreoTriangle = null;
+      choreoStep++;
+      choreoAttempts = 0;
+    }
+    return;
+  }
+  if (piece === "onetouch") {
+    choreoOneTouch++;
+    if (choreoOneTouch >= SET_PIECE_PATIENCE.onetouch) {
+      choreoOneTouch = 0;
+      choreoStep++;
+      choreoAttempts = 0;
+    }
+    return;
+  }
+  // A split or a zone hit always closes out the step.
+  choreoStep++;
+  choreoAttempts = 0;
+}
+// Returns { target, bank } for the pass this frame's set piece wants, or
+// null to fall back to a normal safe pass while it waits for its moment
+// (and to keep the whole demo playable-looking rather than stalling on the
+// mechanic).
+function chooseChoreographedTarget(demo) {
+  const piece = currentSetPiece();
+  // The milestone bonus already fired inside Game#receive the moment the
+  // tenth one-touch reception landed; there's nothing left for this step to
+  // do, so move on before throwing a redundant eleventh pass.
+  if (piece === "onetouch" && demo.oneTouchStreak >= ONE_TOUCH.milestoneEvery) {
+    choreoOneTouch = 0;
+    choreoStep++;
+    choreoAttempts = 0;
+    return null;
+  }
+  if (piece === "triangle") return chooseTriangleTarget(demo);
+  if (piece === "onetouch") return { target: chooseOneTouchTarget(demo), bank: false };
+  const target = piece === "split" ? chooseSplit(demo) : chooseZoneTarget(demo);
+  if (target === null) {
+    choreoAttempts++;
+    if (choreoAttempts >= (SET_PIECE_PATIENCE[piece] ?? 6)) {
+      choreoStep++;
+      choreoAttempts = 0;
+    }
+    return null;
+  }
+  return { target, bank: false };
+}
+function startAttract() {
+  if (!attractCanvas || attractGame) return;
+  attractRenderer ||= new Renderer(attractCanvas, { maxDpr: 1 });
+  attractRenderer.effects.length = 0;
+  attractGame = new Game(
+    {
+      ...COURTS[1],
+      name: "Attract",
+      // Marks this instance as the demo. Two Games can be alive across a view
+      // change, and anything watching from outside — a test probe on
+      // Game.prototype.update, a debugging session — needs to be able to tell
+      // the player's round from the one running behind the menu.
+      attract: true,
+      // Practice rules: unlimited possessions, so a demo left running on the
+      // home screen can never stall on a turnover it has no way to dismiss.
+      practice: true,
+      target: 0,
+      time: 120,
+      speed: 74,
+      defenders: 3,
+      // Fixed, not Date.now(): the choreography below scripts specific
+      // passes against this exact rally, so the seed that produces it -
+      // teammate phase offsets, defender starting spots - has to be
+      // reproducible rather than different on every visit to the home
+      // screen.
+      seed: 424242,
+    },
+    "balanced",
+  );
+  attractPassIn = 0.9;
+  attractPassCount = 0;
+  attractBankEvery = 4 + Math.floor(Math.random() * 3);
+  attractTurnovers = 0;
+  resetChoreography();
+  // Skin the demo to whatever court is currently selected (or last selected)
+  // rather than whatever COURTS[1]'s own seed would otherwise resolve to.
+  attractGame.config.venue = attractVenueForCourt(selectedCourtIndex);
+  attractNeedsRepaint = true;
+  // Same convention as window.__game for the player's round: a stable,
+  // read-only hook for tests/debugging to confirm the demo keeps running the
+  // same instance (rather than being torn down and rebuilt) across a venue
+  // re-skin, without reaching into module-private state.
+  window.__attractGame = attractGame;
+  // A reduced-motion viewer never reaches the per-frame branch in
+  // updateAttract, so paint the one frame they get right away instead of
+  // waiting on whatever schedules the next call.
+  if (attractRenderer.reducedMotion) {
+    attractRenderer.render(attractGame, { preview: false });
+    attractNeedsRepaint = false;
+  }
+}
+function stopAttract() {
+  attractGame = null;
+  attractNeedsRepaint = false;
+  attractAccum = 0;
+  // Deliberately NOT resetting attractFrozen: a machine that could not afford
+  // the rally once cannot afford it on the next visit to home either, and
+  // re-measuring every time would re-spend the budget to reach the same
+  // answer.
+  attractAge = 0;
+  attractCostTotal = 0;
+  attractCostSamples = 0;
+  window.__attractGame = null;
+  if (attractRenderer) attractRenderer.effects.length = 0;
+}
+// The demo is decoration, not gameplay: stepping and repainting it on every
+// animation frame costs the same budget as the live arena for something
+// nobody is playing. Capping it at 30fps halves that on weak hardware, where
+// the home screen competes with thumbnail painting and audio, and is
+// indistinguishable at a glance for a rally of four drifting players.
+const ATTRACT_STEP = 1 / 30;
+let attractAccum = 0;
+// Adaptive degradation. The demo is decoration and must never cost a player
+// their frame budget, so it times its own work and gives up if that work is
+// consistently expensive - freezing to a single painted frame, which is
+// exactly what the static court preview it replaced always was. A machine
+// that can afford the rally keeps it; one that cannot gets the picture.
+//
+// The warmup window matters: first paint, font loading and the first
+// native-resolution background bake make the opening frames expensive on
+// every machine, and judging on those would freeze the demo everywhere.
+const ATTRACT_BUDGET_MS = 6;
+const ATTRACT_SAMPLES = 20;
+const ATTRACT_WARMUP_SECONDS = 1.5;
+let attractFrozen = false,
+  attractAge = 0,
+  attractCostTotal = 0,
+  attractCostSamples = 0;
+function updateAttract(dt) {
+  if (!attractGame || !attractRenderer) return;
+  attractAge += dt;
+  // Frozen (or reduced-motion) demos still repaint on demand, so a venue
+  // re-skin from selectCourt()/hover is visible even when the rally is not
+  // running.
+  if (attractFrozen) {
+    if (attractNeedsRepaint) {
+      attractRenderer.render(attractGame, { preview: false });
+      attractNeedsRepaint = false;
+    }
+    return;
+  }
+  const startedAt = performance.now();
+  stepAttract(dt);
+  if (attractAge < ATTRACT_WARMUP_SECONDS || !attractGame) return;
+  attractCostTotal += performance.now() - startedAt;
+  attractCostSamples++;
+  if (attractCostSamples < ATTRACT_SAMPLES) return;
+  const average = attractCostTotal / attractCostSamples;
+  attractCostTotal = 0;
+  attractCostSamples = 0;
+  if (average > ATTRACT_BUDGET_MS) {
+    attractFrozen = true;
+    attractNeedsRepaint = true;
+  }
+}
+function stepAttract(dt) {
+  if (!attractGame || !attractRenderer) return;
+  // prefers-reduced-motion: freeze the rally. The demo still exists (so a
+  // venue re-skin from selectCourt()/hover still applies) but never steps its
+  // own simulation and only repaints when something actually changed.
+  if (attractRenderer.reducedMotion) {
+    if (attractNeedsRepaint) {
+      attractRenderer.render(attractGame, { preview: false });
+      attractNeedsRepaint = false;
+    }
+    return;
+  }
+  attractNeedsRepaint = false;
+  // Accumulate real elapsed time and step once per capped frame, so the rally
+  // runs at the same speed however often the page paints.
+  attractAccum += dt;
+  if (attractAccum < ATTRACT_STEP) return;
+  dt = attractAccum;
+  attractAccum = 0;
+  const demo = attractGame,
+    carrier = demo.players[demo.carrier];
+  // Drift the carrier off the nearest defender and back towards the middle, so
+  // the demo reads as play rather than as four statues. The engine moves the
+  // teammates and the press on its own.
+  let x = 0,
+    y = 0;
+  // The one-touch set piece needs the receiving carrier to stay put (Game's
+  // own one-touch window allows only ~8px of drift - see ONE_TOUCH in
+  // game.js), including on the frames where the immediate re-pass below is
+  // still blocked by the engine's own pass cooldown, so it holds still
+  // rather than drifting for the whole step.
+  if (currentSetPiece() !== "onetouch") {
+    const nearest = demo.defenders
+      .map((defender) => ({ defender, gap: distance(defender, carrier) }))
+      .sort((a, b) => a.gap - b.gap)[0];
+    if (nearest && nearest.gap > 0.001) {
+      x = (carrier.x - nearest.defender.x) / nearest.gap;
+      y = (carrier.y - nearest.defender.y) / nearest.gap;
+    }
+    x += (500 - carrier.x) / 900;
+    y += (310 - carrier.y) / 560;
+  }
+  demo.update(dt, { x, y, focus: false });
+  // The one-touch set piece needs consecutive passes thrown back-to-back
+  // (see chooseOneTouchTarget) rather than paced on the usual timer, so it
+  // bypasses attractPassIn entirely while it's the active step - Game#pass's
+  // own passCooldown is what actually spaces the individual passes out.
+  const immediate = currentSetPiece() === "onetouch";
+  if (!immediate) attractPassIn -= dt;
+  if (!demo.ball && (immediate || attractPassIn <= 0)) {
+    const piece = currentSetPiece();
+    const choreographed = chooseChoreographedTarget(demo);
+    let target, bank;
+    if (choreographed !== null) {
+      ({ target, bank } = choreographed);
+    } else {
+      // bestTarget(null) is the same smart pass the pass button gives a
+      // player, so a set piece that can't fire this decision still plays
+      // the game the way the game means it to be played while it waits.
+      target = demo.bestTarget(null);
+      bank = false;
+      attractPassCount++;
+      if (attractPassCount >= attractBankEvery) {
+        const passer = demo.players[demo.carrier],
+          receiver = demo.players[target];
+        const waypoint = bankPoint(passer, receiver);
+        const direct = distance(passer, receiver);
+        // Perpendicular distance of the bounce point from the direct line: a
+        // bank whose waypoint sits almost on that line looks identical to a
+        // normal pass, so it isn't worth spending the "every 4-6th" slot on —
+        // skip banking this cycle and try again in another 4-6 passes.
+        const offset =
+          direct > 1
+            ? Math.abs(
+                (receiver.x - passer.x) * (waypoint.y - passer.y) -
+                  (receiver.y - passer.y) * (waypoint.x - passer.x),
+              ) / direct
+            : 0;
+        bank = offset > 40;
+        attractPassCount = 0;
+        attractBankEvery = 4 + Math.floor(Math.random() * 3);
+      }
+    }
+    const thrown = demo.pass(target, bank);
+    if (thrown) {
+      // Only a pass the engine actually accepted counts towards the set
+      // piece's progress - a one-touch retry blocked by passCooldown must
+      // not burn through its patience budget before it ever fires.
+      if (choreographed !== null) advanceChoreography(demo, piece);
+      attractPassIn = immediate ? 0 : 0.55 + Math.random() * 0.5;
+    }
+  }
+  for (const event of demo.events) attractRenderer.addEvent(event);
+  demo.events = [];
+  if (demo.turnovers !== attractTurnovers) {
+    // An interception or a held-too-long turnover: the engine already reset
+    // its own history and positions (see Game#turnover), so the
+    // choreography only has to forget which set piece it was mid-way
+    // through and start the sequence over from "split".
+    attractTurnovers = demo.turnovers;
+    resetChoreography();
+  }
+  if (demo.status !== "playing") {
+    // The clock ran out. Nothing is scored or saved; another round simply
+    // starts, and the next frame renders that one instead. The venue carries
+    // over onto the fresh game rather than resetting to COURTS[1]'s own.
+    const venue = attractGame.config.venue;
+    attractGame = null;
+    startAttract();
+    if (venue) attractGame.config.venue = venue;
+    return;
+  }
+  attractRenderer.render(demo, { preview: false });
+}
 function config() {
   if (mode === "endless")
     return applyDifficulty(
@@ -1114,11 +1574,6 @@ function syncProgress() {
     // Width/height preserve the existing layout while it is pending.
     btn.innerHTML = `<img class="court-thumb" data-court-index="${i}" alt="" width="48" height="30" loading="lazy" /><span class="court-number">${String(i + 1).padStart(2, "0")}</span><span><span class="court-name">${court.name}</span><span class="court-meta">${court.place}</span></span><span class="court-stars">${btn.disabled ? "↗" : `<span class="court-tier-tag">${listedTierTag}</span>${stars ? "★".repeat(stars) : "○"}`}</span>`;
     const previewHover = () => {
-      const preview = $("home-court-preview");
-      if (preview) {
-        preview.src = renderer.courtPreview(court);
-        preview.alt = `${court.name} court preview`;
-      }
       const copy = $("title-play-copy");
       if (copy && phase !== "paused" && phase !== "playing") {
         copy.textContent = `${court.name} · ${court.place}`;
@@ -1126,12 +1581,17 @@ function syncProgress() {
       document.querySelectorAll("#court-list .court-item").forEach((b, idx) => {
         b.classList.toggle("hover-preview", idx === i);
       });
+      setAttractVenue(attractVenueForCourt(i));
     };
     const previewLeave = () => {
       document.querySelectorAll("#court-list .court-item").forEach((b) => {
         b.classList.remove("hover-preview");
       });
       syncTitle();
+      // The pointer/focus left the list without selecting anything, so the
+      // demo falls back to whatever court is actually selected rather than
+      // getting stuck showing the last one hovered.
+      setAttractVenue(attractVenueForCourt(selectedCourtIndex));
     };
     btn.addEventListener("mouseenter", previewHover);
     btn.addEventListener("focus", previewHover);
@@ -1154,6 +1614,7 @@ function syncProgress() {
         b.classList.remove("hover-preview");
       });
       syncTitle();
+      setAttractVenue(attractVenueForCourt(selectedCourtIndex));
     });
   }
   document.querySelectorAll("[data-home-mode]").forEach((btn) => {
@@ -3488,7 +3949,15 @@ window.addEventListener("blur", () => {
   else clearInput();
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) pause();
+  if (document.hidden) {
+    pause();
+    // Don't leave the demo's rAF work running behind a hidden/backgrounded
+    // tab; it restarts fresh (a new rally, not a resumed one) once the tab
+    // is visible again and home is still the active view.
+    stopAttract();
+  } else if (view === "home") {
+    startAttract();
+  }
 });
 // A rotation mid-round is exactly the moment a captured joystick/court
 // pointer is aimed at an axis that no longer matches what's on screen — the
