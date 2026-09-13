@@ -600,6 +600,14 @@ test('three turnovers end a standard run; practice keeps playing', () => {
   assert.equal(standard.events.filter(event => event.type === 'end').length, 1);
 });
 
+test('practice mode has no timer and does not finish on time', () => {
+  const practice = openGame({ practice: true, time: Infinity });
+  const initialTime = practice.time;
+  advance(practice, 120);
+  assert.equal(practice.time, initialTime);
+  assert.equal(practice.status, 'playing');
+});
+
 test('holding the ball without playing fails on every court', () => {
   for (const court of COURTS) {
     const game = new Game(court);

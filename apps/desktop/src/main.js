@@ -496,11 +496,11 @@ function syncTitle() {
     ? " Resume"
     : selectedHomeMode === "practice"
       ? " Practice"
-      : progress.xp > 0
-        ? " Continue"
-        : " Play";
+      : " Play";
   $("title-play-copy").textContent = isResumingSelected
-    ? `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`
+    ? (selectedHomeMode === "practice"
+        ? `${court.name} · Free Practice in progress`
+        : `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`)
     : selectedHomeMode === "practice"
       ? `${court.name} · Free Practice`
       : `${court.name} · ${court.place}`;
@@ -898,7 +898,7 @@ function config() {
       {
         ...court,
         target: 120,
-        time: 90,
+        time: Infinity,
         speed: Math.min(court.speed, 65),
         practice: true,
         description:
@@ -1081,10 +1081,6 @@ function syncProgress() {
     btn.addEventListener("click", () => {
       if (btn.disabled) return;
       selectCourt(i);
-    });
-    btn.addEventListener("dblclick", () => {
-      if (btn.disabled) return;
-      switchMode(selectedHomeMode, i);
     });
     $("court-list").append(btn);
   });
@@ -1316,7 +1312,7 @@ function prepare() {
   const possessionLabel = possessions === 1 ? "POSSESSION" : "POSSESSIONS";
   $("invitation-note").textContent =
     mode === "practice"
-      ? `${game.config.time} SECONDS · UNLIMITED POSSESSIONS · FIND YOUR RHYTHM`
+      ? `NO TIMER · UNLIMITED POSSESSIONS · FIND YOUR RHYTHM`
       : mode === "endless"
         ? `60 SECONDS · ${possessions} POSSESSIONS · TRIANGLES ADD TIME`
         : `${game.config.time} SECONDS · ${possessions} ${possessionLabel} · ${possessionsOrdinal} LOSS ENDS THE ROUND`;
@@ -1331,7 +1327,9 @@ function prepare() {
     mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
       ? "Connect triangles to buy time. Survive the rising press."
-      : `Keep possession for ${game.config.time} seconds. ${mode === "practice" ? "Experiment freely." : `Earn ${game.config.target} points. You have ${possessions} ${possessions === 1 ? "possession" : "possessions"}; the ${possessionOrdinal(possessions)} loss ends the round.`}`,
+      : mode === "practice"
+        ? "No timer. Unlimited recoveries. Experiment freely."
+        : `Keep possession for ${game.config.time} seconds. Earn ${game.config.target} points. You have ${possessions} ${possessions === 1 ? "possession" : "possessions"}; the ${possessionOrdinal(possessions)} loss ends the round.`,
     mode === "daily"
       ? "Play today’s circuit"
       : mode === "endless"
@@ -2240,13 +2238,16 @@ function syncHud() {
     hudCache.score = game.score;
   }
 
+  const isPractice = Boolean(game.config.practice);
   const timeCeil = Math.ceil(game.time);
-  const timeString = `${Math.floor(timeCeil / 60)}:${String(Math.max(0, timeCeil % 60)).padStart(2, "0")}`;
+  const timeString = isPractice
+    ? "∞"
+    : `${Math.floor(timeCeil / 60)}:${String(Math.max(0, timeCeil % 60)).padStart(2, "0")}`;
   if (timeString !== hudCache.timeString) {
     $("time-value").textContent = timeString;
     hudCache.timeString = timeString;
   }
-  const isUrgent = game.time < 15;
+  const isUrgent = !isPractice && game.time < 15;
   if (isUrgent !== hudCache.timeUrgent) {
     $("time-value").classList.toggle("urgent", isUrgent);
     hudCache.timeUrgent = isUrgent;
@@ -3113,7 +3114,6 @@ document.querySelectorAll("[data-home-mode]").forEach((button) => {
       btn.setAttribute("aria-pressed", String(active));
     });
     syncTitle();
-    switchMode(button.dataset.homeMode, selectedCourtIndex);
   });
 });
 const courtLeaderboardTabs = Array.from(document.querySelectorAll(".hl-tab"));
@@ -3634,16 +3634,17 @@ function pollGamepad(dt) {
       );
       if (tap(2)) {
         selectedHomeMode = "practice";
-        switchMode("practice", idx);
+        document.querySelectorAll("[data-home-mode]").forEach((btn) => {
+          const active = btn.dataset.homeMode === "practice";
+          btn.classList.toggle("active", active);
+          btn.setAttribute("aria-pressed", String(active));
+        });
+        syncTitle();
         padPrevious = pressed;
         return;
       }
       if (tap(0)) {
-        if (selectedCourtIndex === idx) {
-          switchMode(selectedHomeMode, idx);
-        } else {
-          selectCourt(idx);
-        }
+        selectCourt(idx);
         padPrevious = pressed;
         return;
       }

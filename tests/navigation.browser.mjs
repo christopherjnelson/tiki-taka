@@ -262,6 +262,8 @@ await check(
       "endless mode should be disabled",
     );
     await page.locator('[data-home-mode="practice"]').click();
+    assert.match(await page.locator("#title-play").textContent(), /Practice/i);
+    await page.locator("#title-play").click();
     // The confirmation names both outcomes plainly, and neither button says
     // anything a player would have to guess at.
     assert.match(
@@ -293,6 +295,8 @@ await check(
     );
     await leaveToHome(page);
     await page.locator('[data-home-mode="practice"]').click();
+    assert.match(await page.locator("#title-play").textContent(), /Practice/i);
+    await page.locator("#title-play").click();
     await page.locator("#secondary-button").click();
     assert.match(await page.locator("#mode-label").textContent(), /PRACTICE|WARM-UP/i);
     // The arena still pushes its own history entry, so Back leaves the court.
@@ -317,6 +321,8 @@ await check(
       /El Patio|Barcelona/i,
     );
     await page.locator('[data-home-mode="practice"]').click();
+    assert.match(await page.locator("#title-play").textContent(), /Practice/i);
+    await page.locator("#title-play").click();
     assert.match(
       await page.locator("#mode-label").textContent(),
       /PRACTICE|WARM-UP/i,
@@ -1305,6 +1311,7 @@ await check(
       ["career", /^Play the court$/],
     ]) {
       await page.locator(`[data-home-mode="${mode}"]`).click();
+      await page.locator("#title-play").click();
       await page.locator("#arena-view").waitFor({ state: "visible" });
       assert.match(
         await page.locator("#start-button").textContent(),
