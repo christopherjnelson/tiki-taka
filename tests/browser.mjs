@@ -667,11 +667,15 @@ if (includeMobileLayouts) await check('portrait and landscape touch layouts rema
   const page = await context.newPage();
   const errors = watchErrors(page);
   await gotoArena(page, baseURL);
-  assert.equal(await page.locator('#joystick').isVisible(), true);
-  assert.equal(await page.locator('#touch-pass').isVisible(), true);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
   await page.locator('#start-button').tap();
   await observeGame(page);
+  // Checked after kick-off, not before it: the opening card is a full-screen
+  // sheet on a phone and deliberately hides the round's controls while it is
+  // up, so these are only meant to be on screen once a round is running.
+  await page.waitForFunction(() => document.querySelector('#game-overlay')?.hidden === true);
+  assert.equal(await page.locator('#joystick').isVisible(), true);
+  assert.equal(await page.locator('#touch-pass').isVisible(), true);
   await page.locator('#touch-bank').tap();
   assert.equal(await page.locator('#touch-bank').getAttribute('aria-pressed'), 'true');
   await page.locator('#touch-pass').tap();
@@ -748,6 +752,10 @@ if (includeMobileLayouts) await check('portrait and landscape touch layouts rema
   const landscapeErrors = watchErrors(landscape);
   await gotoArena(landscape, baseURL);
   assert.equal(await landscape.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+  // Same as portrait above: the controls belong to a running round, and the
+  // opening card covers the screen until one starts.
+  await landscape.locator('#start-button').tap();
+  await landscape.waitForFunction(() => document.querySelector('#game-overlay')?.hidden === true);
   assert.equal(await landscape.locator('#joystick').isVisible(), true);
   assert.equal(await landscape.locator('#touch-pass').isVisible(), true);
   const court = await landscape.locator('#court').boundingBox();
