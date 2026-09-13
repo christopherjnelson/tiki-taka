@@ -266,6 +266,58 @@ await check(
 );
 
 await check(
+  "the attract demo's choreographed rally shows every showcase mechanic on its own within a bounded window",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(baseURL, { waitUntil: "networkidle" });
+    await page.locator("#attract-court").waitFor({ state: "visible" });
+    await page.waitForFunction(() => !!window.__attractGame);
+    // The demo's Game is seeded deterministically (see startAttract in
+    // main.js) precisely so this is reproducible rather than a coin flip:
+    // a full lap through the set-piece table (split, triangle, one-touch,
+    // zone) fires every one of the engine's own counters well inside the
+    // first fifteen seconds of simulated play. Assert on the engine's own
+    // counters, not on rendering, and leave plenty of headroom (a slow CI
+    // runner, an occasional turnover that restarts the sequence) rather
+    // than a timeout tuned to a fast machine.
+    await page.waitForFunction(
+      () =>
+        window.__attractGame &&
+        window.__attractGame.splits > 0 &&
+        window.__attractGame.triangles > 0 &&
+        window.__attractGame.oles > 0,
+      undefined,
+      { timeout: 45_000 },
+    );
+    const counts = await page.evaluate(() => ({
+      splits: window.__attractGame.splits,
+      triangles: window.__attractGame.triangles,
+      oles: window.__attractGame.oles,
+      zones: window.__attractGame.zones,
+    }));
+    assert.ok(counts.splits > 0, "the demo must split the press on its own");
+    assert.ok(counts.triangles > 0, "the demo must close a triangle on its own");
+    assert.ok(
+      counts.oles > 0,
+      "the demo must complete a one-touch chain long enough to pay the olé milestone",
+    );
+    // The zone bonus depends on the zone's own slower rotation lining up
+    // with a teammate's orbit (see chooseZoneTarget in main.js), so it is
+    // given the rest of the window above rather than its own separate wait.
+    await page.waitForFunction(() => window.__attractGame.zones > 0, undefined, {
+      timeout: 45_000,
+    });
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
   "home's zones cover every focusable control, for the gamepad zone nav pad-zones.mjs drives",
   async () => {
     // pollGamepad's home branch (apps/desktop/src/main.js) reads
