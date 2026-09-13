@@ -875,7 +875,11 @@ async function offlineReload(baseURL) {
     await page.locator('#arena-view').waitFor({ state: 'visible' });
     // Play view hides the court heading, so read the arena's live labels instead.
     assert.match(await page.locator('#court-title').textContent(), /Courtyard/);
-    await expectText(page.locator('#overlay-kicker'), /FOUR PLAYERS/i);
+    // The kicker is the pre-round card's own copy, read here to prove the
+    // offline reload served the real app and not a cached shell. It said
+    // "FOUR PLAYERS. ONE BALL." until the card was reworked around the brand
+    // line; what matters to this check is that some live kicker text arrives.
+    await expectText(page.locator('#overlay-kicker'), /NO GOALS/i);
     await page.locator('#start-button').click();
     assert.equal(await page.locator('#game-overlay').isHidden(), true);
     // Audio is not install-time precached. The fetch above proves that the
