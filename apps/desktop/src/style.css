@@ -5958,9 +5958,14 @@ body.play-view .arena-view .below-court {
      it) and only loses its box on screen. */
   body.play-view .game-overlay:not([data-result]) .overlay-symbol {
     display: block;
-    width: 64px;
-    height: 64px;
-    margin: 4px auto;
+    width: min(210px, 72%);
+    height: auto;
+    max-height: 52px;
+    object-fit: contain;
+    margin: 4px auto 10px;
+  }
+  body.play-view .game-overlay:not([data-result]) #overlay-kicker {
+    display: none;
   }
   body.play-view .game-overlay:not([data-result]) #overlay-title {
     position: absolute;

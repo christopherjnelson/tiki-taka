@@ -1391,7 +1391,7 @@ function prepare() {
         ? "HOW LONG CAN YOU KEEP IT?"
         : mode === "practice"
           ? "A LITTLE SPACE TO LEARN"
-          : "NO GOALS. ALL FLOW.",
+          : "FOUR PLAYERS. ONE BALL.",
     mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
       ? "Connect triangles to buy time. Survive the rising press."
