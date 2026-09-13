@@ -23,6 +23,7 @@
     <title>tiki-taka — No goals. All flow.</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./src/style.css" />
   </head>
@@ -73,25 +74,57 @@
           </button>
         </div>
         <p class="top-brand">
-          <span class="top-brand-mark">tiki<span>-</span>taka</span>
+          <span class="top-brand-mark">
+            <img
+              class="top-brand-wordmark"
+              src="./src/brand/tiki-taka-wordmark.png"
+              alt="tiki-taka"
+              width="78"
+              height="26"
+            />
+            <span class="sr-only">tiki-taka</span>
+          </span>
         </p>
         <div class="top-bar-right">
           <!-- Item 3's answer to "a mouse cannot leave a round": a labelled
           control that is always in the same off-court place, only during play,
           far from the passing buttons at the foot of the canvas. Esc and Start
           still do exactly what they did. -->
+          <!-- Always in the bar, on every screen and every width, desktop
+          included: a dialog three taps deep is undiscoverable on a phone
+          (most mobile browsers have no fullscreen entry of their own, so a
+          player who never finds it never gets a fullscreen game at all) and
+          is exactly as useful one tap away for a mouse-and-keyboard player.
+          `#fullscreen-button` used to live inside the settings dialog; it
+          kept its id and its wiring (see syncFullscreen() in main.js) when
+          it moved here, so there is exactly one fullscreen control now, not
+          two drifting toggles for one piece of state. No text label, by
+          design: this row is tight enough at 320px already (see the
+          `.bar-button-label` collapse below) that a fourth label would risk
+          the same wordmark collision that fix already had to solve once.
+          main.js hides this entirely — `hidden`, not just visually — on a
+          browser with no Fullscreen API (iPhone Safari has none), since a
+          button that does nothing on press is worse than no button. -->
+          <button id="fullscreen-button" type="button" class="bar-button top-fullscreen" title="Enter fullscreen" aria-pressed="false" hidden>
+            <svg class="bar-icon" viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M1.5 5.5V2.5a1 1 0 0 1 1-1h3" />
+              <path d="M14.5 5.5V2.5a1 1 0 0 0-1-1h-3" />
+              <path d="M1.5 10.5v3a1 1 0 0 0 1 1h3" />
+              <path d="M14.5 10.5v3a1 1 0 0 1-1 1h-3" />
+            </svg>
+          </button>
           <button id="settings-button" type="button" class="bar-button top-settings" title="Open settings" aria-haspopup="dialog">
             <svg class="bar-icon" viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true">
               <path d="M8 4.75a3.25 3.25 0 1 0 0 6.5 3.25 3.25 0 0 0 0-6.5zM6.25 8a1.75 1.75 0 1 1 3.5 0 1.75 1.75 0 0 1-3.5 0z" />
               <path fill-rule="evenodd" d="M7.05 1.05a1.25 1.25 0 0 1 1.9 0l.45.49c.28.3.69.47 1.1.44l.67-.05a1.25 1.25 0 0 1 1.34 1.34l-.05.67c-.03.41.14.82.44 1.1l.49.45a1.25 1.25 0 0 1 0 1.9l-.49.45c-.3.28-.47.69-.44 1.1l.05.67a1.25 1.25 0 0 1-1.34 1.34l-.67-.05a1.26 1.26 0 0 0-1.1.44l-.45.49a1.25 1.25 0 0 1-1.9 0l-.45-.49a1.26 1.26 0 0 0-1.1-.44l-.67.05a1.25 1.25 0 0 1-1.34-1.34l.05-.67c.03-.41-.14-.82-.44-1.1l-.49-.45a1.25 1.25 0 0 1 0-1.9l.49-.45c.3-.28.47-.69.44-1.1l-.05-.67a1.25 1.25 0 0 1 1.34-1.34l.67.05c.41.03.82-.14 1.1-.44l.45-.49zm.98 1.48l-.45-.49a.25.25 0 0 0-.36 0l-.45.49c-.44.47-1.07.72-1.7.67l-.67-.05a.25.25 0 0 0-.27.27l.05.67c.05.63-.2 1.26-.67 1.7l-.49.45a.25.25 0 0 0 0 .36l.49.45c.47.44.72 1.07.67 1.7l-.05.67a.25.25 0 0 0 .27.27l.67-.05c.63-.05 1.26.2 1.7.67l.45.49a.25.25 0 0 0 .36 0l.45-.49c.44-.47 1.07-.72 1.7-.67l.67.05a.25.25 0 0 0 .27-.27l-.05-.67c-.05-.63.2-1.26.67-1.7l.49-.45a.25.25 0 0 0 0-.36l-.49-.45c-.47-.44-.72-1.07-.67-1.7l.05-.67a.25.25 0 0 0-.27-.27l-.67.05c-.63.05-1.26-.2-1.7-.67z" clip-rule="evenodd" />
             </svg>
-            Settings
+            <span class="bar-button-label">Settings</span>
           </button>
           <button id="top-home" type="button" class="bar-button top-home" title="Return to home screen">
             <svg class="bar-icon" viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true">
               <path d="M8 1.5L1.5 7.5V14.5H6V10H10V14.5H14.5V7.5L8 1.5Z" />
             </svg>
-            Home
+            <span class="bar-button-label">Home</span>
           </button>
           <button id="top-pause" type="button" class="bar-button top-pause" title="Open pause menu">
             <svg class="bar-icon" viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true">
@@ -99,7 +132,7 @@
               <rect x="1" y="7" width="14" height="2" rx="1" />
               <rect x="1" y="11.5" width="14" height="2" rx="1" />
             </svg>
-            Menu
+            <span class="bar-button-label">Menu</span>
           </button>
           <button
             id="profile-button"
@@ -123,9 +156,16 @@
         <section id="home-view" class="home-view" aria-labelledby="title-heading">
           <div class="home-intro console-panel console-panel-notch-tr">
             <h1 id="title-heading" class="game-title">
-              tiki<span>-</span>taka
+              <img
+                class="brand-logo-lockup"
+                src="./src/brand/tiki-taka-logo-lockup.png"
+                alt="tiki-taka — No goals. All flow."
+                width="384"
+                height="195"
+              />
+              <span class="sr-only">tiki-taka — No goals. All flow.</span>
             </h1>
-            <p class="title-tagline">NO GOALS. ALL FLOW.</p>
+            <p class="title-tagline sr-only">NO GOALS. ALL FLOW.</p>
             <nav id="title-menu" class="menu-list" aria-label="Main menu">
               <button id="title-play" type="button" class="menu-item primary">
                 <span class="menu-key" aria-hidden="true">▸</span> Play
@@ -266,6 +306,9 @@
           <div class="home-courts console-panel console-panel-notch-tr">
             <header class="courts-bar">
               <h2 id="courts-title">Choose your court.</h2>
+              <span id="courts-pad-hint" class="courts-pad-hint" hidden>
+                <kbd class="pad-chip">A</kbd> Select
+              </span>
             </header>
             <div
               id="court-list"
@@ -497,6 +540,19 @@
                 aria-modal="true"
                 aria-labelledby="overlay-title"
               >
+                  <!-- Only rendered on the phone sheet (see .overlay-close in
+                     style.css). A desktop player dismisses the result with
+                     one of the three actions or Escape; a phone player gets
+                     a full-screen sheet, and a full-screen sheet needs a way
+                     out that does not commit them to Retry or Home. -->
+                <button
+                  id="overlay-close"
+                  class="overlay-close"
+                  type="button"
+                  aria-label="Close the result"
+                >
+                  <span aria-hidden="true">✕</span>
+                </button>
                 <div id="overlay-card" class="invitation" tabindex="-1">
                   <div id="result-burst" class="result-burst" aria-hidden="true" hidden>
                     <span></span><span></span><span></span>
@@ -634,7 +690,7 @@
                 reserve (engine field `game.focus`); the UI calls it Energy so
                 the two abilities below can keep their own names. -->
                 <div class="energy-row">
-                  <span class="energy-label">BOOST</span>
+                  <span class="energy-label">ENERGY</span>
                   <span id="energy-value" class="energy-value">0 / 10</span>
                 </div>
                 <span
@@ -712,24 +768,64 @@
               ><span id="joystick-thumb"></span>
             </div>
             <span class="touch-hint">MOVE</span>
+            <!-- Five actions, weighted by frequency: Pass and Wall are the
+            primaries a player reaches for on almost every possession, so they
+            sit in their own row, biggest and closest to the thumb's resting
+            edge. Focus, Boost and Shout are holds/occasionals and share a
+            lighter secondary row above. Same grouping works stacked (portrait,
+            below the court) or floating (landscape, over it) — only the
+            container's own position changes between them. -->
             <div class="touch-actions">
-              <button
-                id="touch-focus"
-                aria-pressed="false"
-                title="Earn Focus with wall passes, triangles, or bonus zones."
-                disabled
-              >
-                <span>Focus</span
-                ><span id="touch-focus-value" class="touch-focus-value"
-                  >0 / 10</span
-                ><span class="touch-focus-track" aria-hidden="true"
-                  ><span id="touch-focus-fill"></span
-                ></span></button
-              ><button id="touch-bank" aria-pressed="false" disabled>
-                Wall</button
-              ><button id="touch-pass" disabled>
-                Pass <span aria-hidden="true">↗</span>
-              </button>
+              <div class="touch-actions-secondary">
+                <button
+                  id="touch-shout"
+                  class="touch-action-btn touch-action-shout"
+                  title="Shout target to bonus zone."
+                  disabled
+                >
+                  Shout
+                </button>
+                <button
+                  id="touch-focus"
+                  class="touch-action-btn touch-action-focus"
+                  aria-pressed="false"
+                  title="Earn Focus with wall passes, triangles, or bonus zones."
+                  disabled
+                >
+                  <span>Focus</span
+                  ><span id="touch-focus-value" class="touch-focus-value"
+                    >0 / 10</span
+                  ><span class="touch-focus-track" aria-hidden="true"
+                    ><span id="touch-focus-fill"></span
+                  ></span>
+                </button>
+                <button
+                  id="touch-boost"
+                  class="touch-action-btn touch-action-boost"
+                  aria-pressed="false"
+                  title="Hold Boost. Boost uses Energy."
+                  disabled
+                >
+                  Boost
+                </button>
+              </div>
+              <div class="touch-actions-primary">
+                <button
+                  id="touch-bank"
+                  class="touch-action-btn touch-action-wall"
+                  aria-pressed="false"
+                  disabled
+                >
+                  Wall
+                </button>
+                <button
+                  id="touch-pass"
+                  class="touch-action-btn touch-action-pass"
+                  disabled
+                >
+                  Pass <span aria-hidden="true">↗</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -912,9 +1008,6 @@
       <div class="utility-buttons settings-utilities">
         <button id="sound-button" aria-pressed="false" title="Toggle sound">
           Sound off
-        </button>
-        <button id="fullscreen-button" type="button">
-          <span aria-hidden="true">⌗</span> Fullscreen
         </button>
         <button id="help-button" type="button">
           <span aria-hidden="true">?</span> How to play

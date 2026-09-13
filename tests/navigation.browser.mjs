@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { freePort } from "./free-port.mjs";
-import { gotoArena } from "./open-arena.mjs";
+import { gotoArena, expectedCourtAspect } from "./open-arena.mjs";
 
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -262,6 +262,8 @@ await check(
       "endless mode should be disabled",
     );
     await page.locator('[data-home-mode="practice"]').click();
+    assert.match(await page.locator("#title-play").textContent(), /Practice/i);
+    await page.locator("#title-play").click();
     // The confirmation names both outcomes plainly, and neither button says
     // anything a player would have to guess at.
     assert.match(
@@ -293,6 +295,8 @@ await check(
     );
     await leaveToHome(page);
     await page.locator('[data-home-mode="practice"]').click();
+    assert.match(await page.locator("#title-play").textContent(), /Practice/i);
+    await page.locator("#title-play").click();
     await page.locator("#secondary-button").click();
     assert.match(await page.locator("#mode-label").textContent(), /PRACTICE|WARM-UP/i);
     // The arena still pushes its own history entry, so Back leaves the court.
@@ -301,8 +305,46 @@ await check(
     assert.equal(await page.locator("#arena-view").isHidden(), true);
     await page.locator("#home-view").waitFor({ state: "visible" });
     await page.locator(".court-item").nth(4).click();
+    assert.match(
+      await page.locator("#title-play-copy").textContent(),
+      /The Cage|Tokyo/i,
+    );
+    await page.locator("#title-play").click();
     assert.match(await page.locator("#court-title").textContent(), /The Cage/i);
     assert.equal(page.url().endsWith("#play"), true);
+
+    // Verify selecting a different court and launching Free practice on it
+    await leaveToHome(page);
+    await page.locator(".court-item").nth(2).click();
+    assert.match(
+      await page.locator("#title-play-copy").textContent(),
+      /El Patio|Barcelona/i,
+    );
+    await page.locator('[data-home-mode="practice"]').click();
+    assert.match(await page.locator("#title-play").textContent(), /Practice/i);
+    await page.locator("#title-play").click();
+    if (await page.locator("#secondary-button").isVisible()) {
+      await page.locator("#secondary-button").click();
+    }
+    assert.match(
+      await page.locator("#mode-label").textContent(),
+      /PRACTICE|WARM-UP/i,
+    );
+    assert.match(
+      await page.locator("#court-title").textContent(),
+      /El Patio/i,
+    );
+    assert.equal(page.url().endsWith("#play"), true);
+
+    // Verify selecting a different court preserves staged practice mode
+    await leaveToHome(page);
+    await page.locator('[data-home-mode="practice"]').click();
+    assert.match(await page.locator("#title-play").textContent(), /Practice/i);
+    await page.locator(".court-item").nth(3).click();
+    assert.match(await page.locator("#title-play").textContent(), /Practice/i);
+    assert.match(await page.locator("#title-play-copy").textContent(), /Free Practice/i);
+    assert.equal(await page.locator('[data-home-mode="practice"]').getAttribute("aria-pressed"), "true");
+
     assert.deepEqual(errors, []);
     await context.close();
   },
@@ -526,7 +568,10 @@ await check(
       const court = await page.locator("#court").boundingBox();
       const wrap = await page.locator("#court-wrap").boundingBox();
       assert.ok(
-        court && Math.abs(court.width / court.height - 1000 / 620) < 0.01,
+        court &&
+          Math.abs(
+            court.width / court.height - expectedCourtAspect({ width, height }),
+          ) < 0.01,
         `${width}x${height} ratio ${JSON.stringify(court)}`,
       );
       assert.ok(
@@ -931,11 +976,13 @@ await check(
     assert.equal(await page.locator("#top-home").isVisible(), false);
     // Escape and the gamepad's Start still do exactly what they did.
     await page.locator("#court-list button").first().click();
+    await page.locator("#title-play").click();
     await page.locator("#arena-view").waitFor({ state: "visible" });
     assert.equal(await page.locator("#top-home").isVisible(), true);
     await page.locator("#top-home").click();
     await page.locator("#home-view").waitFor({ state: "visible" });
     await page.locator("#court-list button").first().click();
+    await page.locator("#title-play").click();
     await page.locator("#arena-view").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
     await page.locator("#pause-menu").waitFor({ state: "visible" });
@@ -1277,6 +1324,7 @@ await check(
       ["career", /^Play the court$/],
     ]) {
       await page.locator(`[data-home-mode="${mode}"]`).click();
+      await page.locator("#title-play").click();
       await page.locator("#arena-view").waitFor({ state: "visible" });
       assert.match(
         await page.locator("#start-button").textContent(),

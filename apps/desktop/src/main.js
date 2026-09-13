@@ -179,6 +179,8 @@ let courtThumbnailGeneration = 0;
 const viewForHash = () => (location.hash === "#play" ? "arena" : "home");
 let mode = "career",
   courtIndex = progress.lastCourt,
+  selectedCourtIndex = Math.min(progress.lastCourt || 0, progress.unlocked ?? 0),
+  selectedHomeMode = "career",
   game,
   phase = "ready",
   // A cold load always opens home. applyView() pushes #play when a round
@@ -306,6 +308,7 @@ let padPrevious = [],
 const RESULT_ACTION_DELAY = 1200;
 let capture = null;
 let padFocusElement = null;
+let lastInteractionWasPointer = false;
 // The completed round is held only until a player explicitly chooses how to
 // handle score saving. Its id is deliberately stable across an auth handoff or
 // retry so the remote adapter can make submissions idempotent.
@@ -328,6 +331,17 @@ let awaitingResume = false,
 let pointerId = null,
   joystickId = null,
   joystickOrigin = null;
+// The renderer only rotates the pitch when told to (see renderer.render's
+// `orientation` option and its `screenToWorld`/`screenVectorToWorld`
+// helpers, which every touch/mouse input below is routed through) — without
+// this it draws landscape forever, and touch input would keep mapping to the
+// un-rotated court underneath a rotated pitch. `viewportOrientation` tracks
+// the same query so a genuine rotation (not just a resize) can clear a
+// captured pointer and pause, matching the deleted APK's own resize
+// listener: a joystick pointer captured before the rotation is now aimed at
+// the wrong axis, and a stuck capture reads as a dead stick.
+const portraitQuery = matchMedia("(orientation: portrait)");
+let viewportOrientation = portraitQuery.matches ? "portrait" : "landscape";
 function persist() {
   if (remoteDataUnavailable && onlineAccount()) {
     void recoverRemoteDataContext();
@@ -473,20 +487,45 @@ function dismissPauseMenu() {
 }
 function syncTitle() {
   const resumable = phase === "paused" || phase === "playing";
-  const court = COURTS[resumable ? courtIndex : progress.lastCourt] || COURTS[0];
-  $("title-play").lastChild.textContent = resumable
+  const isResumingSelected =
+    resumable &&
+    selectedCourtIndex === courtIndex &&
+    selectedHomeMode === mode;
+  const court =
+    COURTS[isResumingSelected ? courtIndex : selectedCourtIndex] || COURTS[0];
+  $("title-play").lastChild.textContent = isResumingSelected
     ? " Resume"
-    : progress.xp > 0
-      ? " Continue"
+    : selectedHomeMode === "practice"
+      ? " Practice"
       : " Play";
-  $("title-play-copy").textContent = resumable
-    ? `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`
-    : `${court.name} · ${court.place}`;
+  $("title-play-copy").textContent = isResumingSelected
+    ? (selectedHomeMode === "practice"
+        ? `${court.name} · Free Practice in progress`
+        : `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`)
+    : selectedHomeMode === "practice"
+      ? `${court.name} · Free Practice`
+      : `${court.name} · ${court.place}`;
   const preview = $("home-court-preview");
   if (preview) {
     preview.src = renderer.courtPreview(court);
     preview.alt = `${court.name} court preview`;
   }
+}
+function selectCourt(i) {
+  if (i < 0 || i >= COURTS.length || i > progress.unlocked) return;
+  selectedCourtIndex = i;
+  document.querySelectorAll("#court-list .court-item").forEach((b, idx) => {
+    const isSelected = idx === i;
+    b.classList.toggle("active", isSelected);
+    b.setAttribute("aria-current", isSelected ? "true" : "false");
+  });
+  document.querySelectorAll("[data-home-mode]").forEach((btn) => {
+    const active = btn.dataset.homeMode === selectedHomeMode;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", String(active));
+  });
+  syncTitle();
+  selectHomeLeaderboardCourt(i);
 }
 function deferCourtThumbnails(list, generation) {
   const thumbnails = [...list.querySelectorAll(".court-thumb")];
@@ -802,18 +841,44 @@ function applyView(next, { updateHash = true } = {}) {
   if (view !== "arena") closePauseMenu({ restoreFocus: false });
   // Exactly one game is live at a time: the demo is built on the way into home
   // and dropped on the way out, before the arena starts drawing.
-  if (view === "home") startAttract();
-  else stopAttract();
+  if (view === "home") {
+    if (phase === "paused" || phase === "playing") {
+      selectedCourtIndex = courtIndex;
+      selectedHomeMode = mode;
+    }
+    startAttract();
+  } else stopAttract();
   syncProgress();
   syncSettingChrome();
   syncPauseMenu();
   syncMusicRail();
   requestAnimationFrame(() => {
     if (anyDialogOpen() || menuOpen) return;
-    if (view === "home") padFocus($("title-play"));
-    else if ($("game-overlay").hidden)
+    if (view === "home") {
+      if (inputSource === "gamepad") {
+        padFocus($("title-play"));
+      } else {
+        $("title-play")?.classList.remove("pad-focus");
+        if (lastInteractionWasPointer) {
+          if (document.activeElement === $("title-play")) $("title-play")?.blur();
+        } else {
+          $("title-play")?.focus({ preventScroll: true });
+        }
+      }
+    } else if ($("game-overlay").hidden) {
       $("court").focus({ preventScroll: true });
-    else padFocus($("start-button"));
+    } else {
+      if (inputSource === "gamepad") {
+        padFocus($("start-button"));
+      } else {
+        $("start-button")?.classList.remove("pad-focus");
+        if (lastInteractionWasPointer) {
+          if (document.activeElement === $("start-button")) $("start-button")?.blur();
+        } else {
+          $("start-button")?.focus({ preventScroll: true });
+        }
+      }
+    }
   });
   if (updateHash) {
     const hash = view === "arena" ? "#play" : "";
@@ -848,22 +913,21 @@ function config() {
       },
       progress.difficulty,
     );
-  if (mode === "practice")
+  if (mode === "practice") {
+    const court = COURTS[courtIndex] || COURTS[0];
     return applyDifficulty(
       {
-        ...COURTS[0],
-        name: "The warm-up",
-        place: "YOUR SPACE TO EXPERIMENT",
+        ...court,
         target: 120,
-        time: 90,
-        speed: 58,
-        defenders: 2,
+        time: Infinity,
+        speed: Math.min(court.speed, 65),
         practice: true,
         description:
           "A gentle press and unlimited recoveries. Learn the rhythm, try the walls, find your triangle.",
       },
       progress.difficulty,
     );
+  }
   return applyDifficulty(COURTS[courtIndex], progress.difficulty);
 }
 // The single source of truth for "how many possessions does this round
@@ -952,21 +1016,34 @@ function syncDifficultyChrome() {
     DIFFICULTIES.find((tier) => tier.id === activeDifficulty) || DIFFICULTIES[1];
   const lockedCopy =
     "Locked to Standard — the Daily circuit is one shared course for everyone today.";
+  const practiceDescriptions = {
+    relaxed: "Looser targets and a gentle press. Find your rhythm first.",
+    standard: "Standard targets and defense. Your space to experiment.",
+    ruthless: "Tighter targets and a quicker press.",
+  };
+  const description = dailyLocked
+    ? lockedCopy
+    : mode === "practice"
+      ? (practiceDescriptions[activeDifficulty] || difficultyMeta.label)
+      : difficultyMeta.label;
 
   $("difficulty-select").disabled = dailyLocked;
   $("difficulty-select").value = activeDifficulty;
-  $("difficulty-description").textContent = dailyLocked ? lockedCopy : difficultyMeta.label;
+  $("difficulty-description").textContent = description;
   $("difficulty-target").textContent = game.config.target ? `TARGET ${game.config.target}` : "";
 
   $("overlay-difficulty").hidden = false;
   $("overlay-difficulty-target").textContent = game.config.target
     ? `TARGET ${game.config.target}`
     : "";
-  $("overlay-difficulty-description").textContent = dailyLocked ? lockedCopy : difficultyMeta.label;
+  $("overlay-difficulty-description").textContent = description;
   document.querySelectorAll("#overlay-difficulty-toggle .hl-diff-btn").forEach((btn) => {
     const isActive = btn.dataset.tier === activeDifficulty;
     btn.classList.toggle("active", isActive);
     btn.setAttribute("aria-pressed", String(isActive));
+    if (mode === "practice") {
+      btn.title = practiceDescriptions[btn.dataset.tier] || btn.title;
+    }
     // Daily forces the tier rather than merely defaulting it, so every other
     // option is disabled rather than silently ignored if pressed.
     btn.disabled = dailyLocked && !isActive;
@@ -993,7 +1070,8 @@ function syncProgress() {
   const listedTierTag = shortTierLabel(listedTier);
   COURTS.forEach((court, i) => {
     const btn = document.createElement("button");
-    btn.className = `court-item ${i === courtIndex && mode === "career" ? "active" : ""}`;
+    const isSelected = i === selectedCourtIndex;
+    btn.className = `court-item ${isSelected ? "active" : ""}`;
     btn.disabled = i > progress.unlocked;
     const stars = starsForTier(i, listedTier);
     btn.setAttribute(
@@ -1002,7 +1080,7 @@ function syncProgress() {
     );
     btn.setAttribute(
       "aria-current",
-      i === courtIndex && mode === "career" ? "true" : "false",
+      isSelected ? "true" : "false",
     );
     // The thumb source is intentionally populated after first paint below.
     // Width/height preserve the existing layout while it is pending.
@@ -1034,7 +1112,10 @@ function syncProgress() {
         previewLeave();
       }
     });
-    btn.addEventListener("click", () => switchMode("career", i));
+    btn.addEventListener("click", () => {
+      if (btn.disabled) return;
+      selectCourt(i);
+    });
     $("court-list").append(btn);
   });
   deferCourtThumbnails($("court-list"), thumbnailGeneration);
@@ -1048,7 +1129,10 @@ function syncProgress() {
     });
   }
   document.querySelectorAll("[data-home-mode]").forEach((btn) => {
-    const active = view === "arena" && btn.dataset.homeMode === mode;
+    const active =
+      view === "arena"
+        ? btn.dataset.homeMode === mode
+        : btn.dataset.homeMode === selectedHomeMode;
     btn.classList.toggle("active", active);
     btn.setAttribute("aria-pressed", String(active));
   });
@@ -1156,6 +1240,8 @@ function setControlsEnabled(enabled) {
     "touch-pass",
     "touch-bank",
     "touch-focus",
+    "touch-shout",
+    "touch-boost",
   ].forEach((id) => ($(id).disabled = !enabled));
   $("joystick").setAttribute("aria-disabled", String(!enabled));
 }
@@ -1248,6 +1334,7 @@ function prepare() {
   $("boost-button").setAttribute("aria-pressed", "false");
   $("touch-bank").setAttribute("aria-pressed", "false");
   $("touch-focus").setAttribute("aria-pressed", "false");
+  $("touch-boost").setAttribute("aria-pressed", "false");
   // Every branch below reads the possession count off game.config
   // (possessionLimit(), the same fallback the engine itself uses) rather
   // than a literal 3 — Relaxed/Ruthless move it to 4/2, and endless mode is
@@ -1259,7 +1346,7 @@ function prepare() {
   const possessionLabel = possessions === 1 ? "POSSESSION" : "POSSESSIONS";
   $("invitation-note").textContent =
     mode === "practice"
-      ? `${game.config.time} SECONDS · UNLIMITED POSSESSIONS · FIND YOUR RHYTHM`
+      ? `NO TIMER · UNLIMITED RECOVERIES · FIND YOUR RHYTHM`
       : mode === "endless"
         ? `60 SECONDS · ${possessions} POSSESSIONS · TRIANGLES ADD TIME`
         : `${game.config.time} SECONDS · ${possessions} ${possessionLabel} · ${possessionsOrdinal} LOSS ENDS THE ROUND`;
@@ -1274,7 +1361,9 @@ function prepare() {
     mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
       ? "Connect triangles to buy time. Survive the rising press."
-      : `Keep possession for ${game.config.time} seconds. ${mode === "practice" ? "Experiment freely." : `Earn ${game.config.target} points. You have ${possessions} ${possessions === 1 ? "possession" : "possessions"}; the ${possessionOrdinal(possessions)} loss ends the round.`}`,
+      : mode === "practice"
+        ? "No timer. Unlimited recoveries. Experiment freely."
+        : `Keep possession for ${game.config.time} seconds. Earn ${game.config.target} points. You have ${possessions} ${possessions === 1 ? "possession" : "possessions"}; the ${possessionOrdinal(possessions)} loss ends the round.`,
     mode === "daily"
       ? "Play today’s circuit"
       : mode === "endless"
@@ -1298,6 +1387,8 @@ function prepare() {
 function switchMode(next, index = courtIndex) {
   if (next === "daily" || next === "endless") return;
   closePauseMenu({ restoreFocus: false });
+  selectedCourtIndex = index;
+  selectedHomeMode = next;
   if (phase === "playing" || phase === "paused") {
     pause();
     applyView("arena");
@@ -1482,6 +1573,7 @@ function pause() {
   $("focus-button").setAttribute("aria-pressed", "false");
   $("boost-button").setAttribute("aria-pressed", "false");
   $("touch-focus").setAttribute("aria-pressed", "false");
+  $("touch-boost").setAttribute("aria-pressed", "false");
   setPauseState(true);
   syncResumePrompt();
   openMenu();
@@ -1678,6 +1770,7 @@ function syncBoostButtons() {
   const active = Boolean(boostToggle || game?.boostActive);
   if (active !== hudCache.boostActive) {
     $("boost-button").setAttribute("aria-pressed", String(active));
+    $("touch-boost").setAttribute("aria-pressed", String(active));
     hudCache.boostActive = active;
   }
 }
@@ -2179,13 +2272,16 @@ function syncHud() {
     hudCache.score = game.score;
   }
 
+  const isPractice = Boolean(game.config.practice);
   const timeCeil = Math.ceil(game.time);
-  const timeString = `${Math.floor(timeCeil / 60)}:${String(Math.max(0, timeCeil % 60)).padStart(2, "0")}`;
+  const timeString = isPractice
+    ? "∞"
+    : `${Math.floor(timeCeil / 60)}:${String(Math.max(0, timeCeil % 60)).padStart(2, "0")}`;
   if (timeString !== hudCache.timeString) {
     $("time-value").textContent = timeString;
     hudCache.timeString = timeString;
   }
-  const isUrgent = game.time < 15;
+  const isUrgent = !isPractice && game.time < 15;
   if (isUrgent !== hudCache.timeUrgent) {
     $("time-value").classList.toggle("urgent", isUrgent);
     hudCache.timeUrgent = isUrgent;
@@ -2464,15 +2560,56 @@ $("tertiary-button").addEventListener("click", () => {
   if (phase === "finished" && !resultActionsReady) return;
   applyView("home");
 });
+// The phone sheet's way out. It lands on home rather than merely hiding the
+// sheet: the round behind it is over, so dismissing to a dead arena with no
+// live controls would strand the player with nothing to press.
+$("overlay-close").addEventListener("click", () => {
+  if (phase === "finished" && !resultActionsReady) return;
+  applyView("home");
+});
 $("pause-button").addEventListener("click", togglePause);
 $("pass-button").addEventListener("click", () => doPass());
-$("touch-pass").addEventListener("click", () => doPass());
 $("bank-button").addEventListener("click", toggleBank);
-$("touch-bank").addEventListener("click", toggleBank);
 $("focus-button").addEventListener("click", toggleFocus);
-$("touch-focus").addEventListener("click", toggleFocus);
 $("boost-button").addEventListener("click", toggleBoost);
 $("shout-button").addEventListener("click", shoutTarget);
+// The five touch actions bind the pointer, not the click.
+//
+// A click on a touchscreen is synthesised only after the browser has decided
+// the touch was not the start of a gesture, and while another finger is
+// already down — one holding the joystick, say — that decision is deferred.
+// The result was that a pass would not register until the movement thumb was
+// lifted, which is not how anyone plays: moving and passing at the same time
+// is the whole point of a possession game. Acting on pointerdown makes each
+// finger independent and removes the synthesis delay for every input, not just
+// the second one.
+//
+// `click` is kept for everything that is not a touch, so a keyboard player
+// reaching these with Enter or Space still triggers them; the pointerType
+// guard is what stops a touch firing both.
+for (const [id, run] of [
+  ["touch-pass", () => doPass()],
+  ["touch-bank", toggleBank],
+  ["touch-focus", toggleFocus],
+  ["touch-boost", toggleBoost],
+  ["touch-shout", shoutTarget],
+]) {
+  const button = $(id);
+  button.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "touch") return;
+    if (button.disabled) return;
+    // Claiming the pointer keeps a slide off the button from becoming a
+    // gesture on whatever is underneath, and stops the court's own
+    // pointer handlers seeing this finger at all.
+    event.preventDefault();
+    event.stopPropagation();
+    run();
+  });
+  button.addEventListener("click", (event) => {
+    if (event.pointerType === "touch") return;
+    run();
+  });
+}
 $("tactic-select").addEventListener("change", (e) => {
   progress.tactic = e.target.value;
   persist();
@@ -2667,9 +2804,18 @@ function refreshToolbarChips() {
   $("shout-button").title = `Shout selected target to bonus zone (${chipLabel("shout")})`;
 }
 function setInputSource(source) {
+  if (source !== "gamepad") {
+    if (padFocusElement) {
+      padFocusElement.classList.remove("pad-focus");
+      padFocusElement = null;
+    }
+    document.querySelectorAll(".pad-focus").forEach((el) => el.classList.remove("pad-focus"));
+  }
   if (inputSource === source) return;
   inputSource = source;
   refreshToolbarChips();
+  const padHint = $("courts-pad-hint");
+  if (padHint) padHint.hidden = source !== "gamepad";
 }
 function syncSettingChrome() {
   syncAudioChrome();
@@ -2680,6 +2826,8 @@ function syncSettingChrome() {
   if ($("preset-select")) $("preset-select").value = settings.preset;
   syncGamepadDropdowns();
   refreshToolbarChips();
+  const padHint = $("courts-pad-hint");
+  if (padHint) padHint.hidden = inputSource !== "gamepad";
   // The court's own aria-label stays keyboard-phrased: it is read once by a
   // screen reader, not glanced at mid-play, so it is not worth chasing the
   // live input source the way the visible chips are.
@@ -2993,32 +3141,53 @@ document.querySelectorAll("[data-gamepad-action]").forEach((select) => {
   });
 });
 
+// The Fullscreen API is not a given: iPhone Safari has no
+// `requestFullscreen` at all (iPad does), and this control now lives in the
+// top bar on every screen rather than behind a Settings dialog a player has
+// to go find, so there is no dialog wrapper left to quietly no-op inside.
+// A button that does nothing when pressed is worse than no button, so the
+// single fullscreen control is hidden outright — not just disabled — on any
+// browser that lacks the API, decided once at startup rather than re-checked
+// on every click.
+const fullscreenSupported =
+  typeof document.documentElement.requestFullscreen === "function";
+if (fullscreenSupported) $("fullscreen-button").hidden = false;
+
 function syncFullscreen() {
+  if (!fullscreenSupported) return;
   const active = document.fullscreenElement === document.documentElement;
   document.body.classList.toggle("fullscreen-game", active);
-  $("fullscreen-button").setAttribute("aria-pressed", String(active));
-  $("fullscreen-button").innerHTML =
-    `<span aria-hidden="true">⌗</span> ${active ? "Exit fullscreen" : "Fullscreen"}`;
+  const button = $("fullscreen-button");
+  button.setAttribute("aria-pressed", String(active));
+  const label = active ? "Exit fullscreen" : "Enter fullscreen";
+  button.title = label;
+  button.setAttribute("aria-label", label);
 }
-$("fullscreen-button").addEventListener("click", async () => {
-  try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else await document.documentElement.requestFullscreen();
-  } catch {
-    toast("Fullscreen is not available in this browser.");
-  }
-  syncFullscreen();
-});
-document.addEventListener("fullscreenchange", syncFullscreen);
+if (fullscreenSupported) {
+  $("fullscreen-button").addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch {
+      toast("Fullscreen is not available in this browser.");
+    }
+    syncFullscreen();
+  });
+  document.addEventListener("fullscreenchange", syncFullscreen);
+}
 function playFromMenu() {
-  const resumeRound = phase === "paused";
+  $("title-play").classList.remove("pad-focus");
+  if (document.activeElement === $("title-play")) $("title-play").blur();
+  const resumeRound =
+    phase === "paused" &&
+    selectedCourtIndex === courtIndex &&
+    selectedHomeMode === mode;
   if (!resumeRound) {
-    mode = "career";
-    courtIndex = progress.lastCourt;
-    prepare();
+    switchMode(selectedHomeMode, selectedCourtIndex);
+  } else {
+    applyView("arena");
+    resume();
   }
-  applyView("arena");
-  if (resumeRound) resume();
 }
 $("title-play").addEventListener("click", playFromMenu);
 $("pause-resume").addEventListener("click", dismissPauseMenu);
@@ -3037,7 +3206,13 @@ $("pause-settings").addEventListener("click", openSettings);
 document.querySelectorAll("[data-home-mode]").forEach((button) => {
   button.addEventListener("click", () => {
     if (button.disabled || button.dataset.homeMode === "daily") return;
-    switchMode(button.dataset.homeMode, courtIndex);
+    selectedHomeMode = button.dataset.homeMode;
+    document.querySelectorAll("[data-home-mode]").forEach((btn) => {
+      const active = btn === button;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+    syncTitle();
   });
 });
 const courtLeaderboardTabs = Array.from(document.querySelectorAll(".hl-tab"));
@@ -3080,8 +3255,19 @@ $("help-dialog").addEventListener("click", (e) => {
 // Any keyboard or pointer activity switches the toolbar chips back off
 // gamepad glyphs, however the player got there — capturing a new binding,
 // clicking a menu, or just typing, not only in-round play.
-window.addEventListener("keydown", () => setInputSource("keyboard"));
-window.addEventListener("pointerdown", () => setInputSource("keyboard"));
+window.addEventListener("keydown", () => {
+  lastInteractionWasPointer = false;
+  setInputSource("keyboard");
+});
+window.addEventListener("pointerdown", () => {
+  lastInteractionWasPointer = true;
+  if (padFocusElement) {
+    padFocusElement.classList.remove("pad-focus");
+    padFocusElement = null;
+  }
+  document.querySelectorAll(".pad-focus").forEach((el) => el.classList.remove("pad-focus"));
+  setInputSource("keyboard");
+});
 window.addEventListener("keydown", (e) => {
   if (capture) {
     e.preventDefault();
@@ -3208,12 +3394,29 @@ window.addEventListener("blur", () => {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) pause();
 });
+// A rotation mid-round is exactly the moment a captured joystick/court
+// pointer is aimed at an axis that no longer matches what's on screen — the
+// deleted APK's own resize listener cleared pointers and paused for the same
+// reason. `resize` (not the query's own `change` event) is what actually
+// fires across the phones this targets, and `viewportOrientation` filters
+// it down to genuine orientation flips rather than every keyboard-open or
+// URL-bar-collapse resize a phone browser sends.
+window.addEventListener("resize", () => {
+  const next = portraitQuery.matches ? "portrait" : "landscape";
+  if (next === viewportOrientation) return;
+  viewportOrientation = next;
+  if (phase === "playing") pause();
+  else clearInput();
+});
+// Raw `(clientX - rect.left) / rect.width * 1000`-style math assumes the
+// canvas's own box is laid out the same way its 1000x620 world is drawn.
+// That's true in landscape but not in portrait, where the renderer draws the
+// pitch rotated 90° inside a 620x1000 box (see renderer.resize()) — the same
+// un-rotated arithmetic would then take a tap at 90° to what the player
+// sees. renderer.screenToWorld() knows which way the court is currently
+// rotated and de-rotates the point before handing back world coordinates.
 function courtPoint(e) {
-  const r = $("court").getBoundingClientRect();
-  return {
-    x: ((e.clientX - r.left) / r.width) * 1000,
-    y: ((e.clientY - r.top) / r.height) * 620,
-  };
+  return renderer.screenToWorld(e.clientX, e.clientY);
 }
 $("court").addEventListener("pointermove", (e) => {
   const p = courtPoint(e);
@@ -3280,7 +3483,14 @@ function moveJoystick(e) {
     dy = e.clientY - joystickOrigin.y,
     m = Math.hypot(dx, dy);
   const scale = Math.min(1, 36 / (m || 1));
-  stick = { x: (dx * scale) / 36, y: (dy * scale) / 36 };
+  // The thumb's own translate stays in raw screen pixels — it has to follow
+  // the finger, whichever way the court is drawn. The *world* movement it
+  // produces does not: on a rotated pitch, "push up" has to mean "toward the
+  // far end of the court", not "toward smaller world Y", so the screen-space
+  // vector is de-rotated the same way a tap is (screenToWorld above).
+  const screenX = (dx * scale) / 36,
+    screenY = (dy * scale) / 36;
+  stick = renderer.screenVectorToWorld(screenX, screenY);
   $("joystick-thumb").style.transform =
     `translate(${dx * scale}px, ${dy * scale}px)`;
 }
@@ -3322,7 +3532,11 @@ function padFocus(el) {
   if (padFocusElement && padFocusElement !== el)
     padFocusElement.classList.remove("pad-focus");
   padFocusElement = el;
-  el.classList.add("pad-focus");
+  if (inputSource === "gamepad") {
+    el.classList.add("pad-focus");
+  } else {
+    el.classList.remove("pad-focus");
+  }
   el.focus({ preventScroll: false });
 }
 function padActivate(el) {
@@ -3440,8 +3654,10 @@ function pollGamepad(dt) {
     dead(pad.axes[1]) ||
     dead(pad.axes[2]) ||
     dead(pad.axes[3])
-  )
+  ) {
+    lastInteractionWasPointer = false;
     setInputSource("gamepad");
+  }
   // Any button at all resumes after a turnover, but only on a fresh press:
   // tap() is edge-triggered, so a button still held from before is ignored.
   if (awaitingResume && !menuOpen && !anyDialogOpen()) {
@@ -3525,6 +3741,30 @@ function pollGamepad(dt) {
     else if (phase !== "finished" || resultActionsReady)
       nav($("game-overlay"), () => $("start-button").click());
   } else if (view === "home") {
+    const focused = document.activeElement;
+    const isCourtItem = focused?.classList.contains("court-item");
+    if (isCourtItem) {
+      const idx = Number(
+        focused.querySelector(".court-thumb")?.dataset.courtIndex ??
+          selectedCourtIndex,
+      );
+      if (tap(2)) {
+        selectedHomeMode = "practice";
+        document.querySelectorAll("[data-home-mode]").forEach((btn) => {
+          const active = btn.dataset.homeMode === "practice";
+          btn.classList.toggle("active", active);
+          btn.setAttribute("aria-pressed", String(active));
+        });
+        syncTitle();
+        padPrevious = pressed;
+        return;
+      }
+      if (tap(0)) {
+        selectCourt(idx);
+        padPrevious = pressed;
+        return;
+      }
+    }
     // Home is one list: the menu, then the demo's neighbours — the courts and
     // the modes — then the bar. The menu comes first so the first d-pad step
     // from a fresh load is still the next menu item, and B has nowhere to go
@@ -3692,6 +3932,7 @@ function frame(now) {
       bank: bank || actionDown(settings.bindings, keys, "wallHold"),
       paused: phase === "paused" || phase === "finished" || awaitingResume,
       shoutVisual,
+      orientation: portraitQuery.matches ? "portrait" : "landscape",
     });
     drawTargetHighlight(target);
     const courtTargetStr = Number.isInteger(target) ? String(target) : "";

@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { accessSync, constants, statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { freePort } from "./free-port.mjs";
-import { gotoArena } from "./open-arena.mjs";
+import { gotoArena, expectedCourtAspect } from "./open-arena.mjs";
 
 const playwright = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -616,7 +616,9 @@ await check(
       await page.waitForTimeout(300);
       const box = await page.locator("#court").boundingBox();
       assert.ok(
-        box && Math.abs(box.width / box.height - 1000 / 620) < 0.01,
+        box &&
+          Math.abs(box.width / box.height - expectedCourtAspect(viewport)) <
+            0.01,
         `${viewport.width}x${viewport.height} canvas aspect ${box ? box.width / box.height : "missing"} ${JSON.stringify(box)}`,
       );
       assert.ok(
@@ -733,6 +735,7 @@ await check(
         await page.locator("#home-view").waitFor({ state: "visible" });
       }
       await page.locator(".court-item").nth(i).click();
+      await page.locator("#title-play").click();
       await page.locator("#arena-view").waitFor({ state: "visible" });
       await page.evaluate(
         () =>
@@ -786,6 +789,16 @@ if (includeMobileLayouts) await check(
       const page = await context.newPage(),
         errors = errorsFor(page);
       await gotoArena(page, baseURL);
+      // Kick off first. Arriving in the arena puts the opening card on screen,
+      // and on a phone that card is a full-screen sheet with the round's own
+      // chrome — score, clock, Energy, the thumb controls — hidden behind it,
+      // so asserting the controls are visible before starting asserts against
+      // the moment they are deliberately gone. They belong to a live round, so
+      // the check belongs after one begins.
+      await page.locator("#start-button").tap();
+      await page.waitForFunction(
+        () => document.querySelector("#game-overlay")?.hidden === true,
+      );
       assert.equal(
         await page.locator("#touch-pass").isVisible(),
         true,
@@ -840,7 +853,8 @@ if (includeMobileLayouts) await check(
       }
       const court = await page.locator("#court").boundingBox();
       assert.ok(
-        Math.abs(court.width / court.height - 1000 / 620) < 0.01,
+        Math.abs(court.width / court.height - expectedCourtAspect(viewport)) <
+          0.01,
         `${viewport.width}x${viewport.height} Play view court aspect`,
       );
       assert.deepEqual(errors, []);

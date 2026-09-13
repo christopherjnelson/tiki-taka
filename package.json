@@ -1,6 +1,6 @@
 {
   "name": "tiki-taka",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "releaseStage": "alpha",
   "private": true,
   "workspaces": [
@@ -23,7 +23,8 @@
     "test:audio": "node tests/audio.browser.mjs",
     "test:perf": "npm run build && node tests/performance.browser.mjs",
     "test:web": "npm run test:browser && npm run test:interface && npm run test:navigation && npm run test:one-touch && npm run test:desktop-account && npm run test:audio",
-    "test:mobile-layouts": "MOBILE_LAYOUTS=1 npm run test:browser && MOBILE_LAYOUTS=1 npm run test:interface && MOBILE_LAYOUTS=1 npm run test:navigation"
+    "test:mobile-layouts": "MOBILE_LAYOUTS=1 npm run test:browser && MOBILE_LAYOUTS=1 npm run test:interface && MOBILE_LAYOUTS=1 npm run test:navigation",
+    "test:mobile-smoke": "node tests/mobile-smoke.browser.mjs"
   },
   "engines": {
     "node": ">=22.12"

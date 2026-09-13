@@ -1128,6 +1128,32 @@ kbd {
 .touch-controls {
   display: none;
 }
+/* Every touch surface opts out of the browser's gesture handling, the joystick
+   and the five action buttons alike. This is what lets two fingers work at
+   once: with the default touch-action, a press on an action button while the
+   movement thumb is already down is held back as a possible pan or zoom, and
+   the tap does not resolve until the first finger lifts. The pre-deletion
+   Capacitor build carried the same rule for the same reason — it is listed in
+   its stylesheet as `#court, #touch-controls, #touch-controls button`. Losing
+   it in the port is why passing while moving stopped working. */
+.touch-controls,
+.touch-controls button,
+.joystick {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The vertical "MOVE" hint next to the joystick read as a rendering
+   accident once the joystick had five siblings to share the row with
+   instead of the empty space it used to have — sideways text wedged between
+   two control clusters explains nothing a first glance at a big circular
+   joystick doesn't already. The joystick is self-evident and the help
+   screen spells out the controls in full, so the hint is dropped wherever
+   touch controls actually render rather than given a home. */
+.touch-controls .touch-hint {
+  display: none;
+}
 .toast {
   position: fixed;
   bottom: 20px;
@@ -1582,15 +1608,17 @@ body.play-view .ambience {
   text-align: center;
 }
 .top-brand-mark {
-  color: #fff;
-  text-transform: lowercase;
-  white-space: nowrap;
-  font: italic 800 22px/1 var(--display);
-  letter-spacing: -1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
-
-.top-brand-mark span {
-  color: var(--cyan);
+.top-brand-wordmark {
+  display: block;
+  height: 28px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
 }
 .top-brand-sub {
   color: var(--muted);
@@ -1744,6 +1772,55 @@ body.play-view .top-settings {
   .profile-chip-name {
     max-width: 8ch;
   }
+  /* Below ~340px the three transport buttons (still at their 900px-tier
+     min-width, gap and the 18px wordmark) add up to more than the grid's
+     minmax(0, 1fr) side columns actually have once the centred wordmark
+     claims its auto column — .music-player already has min-width: 0, so it
+     doesn't get clipped, it just renders wider than its track and spills
+     into the wordmark next to it. Shrinking the transport buttons, the gaps
+     around them, and the wordmark keeps all three controls (this bar's
+     stated rule — see the comment above the 900px tier) rather than
+     dropping one, and the given widths clear a 320px viewport with room to
+     spare. */
+  .top-bar {
+    gap: 6px;
+  }
+  .top-brand-wordmark {
+    height: 18px;
+    max-width: 72px;
+  }
+  /* The transport-button shrink above used to be enough to clear 320px on
+     its own: the home screen's right side only carried Settings + the
+     profile chip, and play view's carried Home + Menu — either pair still
+     fit their grid column at this width. The always-present fullscreen
+     toggle (see `.top-fullscreen` in index.html) sits in that same column on
+     every screen now, and a third control tips both pairs over into the
+     centred wordmark. The label text is what gives way, not any control:
+     all three stay tappable and named (each already carries a `title`,
+     which becomes its accessible name once the visible text is gone), they
+     just read as icons here the way the soundtrack transport buttons
+     already do. Unqualified by `body.play-view` on purpose — the home
+     screen needs this exactly as much as play view does now. */
+  .top-bar-right .bar-button-label {
+    display: none;
+  }
+  /* Losing the label text above isn't enough on its own once there are three
+     icons in this column (play view: fullscreen + Home + Menu) — three
+     buttons at the wider tiers' 40px min-width and 10px gap add up to more
+     than this column's actual share of a 320px bar (~110px, once the centred
+     wordmark and the grid's own gaps take theirs), and the overflow paints
+     straight over the wordmark next to it, the same way the transport
+     buttons on the other side already do at this width. Shrinking the icon
+     box and closing the gap between them buys back exactly that difference;
+     three buttons still stay tappable and named (labels moved to `title` /
+     `aria-label`, not removed), just packed tighter. */
+  .top-bar-right {
+    gap: 4px;
+  }
+  .top-bar-right .bar-button {
+    min-width: 32px;
+    padding: 0 5px;
+  }
 }
 @media (orientation: landscape) and (max-height: 480px) {
   :root {
@@ -1881,9 +1958,16 @@ body.play-view .court-toolbar .target-info {
    moved into the play-actions chip row below, since both just spend this
    one reserve rather than being readouts of their own. The pass target
    remains available to assistive technology and through the on-court
-   selection ring instead of competing with the meter. */
+   selection ring instead of competing with the meter.
+
+   padding is not 0 here: .energy-track sits absolutely positioned a few
+   pixels off this box's own bottom edge (see .energy-track), so the box
+   needs bottom padding at least that generous or the track lands on top of
+   ENERGY's own label/value row instead of under it. This is the shared
+   default every width falls back to unless a breakpoint below overrides it
+   with its own (real desktop, >=901px, does — see that block). */
 body.play-view .court-toolbar .energy-info {
-  padding: 0;
+  padding: 6px 14px 12px;
 }
 body.play-view .court-toolbar .energy-info::before {
   display: none;
@@ -1891,16 +1975,30 @@ body.play-view .court-toolbar .energy-info::before {
 /* The target hint is the one element here with no fixed size of its own, so
    it is the one that gives way first: it shrinks and truncates rather than
    pushing the pass controls past the edge of the screen, which is what used
-   to clip the toolbar on a narrower window. */
+   to clip the toolbar on a narrower window.
+
+   The card styling here is shared: #energy-info wears .target-info too (see
+   the markup) precisely to inherit it, so this rule must keep reaching both.
+   Only the padding is split out below, where the two genuinely differ. */
 body.play-view .court-toolbar .target-info {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 6px 14px;
   color: #efe7ff;
   background: #0c0620c2;
   border: 1px solid #ffffff1c;
   border-radius: 12px;
   text-shadow: none;
+}
+/* The padding is the one thing the two cards cannot share, hence :not(). The
+   Energy pill carries its track absolutely positioned off its own bottom edge
+   (see .energy-track), so it needs bottom padding at least that generous or
+   the track prints over the label — which is exactly what a shorthand
+   `padding: 6px 14px` here did, landing after the .energy-info rule above at
+   equal specificity and quietly zeroing the bottom it had just been given.
+   Breakpoints that set their own padding masked it, so it only ever showed
+   where this base rule is the last word: portrait phones. */
+body.play-view .court-toolbar .target-info:not(.energy-info) {
+  padding: 6px 14px;
 }
 body.play-view .court-toolbar #target-label {
   overflow: hidden;
@@ -2029,6 +2127,10 @@ body.play-view #bank-button {
   .game-footer {
     display: none;
   }
+  /* Portrait's touch bar still sits in its own row below the court (Phase B
+     floats it too); the button classes and the secondary/primary split below
+     are shared with the landscape floating layout further down so both read
+     as one component with two positions, not two separate designs. */
   .touch-controls {
     display: flex;
     align-items: center;
@@ -2070,35 +2172,55 @@ body.play-view #bank-button {
     box-shadow: 0 0 15px #27ead877;
     transform: translate(-50%, -50%);
   }
-  .touch-hint {
-    color: var(--muted);
-    font-size: 7px;
-    writing-mode: vertical-rl;
-  }
+  /* .touch-hint is dropped globally now — see .touch-controls .touch-hint. */
+  /* Two rows, not five equal cells: Pass and Wall (the primaries, thrown on
+     nearly every possession) get the bottom row nearest the thumb's resting
+     position and the bigger hit targets; Shout/Focus/Boost (a rare call, two
+     holds) share a lighter row above. */
   .touch-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 6px;
     flex: 1;
   }
-  .touch-actions button {
-    min-height: 50px;
+  .touch-actions-secondary {
+    display: grid;
+    grid-template-columns: 1fr 1.3fr 1fr;
+    gap: 6px;
+  }
+  .touch-actions-primary {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 6px;
+  }
+  .touch-action-btn {
+    min-height: 46px;
     border: 1px solid var(--line);
     background: var(--panel);
     font: 700 11px var(--sign);
     text-transform: uppercase;
   }
-  .touch-actions #touch-focus {
+  /* Focus carries more content than any other action button — a label, a
+     live value, and a track — sharing a cell in a 3-up row with Shout and
+     Boost, which only carry a label. Side-by-side (label | value) does not
+     fit that content in that width: "0 / 10" at the value's usual 18px
+     wraps into a second line and collides with FOCUS above it. Stacking
+     label over value over track, all centered, fits the same three pieces
+     in the same narrow cell without any of them touching. */
+  .touch-action-focus {
     position: relative;
-    grid-column: 1/-1;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 4px 10px;
     border-color: var(--pink);
-    text-align: left;
+    text-align: center;
   }
-  .touch-focus-value {
+  .touch-action-focus .touch-focus-value {
     color: var(--cyan);
+    font-size: 12px;
   }
   .touch-focus-track {
     position: absolute;
@@ -2114,9 +2236,19 @@ body.play-view #bank-button {
     height: 100%;
     background: linear-gradient(90deg, var(--pink), var(--cyan));
   }
-  #touch-pass {
+  .touch-action-pass {
+    min-height: 52px;
     color: #100923;
     background: var(--cyan);
+  }
+  .touch-action-wall {
+    min-height: 52px;
+  }
+  /* Only one control surface at a time: wherever the touch bar renders, the
+     keyboard/gamepad chip row underneath the court goes away, since a phone
+     never has a SPACE/B/F/E/R keyboard to label. */
+  .play-actions {
+    display: none;
   }
   .help-grid {
     grid-template-columns: 1fr;
@@ -2131,6 +2263,15 @@ body.play-view #bank-button {
     padding: 20px;
   }
 }
+/* Landscape on a narrow phone. This used to reserve a solid 180px column on
+   the right for #touch-controls (an opaque rail the court's width came out
+   of) — ported from the pre-deletion Capacitor build's approach instead: the
+   controls float over the field with pointer-events:none on the container
+   and auto again on the joystick/actions, so the court gets the width back
+   and the thumbs split to the two bottom corners the way a landscape grip
+   actually holds the phone. See the matching (and larger) breakpoint below
+   for the full floating rule set and its comments; this one only differs in
+   button/joystick size for a shorter screen. */
 @media (max-width: 700px) and (orientation: landscape) {
   .court-heading,
   .below-court,
@@ -2138,7 +2279,7 @@ body.play-view #bank-button {
     display: none;
   }
   body.play-view .main {
-    padding: 0 190px 4px 4px;
+    padding: 0 4px 4px;
   }
   .game-panel {
     height: calc(100svh - 48px - var(--top-bar));
@@ -2146,20 +2287,108 @@ body.play-view #bank-button {
   .scoreboard {
     min-height: 50px;
   }
-  .court-toolbar {
+  body.play-view .court-toolbar {
+    position: fixed;
+    z-index: 12;
+    inset: auto auto max(6px, env(safe-area-inset-bottom)) 50%;
+    transform: translateX(-50%);
+    width: auto;
+    min-height: 0;
+    padding: 3px 10px;
+    background: #0c0620c2;
+    border: 1px solid #ffffff1c;
+    border-radius: 10px;
+    pointer-events: none;
+  }
+  /* #energy-info doubles up as a .target-info for its base card styling
+     (see the markup), so the hide has to say :not(.energy-info) — a bare
+     .target-info selector here would take Energy down with it. */
+  body.play-view .court-toolbar .target-info:not(.energy-info),
+  body.play-view .court-toolbar .play-actions {
     display: none;
   }
-  .touch-controls {
-    position: absolute;
-    right: 4px;
-    top: 48px;
-    bottom: 4px;
-    width: 180px;
-    min-height: 0;
+  /* The row (label + value) and the meter track underneath both live inside
+     this one pill, the track absolutely positioned a few pixels off its
+     bottom edge (see .energy-track). padding:0 left no room between them,
+     so the track and ENERGY's own descenders/baseline overlapped into an
+     illegible smear — the fix is headroom, not a smaller track. */
+  body.play-view .court-toolbar .energy-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    pointer-events: auto;
+    padding: 6px 14px 12px;
   }
-  .joystick {
-    width: 74px;
-    height: 74px;
+  body.play-view .touch-controls {
+    position: fixed;
+    z-index: 13;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
+    width: auto;
+    min-height: 0;
+    padding: 0 max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom))
+      max(6px, env(safe-area-inset-left));
+    pointer-events: none;
+  }
+  body.play-view .touch-hint {
+    display: none;
+  }
+  body.play-view .joystick,
+  body.play-view .touch-actions {
+    pointer-events: auto;
+  }
+  body.play-view .joystick {
+    width: 68px;
+    height: 68px;
+    flex: none;
+    background: rgba(18, 10, 44, 0.55);
+    backdrop-filter: blur(6px);
+  }
+  body.play-view .touch-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex: none;
+    gap: 6px;
+  }
+  body.play-view .touch-actions-secondary,
+  body.play-view .touch-actions-primary {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+  }
+  body.play-view .touch-action-btn {
+    min-height: 0;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(18, 10, 44, 0.55);
+    backdrop-filter: blur(6px);
+    color: #fff;
+    font-size: 8px;
+  }
+  body.play-view .touch-action-wall {
+    width: 46px;
+    height: 46px;
+  }
+  body.play-view .touch-action-pass {
+    width: 54px;
+    height: 54px;
+    font-size: 9px;
+  }
+  body.play-view .touch-action-focus {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  body.play-view .touch-action-focus .touch-focus-value,
+  body.play-view .touch-action-focus .touch-focus-track {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2214,25 +2443,41 @@ body.play-view #bank-button {
     transform: translate(-50%, -50%);
   }
   .touch-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 5px;
     flex: 1;
   }
-  .touch-actions button {
+  .touch-actions-secondary {
+    display: grid;
+    grid-template-columns: 1fr 1.3fr 1fr;
+    gap: 5px;
+  }
+  .touch-actions-primary {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 5px;
+  }
+  .touch-action-btn {
     min-height: 45px;
     border: 1px solid var(--line);
     background: var(--panel);
     font: 700 10px var(--sign);
     text-transform: uppercase;
   }
-  .touch-actions #touch-focus {
+  .touch-action-focus {
     position: relative;
-    grid-column: 1/-1;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    padding: 7px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 4px 10px;
     border-color: var(--pink);
+    text-align: center;
+  }
+  .touch-action-focus .touch-focus-value {
+    font-size: 12px;
   }
   .touch-focus-track {
     position: absolute;
@@ -2247,6 +2492,15 @@ body.play-view #bank-button {
     width: 100%;
     height: 100%;
     background: linear-gradient(90deg, var(--pink), var(--cyan));
+  }
+  .touch-action-pass {
+    color: #100923;
+    background: var(--cyan);
+  }
+  /* One control surface at a time here too — this breakpoint covers tablets
+     and coarse-pointer laptops as well as phones. */
+  .play-actions {
+    display: none;
   }
 }
 :root {
@@ -2286,8 +2540,74 @@ body.play-view #bank-button {
     font-size: 18px;
   }
 }
-@media (max-width: 900px) and (orientation: landscape),
-  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
+/* The hint toast defaults to hugging the bottom edge (see #toast above),
+   which is exactly where the touch controls live on a phone — in portrait it
+   lands squarely on the Pass button, and in landscape it sits inside the
+   floating control band. Moving it to a flat offset from the top fixed that,
+   but landed it on the scoreboard instead (the SCORE card in portrait, SCORE
+   and POSSESSIONS in landscape) — trading one occluded readout for another.
+   --scoreboard-height is the scoreboard's own live-measured height (see
+   publishScoreboardHeight() in main.js and .one-touch-readout's identical
+   use of it below the court), so anchoring off --top-bar + that height
+   always clears the HUD band itself, in both orientations, however tall it
+   is at a given width. Narrowing it too means less of it sits over the
+   court/pitch below that band, though landscape in particular has no truly
+   dead space there — the scoreboard already floats on top of the court by
+   design (see body.play-view .scoreboard) — so "below the HUD" is the best
+   available spot rather than a fully empty one.
+
+   `.one-touch-readout` sits right below the court's top edge on the exact
+   same formula (`--top-bar` + `--scoreboard-height` + 8px — see its own
+   comment in index.html/style.css), which was fine while only one of the
+   two was ever on screen at once in practice, but they are independent
+   (a streak can be live when a hint fires) and land on the same rectangle
+   when they are. The toast is the transient one, so it gives way: the
+   extra 36px is the one-touch pill's own height plus a matching 8px gap,
+   pushing the toast below it rather than through it, whether or not the
+   pill actually happens to be visible at the time. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+  body.play-view .toast {
+    top: calc(var(--top-bar, 44px) + var(--scoreboard-height, 56px) + 8px + 36px);
+    bottom: auto;
+    max-width: min(84vw, 340px);
+    text-align: center;
+  }
+}
+/* Landscape phones and coarse-pointer tablets up to 1024px. This used to
+   reserve a solid, opaque 180px column on the right for #touch-controls —
+   the court's width came directly out of that column (`calc(100vw - 194px)`
+   below), the joystick and the whole action cluster both lived in that one
+   rail, and .court-toolbar (Energy's only home) was simply turned off, since
+   there was no room left for it. That is the pre-deletion Capacitor build's
+   bug, re-inherited when this became a browser-only build; ported the APK's
+   own fix instead (see `OLD-mobile-styles.css`, the `.game-screen
+   #touch-controls` rule and its two orientation blocks):
+     - the court/game-panel go back to full width — nothing reserves a column
+       for controls any more;
+     - #touch-controls is a fixed, full-bleed overlay with
+       pointer-events:none, so it costs the layout nothing and the joystick
+       and action cluster (pointer-events:auto again) simply float on top of
+       the field, translucent and blurred so the pitch reads through them;
+     - the joystick pins to the bottom-left corner and the action cluster to
+       the bottom-right — split, not stacked together on one side — which is
+       also how the same two elements anchor in the portrait floating layout
+       below (Phase B);
+     - Energy moves into .court-toolbar's own floating pill, bottom-center,
+       in the gap between the two thumb clusters, since a player cannot
+       spend Energy (Focus and Boost both draw from it) they cannot see.
+
+   Phase B (portrait) needs this same floating treatment, not a parallel
+   set: the joystick/action-cluster/Energy-pill markup already shares one
+   set of classes across both orientations (that is what the "written to be
+   reused" plan above was for), so this query no longer requires
+   `orientation: landscape` — it now applies to both, and only the three
+   rules that are genuinely shaped by the court's aspect ratio (`#court`
+   itself, `.scoreboard`, `.one-touch-readout`) get a portrait-specific
+   width formula in the small orientation-qualified blocks right after this
+   one, the same way `OLD-mobile-styles.css` split only its aspect-ratio
+   rule between two tiny `@media (orientation: …)` blocks and kept
+   everything else shared. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
   body.play-view {
     overflow: hidden;
   }
@@ -2298,22 +2618,65 @@ body.play-view #bank-button {
     height: auto;
     flex: 1 1 0;
     min-height: 0;
-    padding: 0 190px 4px 4px;
+    /* The 4px side/bottom inset this used to carry only shaved a few px off
+       an already width-bound court for no visible benefit — a phone court is
+       the screen, not a panel floating inside it, so this reaches the edges
+       on every side and lets .game-panel/.court-wrap fill exactly what the
+       top bar leaves behind. */
+    padding: 0;
     overflow: hidden;
   }
   body.play-view .game-panel {
     flex: 1 1 0;
-    width: calc(100vw - 194px);
-    max-width: calc(100vw - 194px);
+    width: 100%;
+    max-width: 100vw;
     height: auto;
     min-height: 0;
   }
+  /* A fixed height (not just min-height) was safe while this rule only ever
+     matched landscape: at 844px+ of width the score card, match card and
+     pause button always fit on one row. Reusing the same rule for portrait
+     (see the note above this query) breaks that assumption — a narrow
+     phone's court can be under 320px wide, `.scoreboard`'s `flex-wrap: wrap`
+     pushes the match card to a second row, and a fixed height clipped
+     nothing but also grew nothing, so the wrapped row rendered underneath
+     the hint toast instead of pushing it down. min-height alone lets the
+     box (and the --scoreboard-height it publishes, see main.js) grow to
+     whatever it actually wrapped to, in either orientation. */
   body.play-view .scoreboard {
-    height: 50px;
     min-height: 50px;
   }
+  /* Energy is the one readout Focus/Boost gate on, so it keeps its own
+     floating pill; the target hint and the SPACE/B/F/E/R keyboard chips have
+     nowhere useful to go at this width and stay off. */
   body.play-view .court-toolbar {
+    position: fixed;
+    z-index: 12;
+    inset: auto auto max(6px, env(safe-area-inset-bottom)) 50%;
+    transform: translateX(-50%);
+    width: auto;
+    min-height: 0;
+    padding: 4px 12px;
+    background: #0c0620c2;
+    border: 1px solid #ffffff1c;
+    border-radius: 10px;
+    pointer-events: none;
+  }
+  /* #energy-info doubles up as a .target-info for its base card styling
+     (see the markup), so the hide has to say :not(.energy-info) — a bare
+     .target-info selector here would take Energy down with it. */
+  body.play-view .court-toolbar .target-info:not(.energy-info),
+  body.play-view .court-toolbar .play-actions {
     display: none;
+  }
+  /* Headroom for the meter track below the label/value row — see the
+     matching comment on the narrower landscape breakpoint above. */
+  body.play-view .court-toolbar .energy-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    pointer-events: auto;
+    padding: 6px 14px 12px;
   }
   body.play-view .court-wrap {
     width: 100%;
@@ -2322,35 +2685,106 @@ body.play-view #bank-button {
     max-height: none;
     overflow: hidden;
   }
+  /* #court's own width formula depends on which way it's rotated — see the
+     two small orientation blocks right after this one — so only the parts
+     of its box model that don't move (no more max-width/max-height ceiling
+     from the desktop rule, height driven by the aspect ratio) live here. */
   body.play-view #court {
-    width: min(100cqw, 161.2903cqh);
     height: auto;
     max-width: none;
     max-height: none;
   }
   body.play-view .touch-controls {
-    position: absolute;
-    top: 48px;
-    right: 4px;
-    bottom: 4px;
-    width: 180px;
-    min-height: 0;
+    position: fixed;
+    z-index: 13;
+    inset: 0;
     display: flex;
-    flex-direction: column;
-    justify-content: space-evenly;
-    overflow: hidden;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px;
+    width: auto;
+    min-height: 0;
+    padding: 0 max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom))
+      max(10px, env(safe-area-inset-left));
+    overflow: visible;
+    pointer-events: none;
   }
   body.play-view .touch-hint {
     display: none;
   }
+  body.play-view .joystick,
+  body.play-view .touch-actions {
+    pointer-events: auto;
+  }
   body.play-view .joystick {
-    width: 74px;
-    height: 74px;
+    width: 78px;
+    height: 78px;
     flex: none;
+    background: rgba(18, 10, 44, 0.55);
+    backdrop-filter: blur(6px);
   }
   body.play-view .touch-actions {
-    width: 100%;
+    width: auto;
     flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  body.play-view .touch-actions-secondary,
+  body.play-view .touch-actions-primary {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  /* Frequency sets the size: Pass and Wall (thrown on nearly every
+     possession) are the two big circles closest to the bottom edge; Focus
+     and Boost (holds, used less often) are mid-sized; Shout (rare) is the
+     smallest. All five stay circular and translucent, matching the
+     joystick, so the cluster reads as one floating unit over the pitch. */
+  body.play-view .touch-action-btn {
+    min-height: 0;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(18, 10, 44, 0.55);
+    backdrop-filter: blur(6px);
+    color: #fff;
+    font-size: 9px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  }
+  body.play-view .touch-action-btn[aria-pressed="true"] {
+    background: rgba(45, 245, 223, 0.32);
+    box-shadow: 0 0 16px var(--cyan);
+  }
+  body.play-view .touch-action-wall {
+    width: 50px;
+    height: 50px;
+    border: 2px solid #ffd32f88;
+  }
+  body.play-view .touch-action-pass {
+    width: 60px;
+    height: 60px;
+    font-size: 11px;
+    color: #fff;
+    background: rgba(255, 63, 145, 0.5);
+    border: 2px solid #ff3f9188;
+  }
+  body.play-view .touch-action-focus {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 2px solid var(--cyan);
+  }
+  /* The Focus button's own value/track (built for the wide stacked layout
+     below the court) has no room in a 42px circle — the floating Energy pill
+     above already shows the same number, so it is dropped here rather than
+     shrunk into illegibility. */
+  body.play-view .touch-action-focus .touch-focus-value,
+  body.play-view .touch-action-focus .touch-focus-track {
+    display: none;
   }
   body.play-view .game-overlay {
     padding: 6px;
@@ -2373,12 +2807,396 @@ body.play-view #bank-button {
     margin-top: 7px;
   }
 }
+/* The two aspect-specific deltas the shared block above points at. Landscape
+   keeps the 1000:620 court it always had, sized by whichever dimension runs
+   out first (100cqw if the window is narrow, 161.2903cqh — i.e. height
+   scaled by 1000/620 — if it's short). `.scoreboard` and `.one-touch-readout`
+   use the same formula because they're laid out to the court's own width,
+   not the window's: on a landscape phone the two already agree by
+   construction (the container is exactly the court's own box), so this is
+   only carried forward rather than changed. */
+@media (max-width: 900px) and (orientation: landscape),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
+  body.play-view #court {
+    width: min(100cqw, 161.2903cqh);
+  }
+  body.play-view .one-touch-readout {
+    width: min(100cqw, 161.2903cqh);
+  }
+  /* ── Landscape's side gutters ─────────────────────────────────────────
+     The court above is height-bound (161.2903cqh), so on any window wider
+     than that formula needs, real empty columns open up on each side of it
+     — before this, occupied by nothing but the joystick and the action
+     cluster floating at the very bottom, while the scoreboard and the
+     Energy pill were painted straight over the pitch instead of using them.
+     Both readouts move into those gutters now, stacked above the thumb
+     cluster each already shares a corner with, so nothing sits on the
+     playing surface any more.
+
+     `.scoreboard`'s own box — the flex row both `.hud-group`s used to share
+     — stops drawing anything here; each pod opts out of it with its own
+     `position: fixed` below, sized and placed independently so neither
+     depends on how wide the other's content happens to be, the way two
+     flex children sharing one row would. */
+  body.play-view .scoreboard {
+    background: none;
+    pointer-events: none;
+    /* The base rule's own `left: 50%` + `transform: translateX(-50%)` (see
+       line ~1828) centre this box on the court's own width — harmless while
+       it drew the two floating pods itself, but with both gone fixed below,
+       a leftover transform also turns this box into the containing block
+       for them (per spec, any transformed ancestor does), so their `left`/
+       `right` would resolve against ITS box instead of the viewport. Reset
+       to a plain, untransformed full-width box: it paints nothing and only
+       has to stay a normal, on-screen element for the two pods to anchor to
+       the actual screen edges, and so it doesn't fail an "is everything on
+       screen" check for being pushed off by the half-centred math. */
+    left: 0;
+    width: 100%;
+    transform: none;
+  }
+  /* 138px is the gutter's own width (see the file header measurement this
+     block is built from); pulled in a little short of that on both the
+     outer (screen) and inner (court) edge — the court's own width formula
+     lands on a fractional pixel the gutter's nominal 138px doesn't quite
+     reproduce, so a pod sized flush to it grazes the pitch by a pixel or
+     two. 122px leaves a clean few-pixel margin on both sides regardless. */
+  body.play-view {
+    --gutter-pod-width: 122px;
+  }
+  body.play-view .hud-group {
+    position: fixed;
+    z-index: 10;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 3px;
+    width: var(--gutter-pod-width);
+    padding: 4px 8px;
+    pointer-events: auto;
+  }
+  /* Score keeps the left gutter, stacked above the joystick it already
+     shares a corner with. */
+  body.play-view .hud-group-score {
+    top: calc(var(--top-bar, 34px) + 8px);
+    left: max(8px, env(safe-area-inset-left));
+  }
+  body.play-view .hud-group-score .best-stat {
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid #ffffff1c;
+    padding-top: 3px;
+  }
+  /* Match numbers and Energy share the right gutter, stacked above the
+     action cluster: they're the two readouts a player checks together
+     mid-press (how much clock/multiplier is left, how much Energy is left
+     to spend on Focus or Boost), so keeping them in one column instead of
+     splitting them across both gutters reads as one decision, not two.
+     `top` clears the pause button (`.arena-venue-banner`, still pinned at
+     `top: 10px` in the phone rule that predates this file) — see that
+     rule's own comment for why it isn't moved here too. Three stacked stats
+     plus Energy below have to share the same strip of height the bottom-
+     centre dock never had to fit inside, so both this pod's stat numbers
+     and Energy's own type below are set in size explicitly rather than
+     inheriting the larger sizing built for a wide dock or a full-width
+     portrait band. */
+  body.play-view .hud-group-match {
+    top: calc(var(--top-bar, 34px) + 59px);
+    right: max(8px, env(safe-area-inset-right));
+    left: auto;
+    margin-left: 0;
+    align-items: flex-end;
+  }
+  body.play-view .hud-group-match .stat {
+    width: 100%;
+    align-items: flex-end;
+    padding-left: 0;
+    padding-top: 2px;
+    border-left: none;
+  }
+  body.play-view .hud-group-match .stat:not(:first-child) {
+    border-top: 1px solid #ffffff1c;
+  }
+  body.play-view .hud-group-match .stat strong,
+  body.play-view .hud-group-score .stat strong {
+    font-size: 15px;
+  }
+  body.play-view .hud-group-score .score-stat strong {
+    font-size: 20px;
+  }
+  /* Energy sits directly under the match pod in the same column: still the
+     compact label/value-then-track pill the shared coarse-pointer block
+     above already builds, just narrower (this gutter is 138px wide, not the
+     open floor space the bottom-centre dock had) and re-timed to start
+     right after the match pod's own real height instead of a guess. */
+  body.play-view .court-toolbar {
+    top: calc(var(--top-bar, 34px) + 59px + 122px);
+    right: max(8px, env(safe-area-inset-right));
+    left: auto;
+    bottom: auto;
+    width: var(--gutter-pod-width);
+    padding: 4px 6px;
+    transform: none;
+  }
+  body.play-view .court-toolbar .energy-info {
+    gap: 2px;
+    padding: 3px 8px 8px;
+  }
+  body.play-view .court-toolbar .energy-label,
+  body.play-view .court-toolbar .energy-value {
+    font-size: 9px;
+  }
+  body.play-view .court-toolbar .energy-track {
+    bottom: 2px;
+  }
+}
+/* Portrait's own delta: the court rotates to a 620:1000 box (long axis down
+   the screen, the point of Phase B) sized by 62cqh — height scaled by
+   620/1000 — instead of landscape's 161.2903cqh. `.scoreboard` and
+   `.one-touch-readout` inherited the landscape formula from the base rule
+   (`body.play-view .scoreboard` etc., unqualified by orientation) even
+   after the court itself rotated: on anything shaped like a real phone the
+   court is width-limited in portrait too, so `min(100cqw, …)` already
+   clamps to the same width the court lands on and the mismatch never shows
+   — but on a squarer portrait window (a tablet, not a phone) the unfixed
+   formula would draw the HUD wider than the pitch underneath it. Matching
+   the court's own formula here is what the pre-audit flagged as the actual
+   portrait risk (see SPEC.md's Phase B item 4 addendum): none of this is a
+   canvas problem, it's these three DOM boxes disagreeing about the shape
+   the court just took. */
+@media (max-width: 900px) and (orientation: portrait),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: portrait) {
+  body.play-view #court {
+    width: min(100cqw, 62cqh);
+    aspect-ratio: 620 / 1000;
+    /* Every other layout in this file centres the court vertically inside
+       its box (see the shared `top: 50%` rule) because the box IS the court's
+       whole stage. Portrait's box is taller than the court needs once the HUD
+       band below is compact (a phone screen is much taller than 620:1000),
+       so centring would split the leftover height into two dead strips, one
+       hidden above the fold under the HUD and one below. Anchoring to the
+       top instead puts all of that leftover in one place, below the court,
+       which is exactly the "dead strip" the brief points the floating
+       joystick and action cluster at. */
+    top: 0;
+    transform: translateX(-50%);
+  }
+  /* `.one-touch-readout` still keys off the court's own width formula (it's
+     an overlay pinned to the court's corner, not part of the HUD band), but
+     `.scoreboard` no longer does — see its own rule below, which spans the
+     full edge-to-edge width the band now owns. */
+  body.play-view .one-touch-readout {
+    width: min(100cqw, 62cqh);
+  }
+  /* ── The portrait HUD band ────────────────────────────────────────────
+     Before this, the top of a portrait screen held four unrelated islands
+     (a score card, a match card, a bare pause button and a floating Energy
+     pill) scattered across ~150px, while the court sat undersized below
+     them. This composes the same four readouts into one two-row instrument,
+     edge to edge, so the freed height goes to the court instead:
+       row 1 — score (left) | match numbers, then pause (right)
+       row 2 — Energy, full width, as legible as the score above it
+     Pause reads last, after the numbers it acts on, instead of sitting
+     between the two pods where it split the row's reading order in half —
+     an earlier version centred it in a reserved gap between score and match,
+     which read as a control interrupting two things you were reading, not a
+     button placed after them. `.hud-group` keeps its shared classes and
+     inner markup (nothing in index.html moves); only the phone-portrait
+     presentation changes it from a floating pill to a plain section of one
+     continuous strip. */
+  body.play-view .scoreboard {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    transform: none;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 0;
+    padding: 0;
+    background: linear-gradient(180deg, #150a34f0, #0c0620f0);
+    border-bottom: 1px solid #ffffff1c;
+  }
+  /* Fixed row height, shared with the pause button below, so the two read as
+     one strip instead of two boxes that happen to be adjacent. `min-height`
+     (not `height`) lets a genuinely long venue name or a display-scaled font
+     grow the row rather than clip — `align-items: stretch` on `.scoreboard`
+     above then carries that grown height to the other pod and the pause
+     button so they never fall out of alignment with each other. */
+  body.play-view {
+    --mobile-hud-row: 50px;
+  }
+  body.play-view .hud-group {
+    min-height: var(--mobile-hud-row);
+    box-sizing: border-box;
+    /* Each pod now sizes to its own content instead of a fixed fraction of
+       the band — there is no reserved centre gap to hold open for the pause
+       button any more (it docks past the match pod's own edge below), so
+       `.scoreboard`'s `justify-content: space-between` is what puts whatever
+       room is left between the two, same as it always did with two flex
+       children. Capped at 60% each purely as a backstop against one pod's
+       content ever pushing the other one off the row. */
+    flex: 0 1 auto;
+    max-width: 60%;
+    min-width: 0;
+    padding: 6px 4px;
+    background: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  body.play-view .hud-group-score {
+    justify-content: flex-start;
+    padding-left: 14px;
+  }
+  body.play-view .hud-group-match {
+    /* The base rule's `margin-left: auto` was how the match card found the
+       right edge when it was the second of two loosely-spaced islands;
+       `.scoreboard`'s own `justify-content: space-between` above does that
+       job now, and leaving the auto margin in would fight it for the same
+       space twice. The right padding clears the pause button docked past
+       this pod's own edge (see `.arena-venue-banner` below) so its numbers
+       never sit under it. */
+    margin-left: 0;
+    justify-content: flex-end;
+    /* 56px clears the docked pause button at 390 and up. At 320 the pod's
+       own labels are wider relative to the band, and POSSESSIONS ran under
+       the button — the value stayed clear but its label did not, which is
+       the same defect one line up. The narrow tier below widens this. */
+    padding-right: 56px;
+  }
+  /* Three stats plus their dividers in the room the row and the docked pause
+     button leave behind is tight enough at 320px that the shared card's own
+     16px divider gap, POSSESSIONS' own label tracking, and `.lives-stat`'s
+     letter-spacing (both built for a lone wide pill, not a crowded row)
+     push "3 / 3" onto two lines and crowd its label against the pause
+     button next to it. Nothing here is wider than the numbers actually need
+     once the wrap and the extra tracking are both trimmed back. */
+  body.play-view .hud-group-match .stat {
+    padding-left: 8px;
+  }
+  body.play-view .hud-group-match .stat strong {
+    white-space: nowrap;
+  }
+  body.play-view .hud-group-match .stat-label {
+    letter-spacing: 0.5px;
+  }
+  body.play-view .hud-group-match .lives-stat strong {
+    letter-spacing: 0;
+  }
+  /* The pause button, still its own DOM node (`.arena-venue-banner`) placed
+     after the court in index.html, not a child of `.scoreboard` — rather
+     than regroup the markup, it's docked past the match pod's own right
+     edge, matched to the same row height so it lines up with both pods
+     pixel for pixel. It reads last, after the numbers it controls, instead
+     of splitting them from the middle. See the later, phone-only
+     `.arena-venue-banner` rule (kept next to the rest of that button's phone
+     styling) for the actual position. */
+  /* ── Row 2: Energy ─────────────────────────────────────────────────────
+     Energy is what Focus and Boost both spend, so it earns the same full
+     width and the same strip treatment as the score/match row above it,
+     not a pill squeezed into whatever gap was left. `.court-toolbar` still
+     carries the target hint and the play-action buttons in its markup, but
+     both stay `display: none` here (see the shared coarse-pointer block) —
+     only `.energy-info` actually renders, so restyling the toolbar itself as
+     the strip and letting Energy fill it is the same box either way. */
+  body.play-view .court-toolbar {
+    position: fixed;
+    top: calc(var(--top-bar, 44px) + var(--scoreboard-height, 56px));
+    bottom: auto;
+    left: 0;
+    width: 100%;
+    transform: none;
+    min-height: var(--mobile-energy-band, 44px);
+    padding: 0 14px;
+    background: linear-gradient(180deg, #120a2ef0, #0a0420f5);
+    border: none;
+    border-radius: 0 0 12px 12px;
+    display: flex;
+    align-items: center;
+  }
+  /* Energy reads as one line — label, value, then the meter itself filling
+     whatever width is left — instead of the two-line stack the shared
+     coarse-pointer block gives the floating pill (label/value row, then the
+     track below it): a single row is shorter, and shorter is the entire
+     point of this band. */
+  body.play-view .court-toolbar .energy-info {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 0;
+  }
+  body.play-view .court-toolbar .energy-row {
+    flex: 0 0 auto;
+    gap: 6px;
+  }
+  /* Taking the track out of `position: absolute` (its base rule floats it a
+     few px off `.energy-info`'s own bottom edge, built for the two-line
+     stack) and into normal flow next to the label/value pair is what turns
+     this into one line: it becomes an ordinary flex child that simply grows
+     to fill whatever width `.energy-row` doesn't use. */
+  body.play-view .court-toolbar .energy-track {
+    position: static;
+    flex: 1 1 auto;
+    height: 4px;
+    align-self: center;
+  }
+  /* `--mobile-hud-row` (50px) plus this row's own ~44px is the band's real
+     total height; `.court-wrap`'s `top` and `.toast`'s `top` build on the
+     same number below so the three stay in sync rather than three copies of
+     one measurement drifting apart. `--scoreboard-height` is still the one
+     JS actually measures live (see main.js) — this only has to be close
+     enough that nothing overlaps, and the row above pins its own height to
+     `--mobile-hud-row` for exactly that reason. */
+  body.play-view {
+    --mobile-energy-band: 44px;
+  }
+  /* The court now starts right after both rows of the band, with the score/
+     match/pause row's real measured height (`--scoreboard-height`) plus the
+     Energy row's own (`--mobile-energy-band`) — no gap between them, and no
+     gap before the court either, since the band is the top of the stage now,
+     not a card floating over it. */
+  body.play-view .court-wrap {
+    top: calc(var(--scoreboard-height, 56px) + var(--mobile-energy-band, 44px));
+  }
+  /* `.one-touch-readout`'s own `top` (see its base rule) is `--scoreboard-
+     height + 8px`, sized for a `.court-wrap` that starts at the
+     game-panel's own top (y0) everywhere else. `.court-wrap` no longer
+     starts there in portrait (the rule above), so re-adding the same
+     scoreboard height here would double-count it and the second copy would
+     also miss the Energy band entirely — a flat 8px is the correct "clear
+     the top of whatever `.court-wrap` now is" offset instead. */
+  body.play-view .one-touch-readout {
+    top: 8px;
+  }
+  /* The toast/one-touch collision fix (see the shared block's own `.toast`
+     rule) added a flat 36px on top of `--scoreboard-height` to clear a
+     one-touch pill that, at the time, sat directly under the scoreboard.
+     It now sits under the Energy band too (`.court-wrap`'s new `top`, and
+     `.one-touch-readout`'s own 8px on top of that) — so the toast needs the
+     same `--mobile-energy-band` added to keep clearing it, on top of (not
+     instead of) that original 36px. */
+  body.play-view .toast {
+    top: calc(
+      var(--top-bar, 44px) + var(--scoreboard-height, 56px) +
+        var(--mobile-energy-band, 44px) + 8px + 36px
+    );
+  }
+}
 
 /* Home / Arena workspace */
 .app-shell {
   grid-template-columns: 248px minmax(0, 1fr);
 }
 .home-modes {
+  /* display lives here rather than only in the wide layout below because a
+     phone needs the mode grid too now — see the narrow-layout comment above
+     .home-court-card. The 4-up template only ever reads that way at
+     980px+; the max-width queries further down retile it to 2 and then 1
+     column as the window narrows. */
+  display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 10px;
 }
@@ -2431,6 +3249,24 @@ body.play-view #bank-button {
     inset 0 1px 0 color-mix(in srgb, var(--ink), transparent 80%);
 }
 .home-modes button:not(:disabled):not([aria-disabled="true"]):hover::after {
+  color: var(--mode-accent);
+  transform: translateX(2px);
+}
+.home-modes button.active,
+.home-modes button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--mode-accent), transparent 20%);
+  border-top-color: var(--mode-accent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface), var(--mode-accent) 18%) 0%,
+    color-mix(in srgb, var(--surface), var(--mode-accent) 8%) 100%
+  );
+  box-shadow:
+    0 4px 16px color-mix(in srgb, var(--mode-accent), transparent 75%),
+    inset 0 1px 0 color-mix(in srgb, var(--ink), transparent 75%);
+}
+.home-modes button.active::after,
+.home-modes button[aria-pressed="true"]::after {
   color: var(--mode-accent);
   transform: translateX(2px);
 }
@@ -2689,17 +3525,27 @@ body.play-view .arena-view .below-court {
      ------------------ modes ------------------
      ------------------ footer ------------------
 
-   Nothing here is allowed to make the page scroll. The shell is already capped
-   at the viewport height, and everything inside is sized from the row it was
-   given — the demo canvas most of all, which is a size container so it takes
-   the largest 1000:620 rectangle that fits rather than dictating one. */
+   Nothing here is allowed to make the page scroll above the 980×620 tier
+   below — the shell is capped at the viewport height there, and everything
+   inside is sized from the row it was given, the demo canvas most of all,
+   which is a size container so it takes the largest 1000:620 rectangle that
+   fits rather than dictating one. Below that tier a phone can't hold three
+   panels and a strip without crushing them, so it gets a different contract
+   entirely — see the comment above .home-court-card. */
 .home-view {
   flex: 1 1 0;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  align-content: center;
+  /* start, not center: below 980×620 this grid holds a full stacked column
+     (intro, leaderboard, courts, modes) that is routinely taller than the
+     viewport and scrolls. Centering a box taller than its container pushes
+     the top out of reach above scroll position 0 — there would be no way to
+     scroll up to it. The 980×620 tier below overrides this back to stretch,
+     where the single-row three-panel layout never overflows in the first
+     place. */
+  align-content: start;
   /* Tight, near-full-bleed composition: 12px on every edge and between
      panels, not the airier 20px this used to carry. */
   gap: 12px;
@@ -2716,16 +3562,190 @@ body.play-view .arena-view .below-court {
   align-self: center;
   text-align: center;
 }
-/* The attract demo and the court picker are extras on a small window: below
-   this the three columns cannot each hold their contents honestly, so home
-   falls back to the menu alone rather than scrolling or crushing them. The
-   footer is dropped with them — it is pure sign-off, and there is no room to
-   spare for decoration once the layout is down to one column. */
-.home-stage,
-.home-courts,
-.home-modes,
-.home-court-card {
-  display: none;
+/* Below 980×620 — a phone in either orientation, and any window too short
+   for the three-panel console — the court picker, mode picker, difficulty
+   toggle and leaderboard used to be dropped outright, leaving only the menu
+   and the last-played court's Play button reachable. That's not a fallback,
+   it's the entire progression loop gone: no way to pick a different court,
+   try another mode, change difficulty or see where you stand. .home-view
+   already scrolls by design (it's in the shared scrollbar-hiding rule near
+   the top of this file, alongside .court-list and friends) — the fix is to
+   let it actually do that here instead of hiding everything that doesn't
+   fit. Every panel below stacks into the single implicit column .home-view
+   already has, in DOM order, and rides that scroll: intro/menu first, the
+   leaderboard deck, then the court list, then the modes. Only the court
+   preview image stays hidden — it just repeats the court list's own
+   highlighted row, and a phone has no width to spare on a picture of a
+   picture. The 980×620 tier further down restores the three-panel grid,
+   where none of this stacking or scrolling applies. */
+@media (max-width: 979px), (max-height: 619px) {
+  /* The wide layout's single grid-template-rows: minmax(0, 1fr) track exists
+     for exactly one row (the three-panel band); stacking four panels into it
+     leaves the fr unit nothing to distribute once content overflows, and it
+     collapses to its minmax(0, …) floor of 0. .home-intro's align-self:
+     center then centers 500+px of content inside that 0-height row, pushing
+     its top half above scroll position 0 where a player can never reach it,
+     even with .home-view's align-content already set to start above. `auto`
+     makes every row — explicit or implicit — size to its own content
+     instead, which is what a stack that scrolls actually needs. .home-intro's
+     align-self likewise has to go back to start here, so it renders at the
+     top of its own now content-sized row rather than centered inside it. */
+  .home-view {
+    grid-template-rows: auto;
+  }
+  .home-intro {
+    align-self: start;
+  }
+  .home-intro .game-title {
+    justify-content: center;
+  }
+  .brand-logo-lockup {
+    max-width: 200px;
+    max-height: 52px;
+  }
+  .home-court-card {
+    display: none;
+  }
+  .home-stage {
+    min-width: 0;
+  }
+  .home-courts {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  /* Reuses the desktop leaderboard's eight-column data grid (see
+     .home-leaderboard inside the 980×620 tier) but at widths that actually fit
+     a phone: the four bonus columns (triangles/olés/splits/zones) are the
+     first thing to go, not the rank, name, passes or score a player actually
+     scans for. --hl-cols/--hl-gap are only ever defined here and in the wide
+     tier, so nothing above 980×620 sees this. */
+  .home-leaderboard {
+    --hl-cols: 24px minmax(0, 1fr) 46px 54px;
+    --hl-gap: 6px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: min(70vh, 520px);
+  }
+  .hl-cell-bonus {
+    display: none;
+  }
+  .hl-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  /* 3×2 rather than one row of six (the wide tier's shape) or a horizontal
+     scroll strip: six labels in a single row would need horizontal scroll of
+     their own on top of .home-view's, and a phone screen already has the
+     vertical room a 3x2 block asks for. .hl-tab itself is unstyled outside
+     the wide tier — same gap that .hl-head/.hl-row had — so without this it
+     falls back to the browser's default button font (~16px) with no
+     white-space handling, overflowing its grid cell and the panel's edge on
+     the longer names. Sized into the panel's own control scale (compare
+     .hl-head at 9px, .hl-row at 12.5px below), not the headline scale. */
+  .hl-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 6px;
+    background: color-mix(in srgb, var(--surface), #000 45%);
+  }
+  .hl-tab {
+    appearance: none;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: var(--muted);
+    font: 700 9px/1.25 var(--sign);
+    letter-spacing: 0.3px;
+    padding: 6px 3px;
+    text-align: center;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hl-tab:hover {
+    color: var(--ink);
+    background: color-mix(in srgb, var(--accent), transparent 92%);
+    border-color: color-mix(in srgb, var(--accent), transparent 75%);
+  }
+  .hl-tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+  }
+  .hl-tab.active,
+  .hl-tab[aria-selected="true"] {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent), transparent 85%);
+    border-color: color-mix(in srgb, var(--accent), transparent 45%);
+    font-weight: 800;
+  }
+  .hl-tab-num {
+    display: none;
+  }
+  .hl-table {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 6px 8px;
+    overflow-y: auto;
+  }
+  .hl-head,
+  .hl-row,
+  .hl-user-cells {
+    display: grid;
+    grid-template-columns: var(--hl-cols);
+    gap: var(--hl-gap);
+    align-items: center;
+  }
+  .hl-head {
+    padding: 6px 8px;
+    font-size: 9px;
+    color: var(--muted);
+    border-bottom: 1px solid color-mix(in srgb, var(--line), transparent 50%);
+  }
+  .hl-list {
+    list-style: none;
+    margin: 0;
+    padding: 2px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .hl-row {
+    padding: 7px 8px;
+    font-size: 12.5px;
+    border-radius: 3px;
+  }
+  .hl-row:nth-child(even) {
+    background: color-mix(in srgb, var(--panel), transparent 60%);
+  }
+  .hl-cell-player,
+  .hl-cell-pilot {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hl-cell-passes,
+  .hl-cell-score {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .hl-user-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 8px;
+    border-top: 1px solid var(--line);
+  }
 }
 /* ── Console panel chrome ─────────────────────────────────────────────────
    Shared frame for the three row-1 panels: a filled, chamfered card with a
@@ -3335,12 +4355,25 @@ body.play-view .arena-view .below-court {
    longer has to carry the branding on its own — and it has a 24% column to sit
    in rather than half the window. */
 .game-title {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   color: var(--ink);
   text-transform: lowercase;
   font: italic 800 clamp(38px, 4.4vw, 76px) / 0.86 var(--display);
   letter-spacing: -2px;
   text-shadow: 4px 4px 0 #ff3aa7cc;
+}
+.brand-logo-lockup {
+  display: block;
+  width: 100%;
+  max-width: clamp(170px, 18vw, 230px);
+  max-height: clamp(42px, 4.8vw, 56px);
+  height: auto;
+  margin: 0 auto;
+  object-fit: contain;
 }
 .game-title span {
   color: var(--cyan);
@@ -3354,7 +4387,7 @@ body.play-view .arena-view .below-court {
 .menu-list {
   display: grid;
   gap: 9px;
-  margin: 18px 0 0;
+  margin: 8px 0 0;
 }
 .menu-item {
   display: flex;
@@ -3421,7 +4454,7 @@ body.play-view .arena-view .below-court {
   color: #100923;
 }
 .title-note {
-  margin: 13px 0 0;
+  margin: 6px 0 0;
   color: var(--cyan);
   font: 700 9px var(--sign);
   letter-spacing: 2px;
@@ -3445,14 +4478,43 @@ body.play-view .arena-view .below-court {
   font: italic 800 clamp(20px, 1.9vw, 32px) / 0.9 var(--display);
   letter-spacing: -1px;
 }
+.courts-pad-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: auto;
+  align-self: center;
+}
+.courts-pad-hint[hidden] {
+  display: none;
+}
+.courts-pad-hint .pad-chip {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--cyan);
+  font-weight: 700;
+  font-size: 9px;
+  line-height: 1.2;
+}
 /* One column of six on home: the courts sit beside the demo rather than under
    it, so they read as a list you scan down and never need a second page.
-   align-content is deliberately NOT set here — .home-courts is display:none
-   outside the wide layout, so this rule is only ever live alongside the
-   @media (min-width: 980px) block below, and its align-content: stretch is
-   what makes the six rows share the panel's full height instead of stopping
-   short and leaving a gap above the panel's bottom edge. Setting it here too
-   used to fight that (same specificity, later in the file always wins). */
+   align-content is deliberately NOT set here. Below 980×620 (the phone
+   layout — see the comment above .home-court-card) this rule sizes a list
+   that just stacks with everything above it and is free to run its natural
+   height inside .home-view's own scroll. Only inside the
+   @media (min-width: 980px) block below does align-content: stretch get
+   added, which is what makes the six rows share the panel's full fixed
+   height there instead of stopping short and leaving a gap above the
+   panel's bottom edge. Setting it here too used to fight that (same
+   specificity, later in the file always wins). */
 .home-courts .court-list {
   grid-template-columns: minmax(0, 1fr);
   min-height: 0;
@@ -3570,7 +4632,17 @@ body.play-view .arena-view .below-court {
 .arena-rail {
   display: none;
 }
-@media (max-width: 900px) {
+/* A coarse-pointer landscape phone/phablet from 901 up to 1024px wide (a
+   932x430 "plus"-sized phone, say) matches this query's own max-width:900px
+   only by luck of the second breakpoint below matching instead — see the
+   comment on the (min-width: 901px) block's own condition for why both this
+   block and that one need the extra clause. Without it, this block goes
+   quiet in the gap and .arena-venue-banner falls back to its bare
+   `display: none` (the line above the max-width:900px query used to start
+   here), taking the pause button down with it — not merely mis-sized, gone
+   entirely. */
+@media (max-width: 900px),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
   body.play-view .arena-venue-banner {
     display: flex;
     position: absolute;
@@ -3609,7 +4681,49 @@ body.play-view .arena-view .below-court {
     display: none;
   }
 }
-@media (min-width: 901px) {
+/* Portrait docks the pause button past the match pod's own right edge,
+   inside the HUD band, instead of the bare top-right corner the rule above
+   pins it to — see the "portrait HUD band" comment on `.scoreboard` for the
+   composed layout this completes. Reading order stays score, then match,
+   then the control that acts on them, rather than a button splitting the
+   two pods apart from the middle. This has to come after that block (same
+   selector, same specificity: source order decides), since the two `@media`
+   conditions both match a portrait phone and this one needs to win.
+   `.hud-group-match`'s own `padding-right` (see the "portrait HUD band"
+   rule) reserves the room this needs so the match numbers never sit under
+   it. */
+@media (max-width: 900px) and (orientation: portrait),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: portrait) {
+  body.play-view .arena-venue-banner {
+    top: 0;
+    left: auto;
+    right: 6px;
+    height: var(--mobile-hud-row, 50px);
+    transform: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+/* This "desktop broadcast chassis" block (see the heading above) reskins the
+   scoreboard, the venue banner, the pause control and the Energy pill into
+   a heavier, opaque desktop treatment — the right call from 901px up, where
+   there is room for it. But width alone is not a reliable "this is a
+   desktop" signal: a coarse-pointer phone/phablet in landscape easily
+   clears 901px (932x430 is a real device, not a synthetic one) while still
+   needing the phone treatment — the floating touch controls, the compact
+   pause icon, the plain Energy pill with no per-tier chrome. 1024px is
+   already this file's own line for "still a touch device" elsewhere (the
+   tablet touch-control sizing above, and the floating-landscape rail fix),
+   so the exclusion below draws it in the same place: a coarse pointer,
+   landscape, at or under 1024px wide, sits this whole block out and falls
+   through to the plainer rules above instead (the ones that render
+   correctly at 844x390 already). A coarse pointer *above* 1024px wide in
+   landscape (an 11" iPad Air at 1180x820, say) still gets the desktop
+   treatment here — deliberately: at that size there is enough room for the
+   fuller chassis, and nothing below max-width:1024px claims it either, so
+   drawing the line any lower would leave it with neither ruleset. */
+@media (min-width: 901px) and (not ((pointer: coarse) and (max-width: 1024px) and (orientation: landscape))) {
   body.play-view {
     --desktop-control-rail: clamp(60px, 7.2cqh, 70px);
     --desktop-hud-height: clamp(60px, 7.2cqh, 70px);
@@ -4445,4 +5559,224 @@ body.play-view .arena-view .below-court {
   font-weight: 600;
   color: #fff;
   text-align: right;
+}
+
+/* ── The full-time result on a phone ────────────────────────────────────────
+   A sheet, not a card. On desktop the result floats over the court as a panel
+   with the arena still legible around it, which reads as "the round is over,
+   here is how it went". At phone width that same panel had nowhere to go: it
+   was squeezed into a column barely half the screen wide, its stat labels
+   truncated mid-word ("TRIANGLI", "TURNOVE"), and it was taller than the
+   viewport with no way to scroll — so in portrait the buttons sat on the very
+   edge of the screen, and in landscape the card started 98px above the top of
+   the viewport and two of its three actions were off-screen entirely and
+   simply unreachable. There was nothing to salvage in shrinking it further.
+
+   So the phone gets the whole screen and stops trying to show the court
+   behind it. The sheet scrolls if the content is taller than the viewport,
+   which landscape needs, and carries its own close control — a full-screen
+   sheet has to offer a way out that is not "commit to Retry or Home".
+
+   Keyed on coarse pointers as well as width so a phone in landscape at 932px,
+   which is wider than many small laptops, still gets the sheet. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+  body.play-view .game-overlay {
+    position: fixed;
+    inset: 0;
+    /* Above the top bar (6) and the toast (80), because "fills the screen"
+       has to mean the whole screen — with the sheet under the bar, the close
+       control sat behind the Menu button and could not be pressed. The
+       soundtrack controls go with it; the round is over, and the three
+       actions plus the close are the only things worth offering here. */
+    z-index: 120;
+    width: auto;
+    height: auto;
+    padding: 0;
+    background: var(--bg, #07081a);
+  }
+  body.play-view .game-overlay .invitation,
+  body.play-view .game-overlay[data-result] .invitation {
+    position: relative;
+    left: auto;
+    top: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    margin: 0;
+    /* Room for the close control, and for the phone's own rounded corners and
+       home indicator. */
+    padding: calc(52px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-left))
+      max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right));
+    border: 0;
+    border-radius: 0;
+    transform: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    text-align: center;
+  }
+  /* The stats were the worst of the squeeze: three columns in a 154px-wide
+     card clipped every label. Two columns at full width fit the words. */
+  body.play-view .game-overlay .result-breakdown {
+    grid-template-columns: 1fr 1fr;
+  }
+  body.play-view .game-overlay .overlay-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    margin-top: auto;
+  }
+  body.play-view .game-overlay .overlay-actions button {
+    width: 100%;
+    min-height: 48px;
+  }
+  /* Qualified so it beats the bare `.overlay-close { display: none }` default
+     below on specificity rather than on source order — the default has to sit
+     after this block to read as "hidden unless the sheet is on screen", and an
+     unqualified selector here would lose to it. */
+  /* Only on the result. The pre-round card is reached from home and the top
+     bar's Home button is still there to back out with, so a close control
+     there would be a second way to do what is already one tap away — and an
+     ambiguous one, since "close" on a card that starts a round reads as
+     "don't play". The result has no such escape: its three actions all commit
+     to something. */
+  body.play-view .game-overlay[data-result] .overlay-close {
+    /* Absolute, deliberately. `fixed` would be the instinct for a control that
+       must not scroll with the sheet, but an ancestor here establishes a
+       containing block (a transform/filter does that to fixed children), which
+       positioned it against the card rather than the viewport and threw it
+       ~100px off the top in landscape. Absolute is well-defined against the
+       card, and now that the landscape actions sit in a row the sheet no
+       longer scrolls at these sizes, so there is nothing to scroll away from. */
+    position: absolute;
+    z-index: 1;
+    /* Below the top bar, not over it. The bar sits in an ancestor stacking
+       context the sheet cannot reliably out-rank from where it lives in the
+       DOM, so raising z-index alone left the close control underneath the
+       Menu button and unpressable. Anchoring below the bar is stable however
+       that context resolves. */
+    top: calc(var(--top-bar, 44px) + max(8px, env(safe-area-inset-top)));
+    right: max(10px, env(safe-area-inset-right));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    color: var(--ink, #f3f1e6);
+    background: #0c0620c2;
+    border: 1px solid #ffffff2e;
+    border-radius: 50%;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+  }
+}
+/* Desktop dismisses the result with one of the three actions or Escape, and a
+   close affordance floating on the panel there would just be a fourth way to
+   do what Home already does. */
+.overlay-close {
+  display: none;
+}
+
+/* A landscape phone is short, and stacking three full-width actions pushed the
+   last two below the fold — reachable only by scrolling the sheet, which is a
+   poor way to answer "what now?". There is width to spare here even if there
+   is no height, so the actions run as a row and the whole sheet fits. */
+@media (max-height: 500px) and (orientation: landscape),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
+  body.play-view .game-overlay .invitation {
+    gap: 8px;
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+  body.play-view .game-overlay .overlay-actions {
+    flex-direction: row;
+    gap: 8px;
+  }
+  body.play-view .game-overlay .overlay-actions button {
+    min-height: 42px;
+  }
+}
+
+/* Whenever the sheet is up, everything belonging to the live round gets out of
+   the way — not just the controls.
+
+   Keyed on the overlay's own `hidden` attribute rather than a class set when
+   the round ends, because this is the same modal at kick-off as at full time
+   and both need the screen. A class set only in finish() covered half of it
+   and left the score, clock, multiplier, Energy and the thumb controls sitting
+   over the opening card. The HUD, the
+   Energy pill, the pause control and any hint toast all still painted over the
+   sheet, so "FULL TIME." read through a scoreboard and the close control sat
+   underneath the pause button. The toast in particular outranks the sheet on
+   z-index (80 against 60) and so could never be covered, only hidden.
+
+   Two classes on <body> to outrank the body.play-view rules that turn these on;
+   the phone sheet is the only place this applies, so it stays inside the same
+   coarse-pointer query the sheet itself uses. Desktop keeps its HUD, where the
+   result is a panel over a still-visible court rather than a sheet. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+  body.play-view:has(#game-overlay:not([hidden])) .touch-controls,
+  body.play-view:has(#game-overlay:not([hidden])) .scoreboard,
+  body.play-view:has(#game-overlay:not([hidden])) .court-toolbar,
+  body.play-view:has(#game-overlay:not([hidden])) .arena-venue-banner,
+  body.play-view:has(#game-overlay:not([hidden])) .one-touch-readout,
+  body.play-view:has(#game-overlay:not([hidden])) .toast {
+    display: none;
+  }
+}
+
+/* A landscape phone has roughly 300px of usable height once the bar is out.
+   The nine-cell bonus breakdown does not fit alongside the headline, the score
+   and three actions, and making it fit meant scrolling the sheet — which put
+   the result's own headline off-screen. The breakdown is the least of what a
+   player wants at this moment: they want to know the score and to choose what
+   happens next. It stays on the portrait sheet, where there is room, and on
+   desktop. */
+@media (max-height: 500px) and (orientation: landscape),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
+  body.play-view .game-overlay .result-breakdown,
+  body.play-view .game-overlay #overlay-copy {
+    display: none;
+  }
+}
+
+/* ── The top bar at phone widths ──────────────────────────────────────────
+   Two leftovers from adding the fullscreen toggle, both only visible at
+   320px, both only in a picture.
+
+   The wordmark goes. Six controls (three transport, fullscreen, Home, Menu)
+   and a centred brand mark do not fit 320px, and the collision that produces
+   is not a near miss — the mark is drawn straight over the skip button, so
+   the brand looks broken and the control under it looks unpressable. This
+   predates the fullscreen toggle (the transport buttons already reached the
+   mark on their own) but a sixth control removes any remaining slack. Of the
+   things competing for that row, the wordmark is the one carrying no
+   function: the game is on the screen, the player knows what they launched,
+   and `.sr-only` text keeps the name for anything reading the page. Controls
+   keep the space; decoration gives it up.
+
+   And the match pod needs more room for the pause button at this width, for
+   the reason given at its `padding-right` above. */
+@media (max-width: 360px) {
+  .top-brand {
+    display: none;
+  }
+  body.play-view .hud-group-match {
+    /* 58, not the 56 used above: the pause button docks 3px further into this
+       pod at 320 than at 390, and at 56 the POSSESSIONS label and its value
+       both ran the last 3px underneath it. Measured, not guessed — content
+       now ends at 262 against a button starting at 273. */
+    padding-right: 58px;
+    gap: 6px;
+  }
+  body.play-view .hud-group-match .stat-label {
+    font-size: 7px;
+    letter-spacing: 0.04em;
+  }
 }

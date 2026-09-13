@@ -99,9 +99,10 @@ export function awardMatch(progress, game, mode, courtIndex) {
   const tier = DIFFICULTY_IDS.includes(game.config.difficulty)
     ? game.config.difficulty
     : "standard";
+  const isPractice = mode === "practice" || Boolean(game.config?.practice);
   const cleared =
-    game.time <= 0 &&
-    (mode === "practice" || game.config.practice || game.turnovers < possessions) &&
+    (game.time <= 0 || isPractice) &&
+    (isPractice || game.turnovers < possessions) &&
     game.score >= game.config.target;
   const stars = cleared
     ? 1 +

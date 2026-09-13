@@ -713,11 +713,13 @@ export class Game {
     }
     if (this.ball && this.focusActive) this.ball.focusUsed = true;
     const delta = dt - focusedTime * 0.68;
-    this.time -= delta;
+    if (!this.config.practice) {
+      this.time -= delta;
+    }
     this.elapsed += delta;
     this.motionTime += delta;
     this.zoneTimer -= delta;
-    if (this.time <= 0) {
+    if (!this.config.practice && this.time <= 0) {
       this.finish();
       return;
     }

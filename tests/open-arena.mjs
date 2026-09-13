@@ -14,3 +14,18 @@ export async function gotoArena(page, baseURL, options) {
   await page.locator("#arena-view").waitFor({ state: "visible" });
   return page;
 }
+
+// The court is not always 1000:620. On a portrait viewport the renderer draws
+// the pitch rotated a quarter turn so its long axis runs down the screen —
+// `renderer.resize("portrait")` in packages/presentation/src/renderer.js, fed
+// from a matchMedia query in the desktop app — and the canvas box is 620:1000
+// to match. Tests that assert the court's aspect therefore have to ask which
+// orientation they are in; a hardcoded 1000:620 silently passes for years on
+// desktop and then fails the moment a phone-shaped viewport is added.
+//
+// Orientation is decided the same way the CSS decides it: taller than wide is
+// portrait. A square viewport counts as landscape, matching
+// `(orientation: portrait)`, which is false at exactly 1:1.
+export function expectedCourtAspect({ width, height }) {
+  return height > width ? 620 / 1000 : 1000 / 620;
+}
