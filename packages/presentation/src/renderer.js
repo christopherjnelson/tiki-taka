@@ -89,22 +89,64 @@ function label(
   color = "#fff",
   align = "center",
   weight = 700,
+  spacing = 0,
 ) {
   if (c._tikiPortrait) {
     c.save();
     c.translate(x, y);
     c.rotate(-Math.PI / 2);
     c._tikiPortrait = false;
-    label(c, text, 0, 0, size, color, align, weight);
+    label(c, text, 0, 0, size, color, align, weight, spacing);
     c.restore();
     c._tikiPortrait = true;
     return;
   }
   c.font = `${weight} ${size}px ${FONT}`;
-  c.textAlign = align;
   c.textBaseline = "middle";
   c.fillStyle = color;
-  c.fillText(text, x, y);
+  if (!spacing) {
+    c.textAlign = align;
+    c.fillText(text, x, y);
+    return;
+  }
+  // Letter-spaced signage: measured and hand-walked, since canvas text has no
+  // native tracking control.
+  c.textAlign = "left";
+  const chars = [...text];
+  const width = chars.reduce(
+    (sum, ch) => sum + c.measureText(ch).width + spacing,
+    -spacing,
+  );
+  let cursor = align === "center" ? x - width / 2 : align === "right" ? x - width : x;
+  for (const ch of chars) {
+    c.fillText(ch, cursor, y);
+    cursor += c.measureText(ch).width + spacing;
+  }
+}
+// Fits a watermark to the short axis (portrait's 620 design units against
+// landscape's 1000) so it steps down instead of cropping.
+function fittedSize(c, text, max, start, weight = 900) {
+  let size = start;
+  c.font = `${weight} ${size}px ${FONT}`;
+  while (c.measureText(text).width > max && size > 10) {
+    size -= 2;
+    c.font = `${weight} ${size}px ${FONT}`;
+  }
+  return size;
+}
+const withAlpha = (hex, alpha) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+};
+// Signage sits on a plate over the hoarding, the way a real pitch-side board
+// does, so the border motif behind it never fights the lettering.
+function signPlate(c, cx, cy, width, height, tint) {
+  c.fillStyle = "rgba(7,12,26,.86)";
+  rounded(c, cx - width / 2, cy - height / 2, width, height, height * 0.28);
+  c.fill();
+  c.strokeStyle = withAlpha(tint, 0.5);
+  c.lineWidth = 1;
+  c.stroke();
 }
 const THEMES = {
   dark: {
@@ -115,13 +157,174 @@ const THEMES = {
     muted: "#88b9bd",
   },
 };
-const SURFACES = {
-  lisbon: ["#155c82", "#196978"],
-  london: ["#282c38", "#363846"],
-  barcelona: ["#87443f", "#9d503f"],
-  tokyo: ["#21124e", "#32135b"],
-  "sao-paulo": ["#173e38", "#205448"],
-  amsterdam: ["#163d79", "#20518d"],
+// Venue identity without on-pitch pattern: a surround colour, a quiet surface
+// colour, and how warm the light pooling at centre circle is. Same court, six
+// moods - the border band (BORDERS below) carries the rest of the character.
+const VENUE_LOOK = {
+  lisbon: { surround: ["#2b1240", "#5c2242"], surface: ["#123049", "#0d2036"], light: "#ff9b62", wash: 0.16 },
+  london: { surround: ["#1b2030", "#2b3040"], surface: ["#1d2b33", "#131d26"], light: "#cfe6ff", wash: 0.07 },
+  barcelona: { surround: ["#6d3327", "#93513a"], surface: ["#123a3a", "#0c2a2c"], light: "#ffcc82", wash: 0.13 },
+  tokyo: { surround: ["#0d0726", "#241148"], surface: ["#141338", "#0c0b24"], light: "#38f5e5", wash: 0.15 },
+  "sao-paulo": { surround: ["#0c2a27", "#16453c"], surface: ["#0f3327", "#0a2419"], light: "#9bff8a", wash: 0.12 },
+  amsterdam: { surround: ["#0b1f4c", "#123468"], surface: ["#0f2b52", "#0a1d3a"], light: "#8fd9ff", wash: 0.1 },
+};
+// The pitch inset the engine's LIMITS agree on (packages/engine/src/game.js:
+// LIMITS = { left: 50, right: 950, top: 50, bottom: 570 }) - 50 in, on all
+// four sides, in whichever design space (1000x620 landscape, 620x1000
+// portrait) paintArena is currently painting.
+const PITCH_MARGIN = 50;
+// ---------------------------------------------------------------------------
+// Border motifs. Venue character lives here: the band between the outer edge
+// and the touchline, where it can be as loud as it likes because nobody plays
+// on it. Each strip is drawn once per edge through a mitred transform, so the
+// same motif wraps all four sides and the court is identical turned 90
+// degrees - no venue owns a "top" any more, so a future venue is one function
+// here, not a landscape and a portrait variant.
+//
+// Every strip draws in local coordinates: x runs 0..length ALONG the edge, y
+// runs 0..depth INWARD from the outer edge.
+// ---------------------------------------------------------------------------
+function borderBand(c, w, h, depth, strip, venue) {
+  const edges = [
+    [0, 0, 0, w],
+    [w, 0, Math.PI / 2, h],
+    [w, h, Math.PI, w],
+    [0, h, -Math.PI / 2, h],
+  ];
+  for (const [x, y, angle, length] of edges) {
+    c.save();
+    c.translate(x, y);
+    c.rotate(angle);
+    // Mitre the corners so neighbouring edges meet on the diagonal instead of
+    // double-drawing the motif where they overlap.
+    c.beginPath();
+    c.moveTo(0, 0);
+    c.lineTo(length, 0);
+    c.lineTo(length - depth, depth);
+    c.lineTo(depth, depth);
+    c.closePath();
+    c.clip();
+    strip(c, length, depth, venue);
+    c.restore();
+  }
+}
+const BORDERS = {
+  // Azulejo coast: rooftops against a warm sky, rising inward from the edge.
+  lisbon(c, L, D, v) {
+    const sky = c.createLinearGradient(0, 0, 0, D);
+    sky.addColorStop(0, "#ec4388");
+    sky.addColorStop(1, withAlpha("#ff9b62", 0));
+    c.fillStyle = sky;
+    c.fillRect(0, 0, L, D);
+    const step = D * 0.62;
+    for (let x = 0; x < L; x += step) {
+      const tall = D * (0.42 + ((x / step) % 3) * 0.12);
+      c.fillStyle = "#152b5a";
+      c.fillRect(x + 2, D - tall, step - 4, tall);
+      c.fillStyle = withAlpha(v.accent, 0.45);
+      c.fillRect(x + step * 0.28, D - tall + step * 0.16, step * 0.2, step * 0.2);
+    }
+  },
+  // Warehouse five-a-side: a steel truss with its rivets.
+  london(c, L, D, v) {
+    c.fillStyle = "#121827";
+    c.fillRect(0, 0, L, D);
+    c.strokeStyle = withAlpha(v.accent, 0.5);
+    c.lineWidth = Math.max(1.5, D * 0.055);
+    const step = D * 0.9;
+    c.beginPath();
+    for (let x = 0; x <= L; x += step) {
+      c.moveTo(x, D * 0.18);
+      c.lineTo(x + step / 2, D * 0.82);
+      c.lineTo(x + step, D * 0.18);
+    }
+    c.stroke();
+    c.beginPath();
+    c.moveTo(0, D * 0.18);
+    c.lineTo(L, D * 0.18);
+    c.stroke();
+    c.fillStyle = "#ffd32f";
+    for (let x = step / 2; x < L; x += step * 2) c.fillRect(x - D * 0.06, D * 0.12, D * 0.12, D * 0.12);
+  },
+  // Mosaic courtyard: the best pattern in the game, moved off the pitch and
+  // kept at full strength where it cannot hide a ball.
+  barcelona(c, L, D, v) {
+    c.fillStyle = "#8a4632";
+    c.fillRect(0, 0, L, D);
+    const step = D * 0.5;
+    for (let x = 0; x < L + step; x += step)
+      for (let y = 0; y < D + step; y += step) {
+        c.fillStyle = withAlpha((x + y) % (step * 2) ? v.secondary : v.accent, 0.5);
+        c.beginPath();
+        c.moveTo(x + 1, y + step / 2);
+        c.lineTo(x + step / 2, y + 1);
+        c.lineTo(x + step - 1, y + step / 2);
+        c.lineTo(x + step / 2, y + step - 1);
+        c.fill();
+      }
+  },
+  // Electric midnight: lit signage boxes, glow and all.
+  tokyo(c, L, D, v) {
+    c.fillStyle = "#0b0722";
+    c.fillRect(0, 0, L, D);
+    const step = D * 1.5;
+    for (let x = D * 0.3, i = 0; x < L - D * 0.3; x += step, i++) {
+      const hot = i % 2 === 0;
+      c.fillStyle = withAlpha(hot ? v.secondary : v.accent, 0.72);
+      c.shadowColor = withAlpha(hot ? v.secondary : v.accent, 0.8);
+      c.shadowBlur = D * 0.35;
+      c.fillRect(x, D * 0.24, step * 0.62, D * 0.5);
+      c.shadowBlur = 0;
+      c.fillStyle = "rgba(9,7,26,.75)";
+      c.fillRect(x + step * 0.1, D * 0.38, step * 0.42, D * 0.2);
+    }
+  },
+  // Jungle cage: chain-link, which is what makes this venue itself.
+  "sao-paulo"(c, L, D, v) {
+    c.fillStyle = "#0b2320";
+    c.fillRect(0, 0, L, D);
+    const step = D * 0.38;
+    c.strokeStyle = withAlpha("#9bff8a", 0.5);
+    c.lineWidth = Math.max(1, D * 0.028);
+    c.beginPath();
+    for (let x = -D; x < L + D; x += step) {
+      c.moveTo(x, 0);
+      c.lineTo(x + D, D);
+      c.moveTo(x, D);
+      c.lineTo(x + D, 0);
+    }
+    c.stroke();
+    c.strokeStyle = withAlpha(v.accent, 0.85);
+    c.lineWidth = Math.max(1.5, D * 0.05);
+    c.beginPath();
+    c.moveTo(0, D * 0.07);
+    c.lineTo(L, D * 0.07);
+    c.stroke();
+    c.fillStyle = withAlpha("#79ff55", 0.32);
+    for (let x = step; x < L; x += step * 6) {
+      circle(c, x, D * 0.2, D * 0.26);
+      c.fill();
+    }
+  },
+  // Canal geometry: the gable line of a canal house, repeated.
+  amsterdam(c, L, D, v) {
+    c.fillStyle = "#0a1b40";
+    c.fillRect(0, 0, L, D);
+    const step = D * 1.1;
+    c.strokeStyle = withAlpha(v.accent, 0.55);
+    c.lineWidth = Math.max(1.5, D * 0.05);
+    c.beginPath();
+    for (let x = 0; x < L + step; x += step) {
+      c.moveTo(x, D);
+      c.lineTo(x, D * 0.46);
+      c.lineTo(x + step / 2, D * 0.14);
+      c.lineTo(x + step, D * 0.46);
+      c.lineTo(x + step, D);
+    }
+    c.stroke();
+    c.fillStyle = withAlpha(v.secondary, 0.6);
+    for (let x = step / 2; x < L; x += step) c.fillRect(x - D * 0.07, D * 0.58, D * 0.14, D * 0.22);
+  },
 };
 // A native-DPR court bitmap is large (and can be very large on a 4K display).
 // Keeping the current theme plus one recently used variant makes theme/venue
@@ -211,9 +414,20 @@ export class Renderer {
     el.width = w;
     el.height = h;
     const context = el.getContext("2d");
-    if (portrait) context.setTransform(0, h / WIDTH, -w / HEIGHT, 0, w, 0);
-    else context.setTransform(w / WIDTH, 0, 0, h / HEIGHT, 0, 0);
-    this.paintArena(context, v, THEMES[t] || THEMES.dark);
+    // Paint in the orientation's OWN visual dimensions - landscape stays
+    // 1000x620, portrait becomes 620x1000 - through a scale-only transform.
+    // No rotation: paintArena keys its markings off the long axis, so the
+    // halfway line lands correctly either way with no per-orientation
+    // special case, and anything drawn in that space (including screen-space
+    // signage) is already upright on screen once this transform is applied.
+    // The pitch inset (PITCH_MARGIN, 50 units, matching the engine's LIMITS)
+    // is the same in both spaces, so it maps onto exactly the physical
+    // rectangle the old rotated bake produced - the live player layer still
+    // draws in rotated 1000x620 design space against that same rectangle.
+    const dw = portrait ? HEIGHT : WIDTH,
+      dh = portrait ? WIDTH : HEIGHT;
+    context.setTransform(w / dw, 0, 0, h / dh, 0, 0);
+    this.paintArena(context, v, THEMES[t] || THEMES.dark, dw, dh);
     this.backgrounds.set(key, { canvas: el, w, h });
     return el;
   }
@@ -226,61 +440,82 @@ export class Renderer {
     const scale = c.getTransform().a || 1;
     return Math.max(1, Math.round(px * scale)) / scale;
   }
-  paintArena(c, v, p = THEMES.dark) {
-    const surface = SURFACES[v.id] || [p.pitch, p.pitch2],
-      g = c.createLinearGradient(0, 0, WIDTH, HEIGHT);
-    g.addColorStop(0, p.void);
-    g.addColorStop(1, v.id === "tokyo" ? "#27104c" : "#10152c");
-    c.fillStyle = g;
-    c.fillRect(0, 0, WIDTH, HEIGHT);
-    this.drawArchitecture(c, v);
+  // Paints in VISUAL space: W x H as the player will actually see it, not a
+  // fixed 1000x620 that gets rotated for portrait. Markings key off the long
+  // axis, so the halfway line is correct either way with no per-orientation
+  // branch beyond "which axis is longer". The surface stays quiet - venue
+  // identity is carried by colour, light and the border band (drawArchitecture
+  // + drawPitchPattern below), not by pattern under the players' feet.
+  paintArena(c, v, p = THEMES.dark, W = WIDTH, H = HEIGHT) {
+    const look = VENUE_LOOK[v.id] || VENUE_LOOK.london,
+      short = Math.min(W, H),
+      horizontal = W >= H,
+      margin = PITCH_MARGIN,
+      px = margin,
+      py = margin,
+      pw = W - margin * 2,
+      ph = H - margin * 2;
     c.save();
-    rounded(c, 50, 50, 900, 520, 16);
+    c.clearRect(0, 0, W, H);
+    // The surround (everything outside the touchline) and its border motif -
+    // this is where venue colour and character live now.
+    this.drawArchitecture(c, v, W, H);
+    // Quiet playing surface: flat, dark, slightly cooler than the surround so
+    // the touchline reads without needing a hard edge.
+    c.save();
+    rounded(c, px, py, pw, ph, 16);
     c.clip();
-    const turf = c.createLinearGradient(50, 50, 950, 570);
-    turf.addColorStop(0, surface[0]);
-    turf.addColorStop(1, surface[1]);
+    const turf = c.createLinearGradient(px, py, px + pw, py + ph);
+    turf.addColorStop(0, look.surface[0]);
+    turf.addColorStop(1, look.surface[1]);
     c.fillStyle = turf;
-    c.fillRect(50, 50, 900, 520);
-    this.drawPitchPattern(c, v);
-    const light = c.createLinearGradient(50, 50, 950, 570);
-    light.addColorStop(0, "rgba(255,255,255,.13)");
-    light.addColorStop(0.38, "rgba(255,255,255,0)");
-    light.addColorStop(0.72, "rgba(0,0,20,.12)");
-    light.addColorStop(1, "rgba(0,0,20,0)");
-    c.fillStyle = light;
-    c.fillRect(50, 50, 900, 520);
-    c.save();
-    c.translate(500, 310);
-    c.rotate(-0.08);
-    label(
-      c,
-      v.name.toUpperCase(),
-      0,
-      0,
-      v.id === "sao-paulo" ? 53 : 62,
-      "rgba(255,255,255,.055)",
-      "center",
-      900,
-    );
-    c.restore();
+    c.fillRect(px, py, pw, ph);
+    // One soft pool of light from the centre plus corner shading - the only
+    // things on the surface itself.
+    this.drawPitchPattern(c, v, W, H);
+    // Watermark: upright in both orientations, fitted to the short axis so
+    // portrait (620 units wide) never crops it, and kept faint enough to sit
+    // under play.
+    const name = v.name.toUpperCase(),
+      wmSize = fittedSize(c, name, pw * 0.8, Math.round(short * 0.115));
+    label(c, name, W / 2, H / 2, wmSize, "rgba(255,255,255,.055)", "center", 900);
+    // Markings. The halfway line always crosses the short dimension at the
+    // midpoint of the long one, so orientation is handled by the geometry
+    // rather than a branch per venue.
     c.globalAlpha = 0.74;
     c.strokeStyle = p.line;
     c.lineWidth = this.crisp(c, 2);
     c.beginPath();
-    c.moveTo(500, 50);
-    c.lineTo(500, 570);
+    if (horizontal) {
+      c.moveTo(W / 2, py);
+      c.lineTo(W / 2, py + ph);
+    } else {
+      c.moveTo(px, H / 2);
+      c.lineTo(px + pw, H / 2);
+    }
     c.stroke();
-    circle(c, 500, 310, 92);
+    circle(c, W / 2, H / 2, 92);
     c.stroke();
-    circle(c, 500, 310, 3);
+    circle(c, W / 2, H / 2, 3);
     c.fillStyle = p.line;
     c.fill();
+    for (const [x, y, a] of [
+      [px, py, 0],
+      [px + pw, py, Math.PI / 2],
+      [px + pw, py + ph, Math.PI],
+      [px, py + ph, -Math.PI / 2],
+    ]) {
+      c.beginPath();
+      c.arc(x, y, short * 0.036, a, a + Math.PI / 2);
+      c.stroke();
+    }
     c.restore();
     c.globalAlpha = 1;
+    // Touchline and one accent rail outside it - the same frame on all four
+    // sides, so it cannot pick a top.
     c.shadowColor = "rgba(0,0,0,.65)";
     c.shadowBlur = 10;
-    rounded(c, 50, 50, 900, 520, 16);
+    rounded(c, px, py, pw, ph, 16);
     c.strokeStyle = p.line;
     c.lineWidth = this.crisp(c, 3);
     c.stroke();
@@ -288,274 +523,71 @@ export class Renderer {
     c.globalAlpha = 0.72;
     c.strokeStyle = v.accent;
     c.lineWidth = this.crisp(c, 2);
-    rounded(c, 43, 43, 914, 534, 21);
+    rounded(c, px - 7, py - 7, pw + 14, ph + 14, 21);
     c.stroke();
     c.globalAlpha = 1;
-    label(
-      c,
-      `${v.name.toUpperCase()}  /  ${v.vibe.toUpperCase()}`,
-      500,
-      24,
-      11,
-      v.accent,
-    );
-    label(c, "TIKI TAKA WORLD TOUR", 500, 597, 10, p.muted);
-    label(c, "TT 98", 58, 24, 10, v.secondary, "left", 800);
+    // Signage in SCREEN space: always along the visual top and bottom,
+    // upright, whichever way the court is turned - never rotated with the
+    // pitch. Each sits on a plate over the hoarding, centred and sized to its
+    // own text, so the border motif behind it never fights the lettering.
+    const topText = `${name}  /  ${v.vibe.toUpperCase()}`,
+      topSize = Math.max(10, Math.round(short * 0.019));
+    c.font = `600 ${topSize}px ${FONT}`;
+    signPlate(c, W / 2, margin / 2, c.measureText(topText).width + short * 0.09, margin * 0.66, v.accent);
+    label(c, topText, W / 2, margin / 2, topSize, v.accent, "center", 600, 1.5);
+    const footText = "TIKI TAKA WORLD TOUR",
+      footSize = Math.max(9, Math.round(short * 0.017));
+    c.font = `500 ${footSize}px ${FONT}`;
+    signPlate(c, W / 2, H - margin / 2, c.measureText(footText).width + short * 0.1, margin * 0.6, p.muted);
+    label(c, footText, W / 2, H - margin / 2, footSize, p.muted, "center", 500, 2);
+    const markSize = Math.max(9, short * 0.017);
+    c.font = `800 ${markSize}px ${FONT}`;
+    signPlate(c, margin * 0.95, margin / 2, c.measureText("TT 98").width + short * 0.03, margin * 0.6, v.secondary);
+    label(c, "TT 98", margin * 0.95, margin / 2, markSize, v.secondary, "center", 800);
+    c.restore();
   }
-  drawArchitecture(c, v) {
-    const a = v.accent,
-      s = v.secondary;
-    if (v.id === "lisbon") {
-      const sky = c.createLinearGradient(0, 0, 0, 70);
-      sky.addColorStop(0, "#ec4388");
-      sky.addColorStop(1, "#ff9b62");
-      c.fillStyle = sky;
-      c.fillRect(0, 0, 1000, 68);
-      c.fillStyle = "#152b5a";
-      for (let x = 0; x < 1000; x += 28) {
-        c.fillRect(x, 574, 26, 46);
-        c.strokeStyle = "rgba(90,238,236,.35)";
-        c.strokeRect(x + 4, 582, 18, 18);
-      }
-      c.strokeStyle = a;
-      c.lineWidth = 4;
-      for (const x of [88, 920]) {
-        c.beginPath();
-        c.moveTo(x, 50);
-        c.quadraticCurveTo(x - 18, 22, x - 27, 6);
-        c.moveTo(x, 35);
-        c.quadraticCurveTo(x + 25, 25, x + 31, 8);
-        c.stroke();
-      }
-    } else if (v.id === "london") {
-      c.fillStyle = "#2b3040";
-      c.fillRect(0, 0, 1000, 620);
-      c.strokeStyle = "rgba(255,92,112,.25)";
-      for (let y = 8; y < 620; y += 14)
-        for (let x = ((y / 14) % 2) * 18; x < 1000; x += 36)
-          c.strokeRect(x, y, 34, 12);
-      c.fillStyle = "#121827";
-      c.fillRect(0, 0, 1000, 42);
-      c.fillRect(0, 578, 1000, 42);
-      c.fillStyle = "#ffd32f";
-      for (let x = -20; x < 1020; x += 44) {
-        c.save();
-        c.translate(x, 42);
-        c.rotate(-0.6);
-        c.fillRect(0, -5, 25, 10);
-        c.restore();
-      }
-    } else if (v.id === "barcelona") {
-      c.fillStyle = "#d56d52";
-      c.fillRect(0, 0, 1000, 620);
-      for (let x = 0; x < 1000; x += 35)
-        for (let y = 0; y < 620; y += 35) {
-          c.fillStyle = (x + y) % 70 ? s : a;
-          c.globalAlpha = 0.35;
-          c.beginPath();
-          c.moveTo(x + 2, y + 17);
-          c.lineTo(x + 17, y + 2);
-          c.lineTo(x + 32, y + 17);
-          c.lineTo(x + 17, y + 32);
-          c.fill();
-        }
-      c.globalAlpha = 1;
-      c.fillStyle = "#ffcc82";
-      for (let x = 82; x < 950; x += 125) {
-        c.fillRect(x, 8, 68, 27);
-        rounded(c, x + 18, 13, 32, 22, 15);
-        c.fillStyle = "#3a3158";
-        c.fill();
-        c.fillStyle = "#ffcc82";
-      }
-    } else if (v.id === "tokyo") {
-      c.fillStyle = "#100a2c";
-      c.fillRect(0, 0, 1000, 620);
-      c.strokeStyle = "rgba(45,245,223,.22)";
-      for (let x = 12; x < 1000; x += 42) {
-        c.beginPath();
-        c.moveTo(x, 0);
-        c.lineTo(x, 620);
-        c.stroke();
-      }
-      for (let x = 65; x < 950; x += 120) {
-        c.fillStyle = x % 240 ? s : a;
-        c.globalAlpha = 0.65;
-        c.fillRect(x, 8, 76, 27);
-        label(c, x % 240 ? "PASS" : "東京", x + 38, 22, 10, "#fff");
-      }
-      c.globalAlpha = 1;
-    } else if (v.id === "sao-paulo") {
-      c.fillStyle = "#123c39";
-      c.fillRect(0, 0, 1000, 620);
-      c.strokeStyle = "rgba(121,255,111,.35)";
-      for (let x = -620; x < 1000; x += 18) {
-        c.beginPath();
-        c.moveTo(x, 0);
-        c.lineTo(x + 620, 620);
-        c.stroke();
-        c.beginPath();
-        c.moveTo(x, 620);
-        c.lineTo(x + 620, 0);
-        c.stroke();
-      }
-      c.fillStyle = "#79ff55";
-      c.globalAlpha = 0.22;
-      for (let x = 0; x < 1000; x += 80) {
-        circle(c, x, 20, 32);
-        c.fill();
-        circle(c, x + 34, 602, 28);
-        c.fill();
-      }
-      c.globalAlpha = 1;
-    } else {
-      c.fillStyle = "#102a74";
-      c.fillRect(0, 0, 1000, 620);
-      c.strokeStyle = "rgba(62,237,255,.36)";
-      c.lineWidth = 3;
-      for (let x = -100; x < 1100; x += 70) {
-        c.beginPath();
-        c.moveTo(x, 0);
-        c.lineTo(x + 65, 45);
-        c.lineTo(x, 90);
-        c.stroke();
-        c.beginPath();
-        c.moveTo(x, 530);
-        c.lineTo(x + 65, 575);
-        c.lineTo(x, 620);
-        c.stroke();
-      }
-      c.fillStyle = s;
-      for (let x = 45; x < 1000; x += 115) c.fillRect(x, 12, 62, 8);
-    }
+  // Surround: the world outside the touchline, plus the venue's own motif
+  // wrapped around all four sides via borderBand - one strip function per
+  // venue, mitred at the corners, no landscape/portrait variant needed.
+  drawArchitecture(c, v, W, H) {
+    const look = VENUE_LOOK[v.id] || VENUE_LOOK.london,
+      surround = c.createLinearGradient(0, 0, W, H);
+    surround.addColorStop(0, look.surround[0]);
+    surround.addColorStop(1, look.surround[1]);
+    c.fillStyle = surround;
+    c.fillRect(0, 0, W, H);
+    borderBand(c, W, H, PITCH_MARGIN, BORDERS[v.id] || BORDERS.london, v);
   }
-  drawPitchPattern(c, v) {
-    c.strokeStyle = v.accent;
-    c.fillStyle = v.accent;
-    c.lineWidth = 1;
-    if (v.id === "lisbon") {
-      c.globalAlpha = 0.15;
-      for (let x = 54; x < 950; x += 48)
-        for (let y = 54; y < 570; y += 48) {
-          c.strokeRect(x + 5, y + 5, 38, 38);
-          c.beginPath();
-          c.moveTo(x + 5, y + 24);
-          c.lineTo(x + 24, y + 5);
-          c.lineTo(x + 43, y + 24);
-          c.lineTo(x + 24, y + 43);
-          c.closePath();
-          c.stroke();
-        }
-      c.fillStyle = "rgba(255,125,108,.12)";
-      c.beginPath();
-      c.moveTo(50, 50);
-      c.lineTo(340, 50);
-      c.lineTo(170, 570);
-      c.lineTo(50, 570);
-      c.fill();
-    } else if (v.id === "london") {
-      c.globalAlpha = 0.16;
-      c.strokeStyle = "#c8c8cc";
-      for (let x = 50; x < 950; x += 150)
-        for (let y = 50; y < 570; y += 130) c.strokeRect(x, y, 150, 130);
-      c.globalAlpha = 0.2;
-      c.strokeStyle = "#ffd32f";
-      c.lineWidth = 8;
-      for (let y = 80; y < 570; y += 160) {
-        c.beginPath();
-        c.moveTo(50, y);
-        c.lineTo(95, y);
-        c.stroke();
-      }
-      c.globalAlpha = 0.1;
-      for (let i = 0; i < 45; i++) {
-        const x = 70 + ((i * 137) % 850),
-          y = 65 + ((i * 83) % 490);
-        c.fillStyle = i % 2 ? "#fff" : "#101018";
-        c.fillRect(x, y, 10 + (i % 4) * 6, 2);
-      }
-    } else if (v.id === "barcelona") {
-      c.globalAlpha = 0.18;
-      c.strokeStyle = "#ffd49b";
-      for (let x = 65; x < 950; x += 58)
-        for (let y = 65; y < 570; y += 58) {
-          c.beginPath();
-          for (let i = 0; i < 6; i++) {
-            const a = (i * Math.PI) / 3;
-            c.lineTo(x + Math.cos(a) * 22, y + Math.sin(a) * 22);
-          }
-          c.closePath();
-          c.stroke();
-        }
-      c.fillStyle = "rgba(255,207,127,.14)";
-      c.beginPath();
-      c.moveTo(50, 50);
-      c.lineTo(410, 50);
-      c.lineTo(250, 570);
-      c.lineTo(50, 570);
-      c.fill();
-    } else if (v.id === "tokyo") {
-      c.globalAlpha = 0.22;
-      for (let x = 70; x < 950; x += 70) {
-        c.beginPath();
-        c.moveTo(x, 50);
-        c.lineTo(x, 570);
-        c.moveTo(x, 145);
-        c.lineTo(x + 35, 145);
-        c.lineTo(x + 35, 235);
-        c.lineTo(x + 55, 235);
-        c.stroke();
-        for (const y of [145, 235, 430]) {
-          circle(c, x, y, 3);
-          c.fill();
-        }
-      }
-      c.strokeStyle = "#ff3c9c";
-      c.globalAlpha = 0.17;
-      for (let y = 92; y < 570; y += 96) {
-        c.beginPath();
-        c.moveTo(50, y);
-        c.lineTo(950, y);
-        c.stroke();
-      }
-    } else if (v.id === "sao-paulo") {
-      c.globalAlpha = 0.12;
-      c.strokeStyle = "#b4ff6a";
-      for (let x = -400; x < 950; x += 65) {
-        c.beginPath();
-        c.moveTo(x, 50);
-        c.lineTo(x + 520, 570);
-        c.stroke();
-      }
-      c.globalAlpha = 0.1;
-      c.fillStyle = "#d2ff72";
-      for (let i = 0; i < 34; i++) {
-        const x = 55 + ((i * 181) % 890),
-          y = 55 + ((i * 107) % 510);
-        circle(c, x, y, 7 + (i % 8));
-        c.fill();
-      }
-    } else {
-      c.globalAlpha = 0.14;
-      c.strokeStyle = "#87efff";
-      for (let y = 50; y < 570; y += 22) {
-        c.beginPath();
-        for (let x = 50; x <= 950; x += 44)
-          c.lineTo(x, y + ((x / 44 + y / 22) % 2) * 11);
-        c.stroke();
-      }
-      c.globalAlpha = 0.16;
-      c.fillStyle = "#ff4ba8";
-      for (let x = 50; x < 950; x += 180) c.fillRect(x, 50, 22, 520);
-      c.strokeStyle = "rgba(255,255,255,.25)";
-      for (let x = 65; x < 950; x += 24) {
-        c.beginPath();
-        c.moveTo(x, 50);
-        c.lineTo(x, 570);
-        c.stroke();
-      }
+  // The quiet surface: one radial pool of venue-tinted light at centre circle
+  // (identical turned 90 degrees, since it is radial) plus equal corner
+  // shading for depth without a horizon. Nothing else sits on the pitch -
+  // anything drawn here would compete with the four things that actually
+  // matter: three teammates, the carrier, and the ball.
+  drawPitchPattern(c, v, W, H) {
+    const look = VENUE_LOOK[v.id] || VENUE_LOOK.london,
+      short = Math.min(W, H),
+      margin = PITCH_MARGIN,
+      px = margin,
+      py = margin,
+      pw = W - margin * 2,
+      ph = H - margin * 2;
+    const pool = c.createRadialGradient(W / 2, H / 2, short * 0.05, W / 2, H / 2, short * 0.72);
+    pool.addColorStop(0, withAlpha(look.light, look.wash));
+    pool.addColorStop(1, withAlpha(look.light, 0));
+    c.fillStyle = pool;
+    c.fillRect(px, py, pw, ph);
+    for (const [cx, cy] of [
+      [px, py],
+      [px + pw, py],
+      [px + pw, py + ph],
+      [px, py + ph],
+    ]) {
+      const vignette = c.createRadialGradient(cx, cy, 0, cx, cy, short * 0.55);
+      vignette.addColorStop(0, "rgba(4,8,18,.5)");
+      vignette.addColorStop(1, "rgba(4,8,18,0)");
+      c.fillStyle = vignette;
+      c.fillRect(px, py, pw, ph);
     }
-    c.globalAlpha = 1;
   }
   addEvent(e) {
     if (
