@@ -308,6 +308,7 @@ let padPrevious = [],
 const RESULT_ACTION_DELAY = 1200;
 let capture = null;
 let padFocusElement = null;
+let lastInteractionWasPointer = false;
 // The completed round is held only until a player explicitly chooses how to
 // handle score saving. Its id is deliberately stable across an auth handoff or
 // retry so the remote adapter can make submissions idempotent.
@@ -853,10 +854,31 @@ function applyView(next, { updateHash = true } = {}) {
   syncMusicRail();
   requestAnimationFrame(() => {
     if (anyDialogOpen() || menuOpen) return;
-    if (view === "home") padFocus($("title-play"));
-    else if ($("game-overlay").hidden)
+    if (view === "home") {
+      if (inputSource === "gamepad") {
+        padFocus($("title-play"));
+      } else {
+        $("title-play")?.classList.remove("pad-focus");
+        if (lastInteractionWasPointer) {
+          if (document.activeElement === $("title-play")) $("title-play")?.blur();
+        } else {
+          $("title-play")?.focus({ preventScroll: true });
+        }
+      }
+    } else if ($("game-overlay").hidden) {
       $("court").focus({ preventScroll: true });
-    else padFocus($("start-button"));
+    } else {
+      if (inputSource === "gamepad") {
+        padFocus($("start-button"));
+      } else {
+        $("start-button")?.classList.remove("pad-focus");
+        if (lastInteractionWasPointer) {
+          if (document.activeElement === $("start-button")) $("start-button")?.blur();
+        } else {
+          $("start-button")?.focus({ preventScroll: true });
+        }
+      }
+    }
   });
   if (updateHash) {
     const hash = view === "arena" ? "#play" : "";
@@ -994,21 +1016,34 @@ function syncDifficultyChrome() {
     DIFFICULTIES.find((tier) => tier.id === activeDifficulty) || DIFFICULTIES[1];
   const lockedCopy =
     "Locked to Standard — the Daily circuit is one shared course for everyone today.";
+  const practiceDescriptions = {
+    relaxed: "Looser targets and a gentle press. Find your rhythm first.",
+    standard: "Standard targets and defense. Your space to experiment.",
+    ruthless: "Tighter targets and a quicker press.",
+  };
+  const description = dailyLocked
+    ? lockedCopy
+    : mode === "practice"
+      ? (practiceDescriptions[activeDifficulty] || difficultyMeta.label)
+      : difficultyMeta.label;
 
   $("difficulty-select").disabled = dailyLocked;
   $("difficulty-select").value = activeDifficulty;
-  $("difficulty-description").textContent = dailyLocked ? lockedCopy : difficultyMeta.label;
+  $("difficulty-description").textContent = description;
   $("difficulty-target").textContent = game.config.target ? `TARGET ${game.config.target}` : "";
 
   $("overlay-difficulty").hidden = false;
   $("overlay-difficulty-target").textContent = game.config.target
     ? `TARGET ${game.config.target}`
     : "";
-  $("overlay-difficulty-description").textContent = dailyLocked ? lockedCopy : difficultyMeta.label;
+  $("overlay-difficulty-description").textContent = description;
   document.querySelectorAll("#overlay-difficulty-toggle .hl-diff-btn").forEach((btn) => {
     const isActive = btn.dataset.tier === activeDifficulty;
     btn.classList.toggle("active", isActive);
     btn.setAttribute("aria-pressed", String(isActive));
+    if (mode === "practice") {
+      btn.title = practiceDescriptions[btn.dataset.tier] || btn.title;
+    }
     // Daily forces the tier rather than merely defaulting it, so every other
     // option is disabled rather than silently ignored if pressed.
     btn.disabled = dailyLocked && !isActive;
@@ -1311,7 +1346,7 @@ function prepare() {
   const possessionLabel = possessions === 1 ? "POSSESSION" : "POSSESSIONS";
   $("invitation-note").textContent =
     mode === "practice"
-      ? `NO TIMER · UNLIMITED POSSESSIONS · FIND YOUR RHYTHM`
+      ? `NO TIMER · UNLIMITED RECOVERIES · FIND YOUR RHYTHM`
       : mode === "endless"
         ? `60 SECONDS · ${possessions} POSSESSIONS · TRIANGLES ADD TIME`
         : `${game.config.time} SECONDS · ${possessions} ${possessionLabel} · ${possessionsOrdinal} LOSS ENDS THE ROUND`;
@@ -2730,6 +2765,13 @@ function refreshToolbarChips() {
   $("shout-button").title = `Shout selected target to bonus zone (${chipLabel("shout")})`;
 }
 function setInputSource(source) {
+  if (source !== "gamepad") {
+    if (padFocusElement) {
+      padFocusElement.classList.remove("pad-focus");
+      padFocusElement = null;
+    }
+    document.querySelectorAll(".pad-focus").forEach((el) => el.classList.remove("pad-focus"));
+  }
   if (inputSource === source) return;
   inputSource = source;
   refreshToolbarChips();
@@ -3078,6 +3120,8 @@ $("fullscreen-button").addEventListener("click", async () => {
 });
 document.addEventListener("fullscreenchange", syncFullscreen);
 function playFromMenu() {
+  $("title-play").classList.remove("pad-focus");
+  if (document.activeElement === $("title-play")) $("title-play").blur();
   const resumeRound =
     phase === "paused" &&
     selectedCourtIndex === courtIndex &&
@@ -3155,8 +3199,19 @@ $("help-dialog").addEventListener("click", (e) => {
 // Any keyboard or pointer activity switches the toolbar chips back off
 // gamepad glyphs, however the player got there — capturing a new binding,
 // clicking a menu, or just typing, not only in-round play.
-window.addEventListener("keydown", () => setInputSource("keyboard"));
-window.addEventListener("pointerdown", () => setInputSource("keyboard"));
+window.addEventListener("keydown", () => {
+  lastInteractionWasPointer = false;
+  setInputSource("keyboard");
+});
+window.addEventListener("pointerdown", () => {
+  lastInteractionWasPointer = true;
+  if (padFocusElement) {
+    padFocusElement.classList.remove("pad-focus");
+    padFocusElement = null;
+  }
+  document.querySelectorAll(".pad-focus").forEach((el) => el.classList.remove("pad-focus"));
+  setInputSource("keyboard");
+});
 window.addEventListener("keydown", (e) => {
   if (capture) {
     e.preventDefault();
@@ -3421,7 +3476,11 @@ function padFocus(el) {
   if (padFocusElement && padFocusElement !== el)
     padFocusElement.classList.remove("pad-focus");
   padFocusElement = el;
-  el.classList.add("pad-focus");
+  if (inputSource === "gamepad") {
+    el.classList.add("pad-focus");
+  } else {
+    el.classList.remove("pad-focus");
+  }
   el.focus({ preventScroll: false });
 }
 function padActivate(el) {
@@ -3539,8 +3598,10 @@ function pollGamepad(dt) {
     dead(pad.axes[1]) ||
     dead(pad.axes[2]) ||
     dead(pad.axes[3])
-  )
+  ) {
+    lastInteractionWasPointer = false;
     setInputSource("gamepad");
+  }
   // Any button at all resumes after a turnover, but only on a fresh press:
   // tap() is edge-triggered, so a button still held from before is ignored.
   if (awaitingResume && !menuOpen && !anyDialogOpen()) {

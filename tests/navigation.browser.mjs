@@ -323,6 +323,9 @@ await check(
     await page.locator('[data-home-mode="practice"]').click();
     assert.match(await page.locator("#title-play").textContent(), /Practice/i);
     await page.locator("#title-play").click();
+    if (await page.locator("#secondary-button").isVisible()) {
+      await page.locator("#secondary-button").click();
+    }
     assert.match(
       await page.locator("#mode-label").textContent(),
       /PRACTICE|WARM-UP/i,
