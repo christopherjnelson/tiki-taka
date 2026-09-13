@@ -1167,7 +1167,7 @@ function chooseChoreographedTarget(demo) {
 }
 function startAttract() {
   if (!attractCanvas || attractGame) return;
-  attractRenderer ||= new Renderer(attractCanvas);
+  attractRenderer ||= new Renderer(attractCanvas, { maxDpr: 1 });
   attractRenderer.effects.length = 0;
   attractGame = new Game(
     {
@@ -1219,10 +1219,68 @@ function startAttract() {
 function stopAttract() {
   attractGame = null;
   attractNeedsRepaint = false;
+  attractAccum = 0;
+  // Deliberately NOT resetting attractFrozen: a machine that could not afford
+  // the rally once cannot afford it on the next visit to home either, and
+  // re-measuring every time would re-spend the budget to reach the same
+  // answer.
+  attractAge = 0;
+  attractCostTotal = 0;
+  attractCostSamples = 0;
   window.__attractGame = null;
   if (attractRenderer) attractRenderer.effects.length = 0;
 }
+// The demo is decoration, not gameplay: stepping and repainting it on every
+// animation frame costs the same budget as the live arena for something
+// nobody is playing. Capping it at 30fps halves that on weak hardware, where
+// the home screen competes with thumbnail painting and audio, and is
+// indistinguishable at a glance for a rally of four drifting players.
+const ATTRACT_STEP = 1 / 30;
+let attractAccum = 0;
+// Adaptive degradation. The demo is decoration and must never cost a player
+// their frame budget, so it times its own work and gives up if that work is
+// consistently expensive - freezing to a single painted frame, which is
+// exactly what the static court preview it replaced always was. A machine
+// that can afford the rally keeps it; one that cannot gets the picture.
+//
+// The warmup window matters: first paint, font loading and the first
+// native-resolution background bake make the opening frames expensive on
+// every machine, and judging on those would freeze the demo everywhere.
+const ATTRACT_BUDGET_MS = 6;
+const ATTRACT_SAMPLES = 20;
+const ATTRACT_WARMUP_SECONDS = 1.5;
+let attractFrozen = false,
+  attractAge = 0,
+  attractCostTotal = 0,
+  attractCostSamples = 0;
 function updateAttract(dt) {
+  if (!attractGame || !attractRenderer) return;
+  attractAge += dt;
+  // Frozen (or reduced-motion) demos still repaint on demand, so a venue
+  // re-skin from selectCourt()/hover is visible even when the rally is not
+  // running.
+  if (attractFrozen) {
+    if (attractNeedsRepaint) {
+      attractRenderer.render(attractGame, { preview: false });
+      attractNeedsRepaint = false;
+    }
+    return;
+  }
+  const startedAt = performance.now();
+  stepAttract(dt);
+  if (attractAge < ATTRACT_WARMUP_SECONDS || !attractGame) return;
+  attractCostTotal += performance.now() - startedAt;
+  attractCostSamples++;
+  if (attractCostSamples < ATTRACT_SAMPLES) return;
+  const average = attractCostTotal / attractCostSamples;
+  attractCostTotal = 0;
+  attractCostSamples = 0;
+  if (average > ATTRACT_BUDGET_MS) {
+    attractFrozen = true;
+    attractNeedsRepaint = true;
+  }
+}
+function stepAttract(dt) {
   if (!attractGame || !attractRenderer) return;
   // prefers-reduced-motion: freeze the rally. The demo still exists (so a
   // venue re-skin from selectCourt()/hover still applies) but never steps its
@@ -1235,6 +1293,12 @@ function updateAttract(dt) {
     return;
   }
   attractNeedsRepaint = false;
+  // Accumulate real elapsed time and step once per capped frame, so the rally
+  // runs at the same speed however often the page paints.
+  attractAccum += dt;
+  if (attractAccum < ATTRACT_STEP) return;
+  dt = attractAccum;
+  attractAccum = 0;
   const demo = attractGame,
     carrier = demo.players[demo.carrier];
   // Drift the carrier off the nearest defender and back towards the middle, so

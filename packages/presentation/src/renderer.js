@@ -130,8 +130,13 @@ const SURFACES = {
 const MAX_BACKGROUND_CACHE_ENTRIES = 2;
 
 export class Renderer {
-  constructor(canvas) {
+  // maxDpr caps the backing-store resolution. The arena wants the default 2
+  // for a sharp court; the home attract demo passes 1, which quarters the
+  // pixels it paints every frame - it is a small decorative card, and on weak
+  // hardware its cost otherwise competes with the game itself.
+  constructor(canvas, { maxDpr = 2 } = {}) {
     this.canvas = canvas;
+    this.maxDpr = maxDpr;
     this.ctx = canvas.getContext("2d");
     this.effects = [];
     this.lastTime = 0;
@@ -581,7 +586,7 @@ export class Renderer {
   }
   resize(orientation = this.orientation) {
     const nextOrientation = orientation === "portrait" ? "portrait" : "landscape",
-      d = Math.min(globalThis.devicePixelRatio || 1, 2);
+      d = Math.min(globalThis.devicePixelRatio || 1, this.maxDpr ?? 2);
     if (
       !this.resizeNeeded &&
       this.orientation === nextOrientation &&
