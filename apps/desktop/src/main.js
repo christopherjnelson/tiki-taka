@@ -37,6 +37,13 @@ import { createLocalDataAdapter, selectDataAdapter } from "../../../packages/dat
 import { createMusic } from "./music.js";
 import { TRACKS } from "./playlist.js";
 import { SAMPLES } from "./samples.js";
+import {
+  HOME_ZONE_ORDER,
+  withinZone,
+  nextZone,
+  restoreInZone,
+  zoneContaining,
+} from "./pad-zones.mjs";
 const $ = (id) => document.getElementById(id);
 // Vite replaces this allowlisted object during a build. The fallback keeps
 // source-served development and browser tests identifiable without exposing
@@ -552,6 +559,13 @@ function selectCourt(i) {
   });
   syncTitle();
   selectHomeLeaderboardCourt(i);
+  // A gamepad player's cursor was just sitting in the courts zone; follow the
+  // flow into modes rather than leaving it stranded on the list. Mouse and
+  // keyboard users keep their own focus — nothing here should yank it.
+  if (inputSource === "gamepad") {
+    const active = document.querySelector("[data-home-mode].active");
+    if (active) focusHomeZone("modes", active);
+  }
 }
 function deferCourtThumbnails(list, generation) {
   const thumbnails = [...list.querySelectorAll(".court-thumb")];
@@ -3290,6 +3304,10 @@ document.querySelectorAll("[data-home-mode]").forEach((button) => {
       btn.setAttribute("aria-pressed", String(active));
     });
     syncTitle();
+    // Mirrors the courts -> modes advance in selectCourt(): a gamepad player
+    // who just picked a mode is handed straight to Play. Mouse/keyboard focus
+    // is left alone.
+    if (inputSource === "gamepad") focusHomeZone("action", $("title-play"));
   });
 });
 const courtLeaderboardTabs = Array.from(document.querySelectorAll(".hl-tab"));
@@ -3604,6 +3622,38 @@ function padFocusables(root) {
     .filter((el) => !el.closest("[hidden]") && el.getClientRects().length);
 }
 const isRange = (el) => el instanceof HTMLInputElement && el.type === "range";
+// Where each home-screen zone lives in the DOM. HOME_ZONE_ORDER (pad-zones.mjs)
+// is the left-to-right cycle order; this just maps each of its ids to the
+// container carrying that data-pad-zone attribute in index.html.
+const HOME_ZONE_SELECTORS = {
+  action: "#title-menu",
+  leaderboard: "#home-leaderboard",
+  courts: "#court-list",
+  modes: ".home-modes",
+  topbar: "#top-bar",
+};
+// The last-focused element in each home zone, so leaving a zone and coming
+// back (via left/right) restores where the player was rather than always
+// snapping to the zone's first control.
+const padHomeZoneMemory = {};
+// Reads the live DOM into the { id, elements } shape pad-zones.mjs's pure
+// helpers expect. Called fresh every poll — nothing here is cached, so a
+// re-render (a new court list, a leaderboard tab switch) is always current.
+function homePadZones() {
+  return HOME_ZONE_ORDER.map((id) => {
+    const node = document.querySelector(HOME_ZONE_SELECTORS[id]);
+    return { id, elements: node ? padFocusables(node) : [] };
+  });
+}
+// Focuses an element that belongs to a home zone and remembers it as that
+// zone's return point. Every home-screen focus move — within a zone, between
+// zones, or an auto-advance after a selection — should go through this so
+// the memory used by restoreInZone() never goes stale.
+function focusHomeZone(zoneId, el) {
+  if (!el) return;
+  padFocus(el);
+  padHomeZoneMemory[zoneId] = el;
+}
 function padFocus(el) {
   if (!el) return;
   if (padFocusElement && padFocusElement !== el)
@@ -3842,11 +3892,49 @@ function pollGamepad(dt) {
         return;
       }
     }
-    // Home is one list: the menu, then the demo's neighbours — the courts and
-    // the modes — then the bar. The menu comes first so the first d-pad step
-    // from a fresh load is still the next menu item, and B has nowhere to go
-    // back to now that the courts page is this page.
-    nav([$("home-view"), $("top-bar")], () => $("title-play").click());
+    // Home is zoned rather than one flat list: up/down moves within whichever
+    // zone the cursor is in, left/right hops between zones (action ->
+    // leaderboard -> courts -> modes -> topbar, see HOME_ZONE_ORDER), and each
+    // zone remembers the control it last held focus on. This is the one place
+    // in pollGamepad that does not go through the shared padNavigate/nav —
+    // that helper only understands one flat focusable list, and home's whole
+    // point here is that it is not one.
+    const zones = homePadZones();
+    const currentZoneId =
+      zoneContaining(zones, focused) ||
+      zones.find((zone) => zone.elements.length)?.id ||
+      null;
+    // Pure d-pad-up/down and stick-Y, decoupled from the shared `direction`
+    // above (which folds d-pad left/right into the same "next/previous" axis
+    // for the old flat list) and from `horizontal`, which stays exactly what
+    // it was so a focused slider elsewhere keeps behaving.
+    const vertical =
+      pressed[13] || pad.axes[1] > 0.6
+        ? 1
+        : pressed[12] || pad.axes[1] < -0.6
+          ? -1
+          : 0;
+    menuRepeat -= dt;
+    if ((vertical || horizontal) && menuRepeat <= 0) {
+      if (vertical && currentZoneId) {
+        const zone = zones.find((z) => z.id === currentZoneId);
+        focusHomeZone(currentZoneId, withinZone(zone.elements, focused, vertical));
+      } else if (horizontal) {
+        const targetZone = nextZone(zones, currentZoneId || HOME_ZONE_ORDER[0], horizontal);
+        if (targetZone) {
+          focusHomeZone(
+            targetZone.id,
+            restoreInZone(targetZone, padHomeZoneMemory[targetZone.id]),
+          );
+        }
+      }
+      menuRepeat = 0.2;
+    } else if (!vertical && !horizontal) menuRepeat = 0;
+    if (tap(0)) {
+      const active = document.activeElement;
+      const withinAZone = zones.some((zone) => zone.elements.includes(active));
+      if (!padActivate(withinAZone ? active : null)) $("title-play").click();
+    }
   } else {
     nav(document.body);
   }
