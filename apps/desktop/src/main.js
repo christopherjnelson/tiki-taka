@@ -1335,13 +1335,6 @@ function prepare() {
   $("eyebrow").textContent = game.config.place;
   $("court-title").textContent = game.config.name;
   $("court-description").textContent = game.config.description;
-  // Same mechanism the home screen uses for #home-court-preview: one
-  // renderer.courtPreview() call per court, not a second preview pipeline
-  // for the pre-round card (see .overlay-court-preview in style.css, phone
-  // widths only — it fills the space that card otherwise left empty).
-  if ($("overlay-court-preview")) {
-    $("overlay-court-preview").src = renderer.courtPreview(game.config);
-  }
   $("mode-label").textContent =
     mode === "career"
       ? `THE CIRCUIT / ${String(courtIndex + 1).padStart(2, "0")}`
