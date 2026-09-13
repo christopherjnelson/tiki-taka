@@ -102,7 +102,11 @@
               aria-expanded="false"
               aria-controls="music-popup"
             >
-              <span aria-hidden="true">♫</span>
+              <svg class="bar-icon" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 12.5V3.5l7-1.5v7.5" />
+                <circle cx="4" cy="12.5" r="2" fill="currentColor" />
+                <circle cx="11" cy="11" r="2" fill="currentColor" />
+              </svg>
             </button>
             <div id="music-popup" class="music-popup" role="menu" aria-label="Soundtrack controls" hidden>
               <p id="music-popup-track" class="music-popup-track" role="status" aria-live="off">—</p>
@@ -126,6 +130,14 @@
         </div>
         <p class="top-brand">
           <span class="top-brand-mark">
+            <img
+              class="top-brand-symbol"
+              src="./src/brand/tiki-taka-symbol.png"
+              alt=""
+              aria-hidden="true"
+              width="28"
+              height="28"
+            />
             <img
               class="top-brand-wordmark"
               src="./src/brand/tiki-taka-wordmark.png"

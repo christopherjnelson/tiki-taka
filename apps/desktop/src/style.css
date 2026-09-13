@@ -1689,6 +1689,11 @@ body.play-view .ambience {
    without the extra class to break the tie. */
 .bar-button.music-more {
   display: none;
+  padding: 0 8px;
+}
+.bar-button.music-more .bar-icon {
+  width: 13px;
+  height: 13px;
 }
 #music-popup-toggle[aria-pressed="false"] span {
   margin-left: 1px;
@@ -1756,6 +1761,12 @@ body.play-view .ambience {
   align-items: center;
   justify-content: center;
   line-height: 1;
+}
+.top-brand-symbol {
+  display: none;
+  height: 28px;
+  width: auto;
+  object-fit: contain;
 }
 .top-brand-wordmark {
   display: block;
@@ -1936,6 +1947,17 @@ body.play-view .top-settings {
 /* The bar drops its explanatory labels before it drops a control: on a narrow
    window the wordmark, the track title and the three buttons survive, and the
    sub-headings that only name what you are already looking at go. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+  .top-brand-wordmark {
+    display: none;
+  }
+  .top-brand-symbol {
+    display: block;
+    height: 26px;
+    width: 26px;
+    object-fit: contain;
+  }
+}
 @media (max-width: 900px) {
   :root {
     --top-bar: 40px;
@@ -1979,6 +2001,10 @@ body.play-view .top-settings {
     height: 18px;
     max-width: 72px;
   }
+  .top-brand-symbol {
+    height: 22px;
+    width: 22px;
+  }
   /* The label text is what gives way here, not any control: every button
      already carries a `title`, which becomes its accessible name once the
      visible text is gone, so it stays tappable and named — it just reads as
@@ -2007,6 +2033,10 @@ body.play-view .top-settings {
     min-width: 32px;
     padding: 0 5px;
   }
+  .bar-button.music-more .bar-icon {
+    width: 12px;
+    height: 12px;
+  }
 }
 @media (orientation: landscape) and (max-height: 480px) {
   :root {
@@ -2015,8 +2045,16 @@ body.play-view .top-settings {
   .top-brand-mark {
     font-size: 16px;
   }
+  .top-brand-symbol {
+    height: 22px;
+    width: 22px;
+  }
   .bar-button {
     min-height: 26px;
+  }
+  .bar-button.music-more .bar-icon {
+    width: 12px;
+    height: 12px;
   }
   .profile-chip {
     min-height: 26px;
