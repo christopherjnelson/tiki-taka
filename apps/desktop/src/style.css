@@ -1558,12 +1558,24 @@ body.play-view .ambience {
   border-bottom: 1px solid var(--line);
 }
 
+/* .top-bar-left, not .music-player, is the grid item now that Home sits
+   beside the player (see the markup note in index.html) — position: relative
+   here is only so `.music-popup` below can anchor under `#music-more`
+   wherever this row ends up sitting. */
+.top-bar-left {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  justify-self: start;
+}
 .music-player {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  justify-self: start;
 }
 .music-player-heading {
   color: var(--cyan);
@@ -1595,6 +1607,67 @@ body.play-view .ambience {
 }
 #music-toggle[aria-pressed="false"] span {
   margin-left: 1px;
+}
+/* The opener stays out of the layout entirely on desktop (not just visually
+   hidden) — see the mobile tier below for where it turns on — so it never
+   claims a gap in the flex row or a stop in padFocusables() where the three
+   full-size transport buttons already do the job. Selector is `.bar-button
+   .music-more`'s combined specificity, not just `.music-more`, because
+   `.bar-button` itself sets `display: inline-flex` and is declared later in
+   this file — same specificity, later rule wins, which silently undid this
+   without the extra class to break the tie. */
+.bar-button.music-more {
+  display: none;
+}
+#music-popup-toggle[aria-pressed="false"] span {
+  margin-left: 1px;
+}
+/* A plain positioned panel, not a <dialog> — it doesn't pause the round or
+   block input the way Settings/Account do (see menuBlocking() in main.js),
+   because skipping a track mid-possession shouldn't cost you the ball.
+   `[hidden]` needs the explicit `display: none` below because an attribute
+   selector and a class selector tie on specificity and this rule would
+   otherwise win by coming later in the sheet (same fix as `.pause-menu`). */
+.music-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 168px;
+  padding: 10px;
+  background: #150c30;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 28px #00000080;
+}
+.music-popup[hidden] {
+  display: none;
+}
+.music-popup-track {
+  overflow: hidden;
+  margin: 0;
+  color: #efe7ff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 11px var(--sign);
+  letter-spacing: 1px;
+}
+.music-popup-transport {
+  display: flex;
+  gap: 8px;
+}
+.music-popup-transport .bar-button {
+  flex: 1 0 0;
+  padding: 0;
+  letter-spacing: 0;
+}
+/* Empty and hidden today — see the markup comment. Reserved so the eventual
+   track list has a home inside the popup that already exists, instead of a
+   second popup being built later. */
+.music-popup-tracks {
+  display: none;
 }
 .top-brand {
   grid-column: 2;
@@ -1640,6 +1713,10 @@ body.play-view .ambience {
 .bar-button {
   display: inline-flex;
   align-items: center;
+  /* Was left-aligned: a button wider than its icon+label (every one of these
+     is at least 40px) drew the icon hugging the left edge instead of sitting
+     in the middle of the tap target. */
+  justify-content: center;
   gap: 6px;
   min-width: 40px;
   min-height: 30px;
@@ -1741,6 +1818,50 @@ body.play-view .top-settings {
   font: 700 7px var(--sign);
   letter-spacing: 2px;
 }
+/* Home moving into the left group (see the markup comment on `#top-home`)
+   adds a fourth 40px-ish control to a row that, between 901px and 1024px,
+   still carries the full three-button transport and the full-text profile
+   chip — neither shrinks until the 900px tier below. The sum overflows the
+   grid's minmax(0, 1fr) column at those widths and the overflow paints
+   straight over the centred wordmark (measured at 901–1023px; the collision
+   is worst just above 900 and shrinks to nothing by 1024). This tier exists
+   only to close that gap, so it repeats two of the 900px tier's rules early
+   rather than lowering that tier's own breakpoint and pulling in its
+   unrelated label/height changes (`--top-bar`, the SOUNDTRACK heading, the
+   wordmark font-size) at a width where nothing forced those. Comfortably
+   inside the "must not move" floor of 1025px. */
+@media (max-width: 1024px) {
+  /* The heading and the track name are the other half of the same overflow —
+     trimming the transport down to two buttons wasn't enough on its own
+     because "SOUNDTRACK" plus an 18-character track name is wider than the
+     buttons it sat beside. The 900px tier below re-hides/reflows these for
+     its own reasons; repeating the hide here (not lowering that tier's
+     breakpoint) keeps this fix scoped to the collision it's fixing. */
+  .music-player-heading {
+    display: none;
+  }
+  .music-track {
+    display: none;
+  }
+  .bar-button.music-transport {
+    display: none;
+  }
+  .bar-button.music-more {
+    display: inline-flex;
+  }
+  .profile-chip {
+    min-width: 30px;
+    padding: 0;
+    justify-content: center;
+  }
+  .profile-chip-text {
+    display: none;
+  }
+  .profile-avatar {
+    width: 22px;
+    height: 22px;
+  }
+}
 /* The bar drops its explanatory labels before it drops a control: on a narrow
    window the wordmark, the track title and the three buttons survive, and the
    sub-headings that only name what you are already looking at go. */
@@ -1772,16 +1893,14 @@ body.play-view .top-settings {
   .profile-chip-name {
     max-width: 8ch;
   }
-  /* Below ~340px the three transport buttons (still at their 900px-tier
-     min-width, gap and the 18px wordmark) add up to more than the grid's
-     minmax(0, 1fr) side columns actually have once the centred wordmark
-     claims its auto column — .music-player already has min-width: 0, so it
-     doesn't get clipped, it just renders wider than its track and spills
-     into the wordmark next to it. Shrinking the transport buttons, the gaps
-     around them, and the wordmark keeps all three controls (this bar's
-     stated rule — see the comment above the 900px tier) rather than
-     dropping one, and the given widths clear a 320px viewport with room to
-     spare. */
+  /* Below ~340px, Home + play/pause + the popup opener on the left (three
+     40px-ish controls) and fullscreen + Menu + the icon-only profile chip on
+     the right add up to more than the grid's minmax(0, 1fr) side columns
+     actually have once the centred wordmark claims its auto column — both
+     side groups already have min-width: 0, so they don't get clipped, they
+     just render wider than their content and spill into the wordmark next to
+     them. Shrinking the buttons, the gaps around them, and the wordmark
+     clears a 320px viewport with room to spare without dropping a control. */
   .top-bar {
     gap: 6px;
   }
@@ -1789,34 +1908,30 @@ body.play-view .top-settings {
     height: 18px;
     max-width: 72px;
   }
-  /* The transport-button shrink above used to be enough to clear 320px on
-     its own: the home screen's right side only carried Settings + the
-     profile chip, and play view's carried Home + Menu — either pair still
-     fit their grid column at this width. The always-present fullscreen
-     toggle (see `.top-fullscreen` in index.html) sits in that same column on
-     every screen now, and a third control tips both pairs over into the
-     centred wordmark. The label text is what gives way, not any control:
-     all three stay tappable and named (each already carries a `title`,
-     which becomes its accessible name once the visible text is gone), they
-     just read as icons here the way the soundtrack transport buttons
-     already do. Unqualified by `body.play-view` on purpose — the home
-     screen needs this exactly as much as play view does now. */
+  /* The label text is what gives way here, not any control: every button
+     already carries a `title`, which becomes its accessible name once the
+     visible text is gone, so it stays tappable and named — it just reads as
+     an icon here the way the soundtrack transport already did before it
+     moved into the popup. Unqualified by `body.play-view` on purpose — the
+     home screen needs this exactly as much as play view does. */
+  .top-bar-left .bar-button-label,
   .top-bar-right .bar-button-label {
     display: none;
   }
-  /* Losing the label text above isn't enough on its own once there are three
-     icons in this column (play view: fullscreen + Home + Menu) — three
+  /* Losing the label text above isn't enough on its own once a side is
+     carrying three controls (left, in the arena: Home + play/pause + the
+     popup opener; right: fullscreen + Menu + the profile chip) — three
      buttons at the wider tiers' 40px min-width and 10px gap add up to more
-     than this column's actual share of a 320px bar (~110px, once the centred
-     wordmark and the grid's own gaps take theirs), and the overflow paints
-     straight over the wordmark next to it, the same way the transport
-     buttons on the other side already do at this width. Shrinking the icon
-     box and closing the gap between them buys back exactly that difference;
-     three buttons still stay tappable and named (labels moved to `title` /
-     `aria-label`, not removed), just packed tighter. */
+     than a side's actual share of a 320px bar, and the overflow paints
+     straight over the wordmark next to it. Shrinking the icon box and
+     closing the gap between them buys back exactly that difference; every
+     control stays tappable and named (labels moved to `title` / `aria-label`,
+     not removed), just packed tighter. */
+  .top-bar-left,
   .top-bar-right {
     gap: 4px;
   }
+  .top-bar-left .bar-button,
   .top-bar-right .bar-button {
     min-width: 32px;
     padding: 0 5px;
@@ -5853,26 +5968,20 @@ body.play-view .arena-view .below-court {
 }
 
 /* ── The top bar at phone widths ──────────────────────────────────────────
-   Two leftovers from adding the fullscreen toggle, both only visible at
-   320px, both only in a picture.
+   The wordmark used to give way here: six controls (three transport,
+   fullscreen, Home, Menu) plus a centred brand mark did not fit 320px, and
+   the mark was drawn straight over the skip button. Round 2 of the top bar
+   took the transport count down to two (see `.music-transport`/`.music-more`
+   above) and moved Home to the left group, so each side of the bar is down
+   to two or three controls even in the arena — measured at 320px with the
+   wordmark back in and nothing overlapping, so the rule that dropped it is
+   gone. If a later change reopens this collision, the wordmark is still the
+   one thing here with no function (`.sr-only` keeps its name for anyone
+   reading the page either way) and should be the first to give.
 
-   The wordmark goes. Six controls (three transport, fullscreen, Home, Menu)
-   and a centred brand mark do not fit 320px, and the collision that produces
-   is not a near miss — the mark is drawn straight over the skip button, so
-   the brand looks broken and the control under it looks unpressable. This
-   predates the fullscreen toggle (the transport buttons already reached the
-   mark on their own) but a sixth control removes any remaining slack. Of the
-   things competing for that row, the wordmark is the one carrying no
-   function: the game is on the screen, the player knows what they launched,
-   and `.sr-only` text keeps the name for anything reading the page. Controls
-   keep the space; decoration gives it up.
-
-   And the match pod needs more room for the pause button at this width, for
-   the reason given at its `padding-right` above. */
+   The match pod still needs more room for the pause button at this width,
+   for the reason given at its `padding-right` above. */
 @media (max-width: 360px) {
-  .top-brand {
-    display: none;
-  }
   body.play-view .hud-group-match {
     /* 58, not the 56 used above: the pause button docks 3px further into this
        pod at 320 than at 390, and at 56 the POSSESSIONS label and its value
