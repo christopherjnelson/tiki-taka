@@ -197,3 +197,29 @@ jobs:
           INCOMING="run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           "${SSH[@]}" "$DEPLOY_USER@$DEPLOY_HOST" /srv/tiki-taka/bin/activate-release \
             "$INCOMING" "$RELEASE_TAG" "$RELEASE_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+
+  notify:
+    name: Announce production deployment
+    needs: [build, deploy]
+    if: github.event_name == 'release' && github.event.action == 'published'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out release history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.build.outputs.release_tag }}
+          fetch-depth: 0
+      - name: Send rich Discord deployment announcement
+        env:
+          DISCORD_DEPLOY_WEBHOOK_URL: ${{ secrets.DISCORD_DEPLOY_WEBHOOK_URL }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          RELEASE_SHA: ${{ needs.build.outputs.release_sha }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPOSITORY_URL: https://github.com/${{ github.repository }}
+          PRODUCTION_URL: https://tiki-taka.chris.guru
+          DEPLOYED_AT: ${{ github.event.release.published_at }}
+        run: node scripts/notify-discord-release.mjs

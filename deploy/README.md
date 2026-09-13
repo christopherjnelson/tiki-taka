@@ -40,6 +40,11 @@ Environment secrets:
 
 - `DEPLOY_SSH_PRIVATE_KEY` — dedicated private key
 - `DEPLOY_KNOWN_HOSTS` — pinned host-key line verified out of band
+- `DISCORD_DEPLOY_WEBHOOK_URL` — Discord webhook used only after successful deployment
+
+The downstream notification job summarizes commits since the previous stable
+tag, links the full comparison if Discord's embed limit is reached, disables
+mentions from commit text, and can be retried without redeploying.
 
 Repository build variables remain `VITE_SUPABASE_URL` and
 `VITE_SUPABASE_PUBLISHABLE_KEY`. Never configure a Supabase secret or
