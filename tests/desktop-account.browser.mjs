@@ -54,7 +54,7 @@ try {
     localStorage.setItem(
       "tiki-taka.progress.v1",
       JSON.stringify({
-        version: 1,
+        version: 2,
         xp: 180,
         unlocked: 0,
         courts: {},
@@ -71,7 +71,7 @@ try {
   // both hidden rather than offered disabled, and guest progress still saves
   // and reloads on its own.
   await page.goto(baseURL);
-  assert.equal(await page.locator("#xp-label").textContent(), "180 / 300 XP");
+  assert.equal(await page.locator("#xp-label").textContent(), "30 / 80 XP");
   assert.equal(await page.locator("#profile-button").isVisible(), false);
   await page.locator("#settings-button").click();
   await page.locator("#settings-dialog").waitFor({ state: "visible" });
@@ -80,7 +80,7 @@ try {
   assert.equal(await page.locator("#sound-button").textContent(), "Sound on");
   await page.locator("#close-settings").click();
   await page.reload();
-  assert.equal(await page.locator("#xp-label").textContent(), "180 / 300 XP");
+  assert.equal(await page.locator("#xp-label").textContent(), "30 / 80 XP");
   assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
   assert.equal(await page.locator("#profile-button").isVisible(), false);
   await page.locator("#settings-button").click();
@@ -102,7 +102,7 @@ try {
       shout: ["KeyF"], pause: ["Escape"],
     };
     const data = () => ({
-      progress: { version: 1, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: "balanced", lastCourt: 0 },
+      progress: { version: 2, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: "balanced", lastCourt: 0 },
       settings: { theme: "dark", effectsOn: true, effectsVolume: 0.3, musicOn: true, musicVolume: 1, audioMigrated: true, preset: "wasd", bindings },
       stats: { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 },
       preferences: { scoreSaveChoice: "ask" },
@@ -199,7 +199,7 @@ try {
   const offlinePage = await browser.newPage({ serviceWorkers: "block" });
   await offlinePage.addInitScript(() => {
     const bindings = Object.fromEntries(["moveUp", "moveDown", "moveLeft", "moveRight", "smartPass", "direct1", "direct2", "direct3", "direct4", "wallToggle", "wallHold", "focusHold", "boostHold", "shout", "pause"].map((key) => [key, []]));
-    const fallback = { progress: { version: 1, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: "balanced", lastCourt: 0 }, settings: { theme: "dark", effectsOn: true, effectsVolume: 0.3, musicOn: true, musicVolume: 1, audioMigrated: true, preset: "wasd", bindings }, stats: { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 }, preferences: { scoreSaveChoice: "ask" } };
+    const fallback = { progress: { version: 2, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: "balanced", lastCourt: 0 }, settings: { theme: "dark", effectsOn: true, effectsVolume: 0.3, musicOn: true, musicVolume: 1, audioMigrated: true, preset: "wasd", bindings }, stats: { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 }, preferences: { scoreSaveChoice: "ask" } };
     window.__offlineAdapter = { online: false, rounds: [] };
     window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
       kind: "supabase",
@@ -225,7 +225,7 @@ try {
   await offlinePage.evaluate(() => { window.__offlineAdapter.online = true; window.dispatchEvent(new Event("online")); });
   await offlinePage.waitForFunction(() => window.__offlineAdapter.rounds.length === 1);
   assert.equal(await offlinePage.locator("#profile-chip-name").textContent(), "Recovered");
-  assert.equal(await offlinePage.locator("#xp-label").textContent(), "77 / 300 XP");
+  assert.equal(await offlinePage.locator("#xp-label").textContent(), "7 / 80 XP");
   console.log("✓ remote bootstrap failure preserves the configured account adapter and offline identity");
   console.log("✓ Supabase account handoff saves one stable pending score and always-save persists");
 } finally {

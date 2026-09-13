@@ -4,7 +4,6 @@ import {
   TACTICS,
   DIFFICULTIES,
   applyDifficulty,
-  dailyConfig,
   distance,
   clamp,
   bankPoint,
@@ -921,10 +920,6 @@ function startAttract() {}
 function stopAttract() {}
 function updateAttract() {}
 function config() {
-  // dailyConfig() applies its own forced-standard difficulty internally (see
-  // engine/src/game.js) — the Daily circuit's premise is one shared course
-  // for everyone, so it never honours progress.difficulty.
-  if (mode === "daily") return dailyConfig();
   if (mode === "endless")
     return applyDifficulty(
       {
@@ -985,11 +980,7 @@ function possessionOrdinal(n) {
 // applyDifficulty actually stamped onto the running round, never off
 // progress.difficulty/UI state that could have changed since kickoff.
 function recordKey() {
-  return mode === "career"
-    ? `court-${courtIndex}-${game.config.difficulty}`
-    : mode === "daily"
-      ? `daily-${game.config.key}`
-      : mode;
+  return mode === "career" ? `court-${courtIndex}-${game.config.difficulty}` : mode;
 }
 // Builds the difficulty <select> options straight from DIFFICULTIES, the
 // same way the engine defines them — never hardcoded here.
@@ -1031,31 +1022,26 @@ function renderOverlayDifficultyToggle() {
     }),
   );
 }
-// Reflects the tier actually in effect (game.config.difficulty, which
-// applyDifficulty stamped — forced to "standard" for Daily) onto every
-// difficulty-related control: the below-court select/description (mirroring
-// the pre-existing, currently off-screen tactic-select pattern) and the
-// overlay toggle/description/target, which is what a player actually sees
-// before a round.
+// Reflects the tier actually in effect (game.config.difficulty, as
+// applyDifficulty stamped it) onto every difficulty-related control: the
+// below-court select/description (mirroring the pre-existing, currently
+// off-screen tactic-select pattern) and the overlay toggle/description/
+// target, which is what a player actually sees before a round.
 function syncDifficultyChrome() {
-  const dailyLocked = mode === "daily";
   const activeDifficulty = game.config.difficulty;
   const difficultyMeta =
     DIFFICULTIES.find((tier) => tier.id === activeDifficulty) || DIFFICULTIES[1];
-  const lockedCopy =
-    "Locked to Standard — the Daily circuit is one shared course for everyone today.";
   const practiceDescriptions = {
     relaxed: "Looser targets and a gentle press. Find your rhythm first.",
     standard: "Standard targets and defense. Your space to experiment.",
     ruthless: "Tighter targets and a quicker press.",
   };
-  const description = dailyLocked
-    ? lockedCopy
-    : mode === "practice"
+  const description =
+    mode === "practice"
       ? (practiceDescriptions[activeDifficulty] || difficultyMeta.label)
       : difficultyMeta.label;
 
-  $("difficulty-select").disabled = dailyLocked;
+  $("difficulty-select").disabled = false;
   $("difficulty-select").value = activeDifficulty;
   $("difficulty-description").textContent = description;
   $("difficulty-target").textContent = game.config.target ? `TARGET ${game.config.target}` : "";
@@ -1072,16 +1058,15 @@ function syncDifficultyChrome() {
     if (mode === "practice") {
       btn.title = practiceDescriptions[btn.dataset.tier] || btn.title;
     }
-    // Daily forces the tier rather than merely defaulting it, so every other
-    // option is disabled rather than silently ignored if pressed.
-    btn.disabled = dailyLocked && !isActive;
+    btn.disabled = false;
   });
 }
 function syncProgress() {
   const thumbnailGeneration = ++courtThumbnailGeneration;
   const r = rank(progress.xp);
   $("level-label").textContent = `LEVEL ${r.level} · ${r.name}`;
-  $("xp-label").textContent = `${progress.xp % 300} / 300 XP`;
+  $("xp-label").textContent =
+    r.span === 0 ? `${progress.xp} XP · MAX` : `${r.into} / ${r.span} XP`;
   $("xp-fill").style.width = `${r.fraction * 100}%`;
   $("court-list").innerHTML = "";
   // Stars are tracked per tier now (progress.courts[i][tier]); the court
@@ -1378,41 +1363,36 @@ function prepare() {
         ? `60 SECONDS · ${possessions} POSSESSIONS · TRIANGLES ADD TIME`
         : `${game.config.time} SECONDS · ${possessions} ${possessionLabel} · ${possessionsOrdinal} LOSS ENDS THE ROUND`;
   setOverlay(
-    mode === "daily"
-      ? `DAILY CIRCUIT · ${game.config.key}`
-      : mode === "endless"
-        ? "HOW LONG CAN YOU KEEP IT?"
-        : mode === "practice"
-          ? "A LITTLE SPACE TO LEARN"
-          : "FOUR PLAYERS. ONE BALL.",
+    mode === "endless"
+      ? "HOW LONG CAN YOU KEEP IT?"
+      : mode === "practice"
+        ? "A LITTLE SPACE TO LEARN"
+        : "FOUR PLAYERS. ONE BALL.",
     mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
       ? "Connect triangles to buy time. Survive the rising press."
       : mode === "practice"
         ? "No timer. Unlimited recoveries. Experiment freely."
         : `Keep possession for ${game.config.time} seconds. Earn ${game.config.target} points. You have ${possessions} ${possessions === 1 ? "possession" : "possessions"}; the ${possessionOrdinal(possessions)} loss ends the round.`,
-    mode === "daily"
-      ? "Play today’s circuit"
-      : mode === "endless"
-        ? "Start the run"
-        : mode === "practice"
-          ? "Start the warm-up"
-          : "Play the court",
+    mode === "endless"
+      ? "Start the run"
+      : mode === "practice"
+        ? "Start the warm-up"
+        : "Play the court",
   );
   // Must run after setOverlay(): that generic reset hides #overlay-difficulty
   // (it is also reused by the results screen and the "end this round?"
   // prompt, neither of which should show a difficulty picker), and this call
   // is what opts the pre-round invitation back in. The tier actually in
   // effect always comes off game.config.difficulty — applyDifficulty()
-  // already stamped it there (forced to "standard" for Daily regardless of
-  // progress.difficulty) — so every difficulty control reflects reality
+  // already stamped it there — so every difficulty control reflects reality
   // rather than UI state that could disagree with the round it sits next to.
   syncDifficultyChrome();
   syncProgress();
   syncHud();
 }
 function switchMode(next, index = courtIndex) {
-  if (next === "daily" || next === "endless") return;
+  if (next === "kotc" || next === "endless") return;
   closePauseMenu({ restoreFocus: false });
   selectedCourtIndex = index;
   selectedHomeMode = next;
@@ -1442,13 +1422,6 @@ let pendingSwitch = null;
 function start() {
   if (menuBlocking()) return;
   unlockAudio();
-  if (
-    phase === "ready" &&
-    mode === "daily" &&
-    game.config.key !== dailyConfig().key
-  ) {
-    prepare();
-  }
   if (pendingSwitch) {
     pendingSwitch = null;
     resume();
@@ -2519,13 +2492,11 @@ function finish() {
         ? "Play the next court"
         : !result.cleared
           ? "Retry"
-          : mode === "daily"
-            ? "Play today’s circuit again"
-            : mode === "endless"
-              ? "Start a new run"
-              : mode === "practice"
-                ? "Practise this court again"
-                : "Play this court again",
+          : mode === "endless"
+            ? "Start a new run"
+            : mode === "practice"
+              ? "Practise this court again"
+              : "Play this court again",
     secondary: "Change difficulty",
     tertiary: "Home",
     stars: result.stars,
@@ -3311,7 +3282,7 @@ $("pause-home").addEventListener("click", () => {
 $("pause-settings").addEventListener("click", openSettings);
 document.querySelectorAll("[data-home-mode]").forEach((button) => {
   button.addEventListener("click", () => {
-    if (button.disabled || button.dataset.homeMode === "daily") return;
+    if (button.disabled || button.dataset.homeMode === "kotc") return;
     selectedHomeMode = button.dataset.homeMode;
     document.querySelectorAll("[data-home-mode]").forEach((btn) => {
       const active = btn === button;

@@ -38,7 +38,7 @@ test("guest progress persists under one fixed storage key", async () => {
 
 test("guest imports legacy progress and settings on first load", async () => {
   const storage = memoryStorage({
-    "tiki-taka.progress.v1": JSON.stringify({ version: 1, xp: 91, unlocked: 2 }),
+    "tiki-taka.progress.v1": JSON.stringify({ version: 2, xp: 91, unlocked: 2 }),
     "tiki-taka.settings.v1": JSON.stringify({ theme: "light", playView: true }),
   });
   const adapter = createLocalDataAdapter({ storage });
@@ -57,7 +57,7 @@ test("round stats aggregate and malformed values normalize", async () => {
   storage.setItem(
     LOCAL_DATA_KEYS.guest,
     JSON.stringify({
-      progress: { version: 1, xp: -4, unlocked: 999 },
+      progress: { version: 2, xp: -4, unlocked: 999 },
       settings: { theme: "purple", bindings: {} },
       stats: {
         games: -2,

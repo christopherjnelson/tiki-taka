@@ -1,12 +1,27 @@
 import { COURTS, DIFFICULTIES } from "./game.js";
 const DIFFICULTY_IDS = DIFFICULTIES.map((tier) => tier.id);
-// The clear bonus scales with tier so the easiest difficulty is not also the
-// fastest XP in the game. The rest of the XP formula and the rank() curve are
-// deliberately left alone here - a separate rebalance is out of scope.
-const CLEAR_BONUS = { relaxed: 30, standard: 60, ruthless: 90 };
+// XP rewards clearing NEW ground, not grinding a round that's already been
+// won. Score alone pays a small, capped amount ("performance"); both clear
+// payouts scale with how hard the court is - later courts and higher tiers
+// pay more either way - but only the first-clear payout is large. Replaying
+// a court/tier that has already been cleared pays the same shape of bonus,
+// scaled down to a trickle. This is why a career clear checks whether the
+// court/tier has ever had stars before writing this round's stars.
+const STAR_XP = 6;
+const FIRST_CLEAR_TIER = { relaxed: 0.6, standard: 1, ruthless: 1.5 };
+// Stand-in "target" for endless and other modes with no real target, so
+// performance XP still has a reference point to scale against.
+const ENDLESS_REFERENCE = 600;
+// XP is a progression reward, so it is only paid in progression modes: World
+// tour (career), Endless, and King of the Court ("kotc" - a disabled
+// placeholder today, with no gameplay of its own yet, so it is folded into
+// the plain performance-only rule below until it ships its own). Practice is
+// excluded on purpose: a no-stakes sandbox for finding your feet, not a way
+// to grind levels.
+const XP_MODES = new Set(["career", "endless", "kotc"]);
 export function freshProgress() {
   return {
-    version: 1,
+    version: 2,
     xp: 0,
     unlocked: 0,
     courts: {},
@@ -24,9 +39,18 @@ export function freshProgress() {
 // trip fails on every reload until the value is repaired.
 export function normalizeProgress(value) {
   try {
-    if (!value || value.version !== 1) return freshProgress();
+    if (!value || (value.version !== 1 && value.version !== 2)) return freshProgress();
     const progress = freshProgress();
-    progress.xp = Number.isFinite(value.xp) ? Math.max(0, value.xp) : 0;
+    // The old flat 300-XP-per-level curve inflated levels far past what this
+    // rebalance intends, and there is no honest way to rescale a version-1 xp
+    // total onto the new progressive curve. So a version-1 save resets xp to
+    // 0 and comes back stamped version 2 - everything else it recorded
+    // (unlocked courts, stars, records, tactic, difficulty) is preserved.
+    // Legacy `daily-*` record keys are dropped below regardless of version:
+    // the Daily mode they named no longer exists, so keeping them around
+    // would just be dead weight.
+    progress.xp =
+      value.version === 2 && Number.isFinite(value.xp) ? Math.max(0, value.xp) : 0;
     progress.unlocked = Math.min(
       COURTS.length - 1,
       Math.max(0, Math.floor(Number(value.unlocked) || 0)),
@@ -63,7 +87,8 @@ export function normalizeProgress(value) {
       !Array.isArray(value.records)
     ) {
       for (const [key, score] of Object.entries(value.records))
-        if (Number.isFinite(score) && score >= 0) progress.records[key] = score;
+        if (Number.isFinite(score) && score >= 0 && !key.startsWith("daily-"))
+          progress.records[key] = score;
     }
     progress.sound = typeof value.sound === "boolean" ? value.sound : true;
     progress.tactic = ["balanced", "runner", "maestro"].includes(value.tactic)
@@ -109,15 +134,30 @@ export function awardMatch(progress, game, mode, courtIndex) {
       Number(game.score >= game.config.target * 1.5) +
       Number(game.score >= game.config.target * 2.2 && game.turnovers === 0)
     : 0;
-  const xp =
-    Math.max(10, Math.floor(game.score / 8)) + (cleared ? CLEAR_BONUS[tier] : 0);
+  const reference = game.config.target > 0 ? game.config.target : ENDLESS_REFERENCE;
+  const performance = Math.min(20, Math.max(0, Math.floor((10 * game.score) / reference)));
+  const key = mode === "career" ? `court-${courtIndex}-${tier}` : mode;
+  // Read "is this new ground" BEFORE the writes further down overwrite it.
+  const isFirstClearOfCourtTier =
+    (progress.courts[courtIndex]?.[tier]?.stars || 0) === 0;
+  let xp;
+  if (!XP_MODES.has(mode)) {
+    xp = 0;
+  } else if (mode === "career") {
+    let clearBonus = 0;
+    if (cleared) {
+      clearBonus = isFirstClearOfCourtTier
+        ? Math.round(((60 + 15 * courtIndex) * FIRST_CLEAR_TIER[tier]) / 5) * 5
+        : Math.max(5, Math.round(((6 + 3 * courtIndex) * FIRST_CLEAR_TIER[tier]) / 5) * 5);
+    }
+    xp = Math.max(3, performance + stars * STAR_XP + clearBonus);
+  } else {
+    // Endless (target 0, cleared/stars trivially true) pays performance only
+    // - no star or clear pay. King of the Court has no gameplay yet and
+    // falls through to this same rule until it ships its own.
+    xp = Math.max(3, performance);
+  }
   progress.xp += xp;
-  const key =
-    mode === "career"
-      ? `court-${courtIndex}-${tier}`
-      : mode === "daily"
-        ? `daily-${game.config.key}`
-        : mode;
   const prev = Number(progress.records[key]) || 0;
   progress.records[key] = Math.max(prev, game.score);
   if (mode === "career") {
@@ -143,28 +183,47 @@ export function awardMatch(progress, game, mode, courtIndex) {
         Math.min(COURTS.length - 1, courtIndex + 1),
       );
   }
-  // Bound retained daily records while keeping all permanent court and mode records.
-  const daily = Object.keys(progress.records)
-    .filter((k) => k.startsWith("daily-"))
-    .sort()
-    .reverse();
-  for (const key of daily.slice(30)) delete progress.records[key];
   return { cleared, stars, xp, newBest: game.score > prev };
 }
+const MAX_LEVEL = 50;
+// Cumulative XP needed to REACH level L (1-indexed; level 1 is 0). Built once
+// at module load rather than re-derived per call so rank() is a lookup, not
+// a floating-point inverse.
+const LEVEL_XP = Object.freeze(
+  Array.from({ length: MAX_LEVEL }, (_, i) => {
+    const L = i + 1;
+    return 10 * Math.round((66 * (L - 1) + 4 * (L - 1) ** 2) / 10);
+  }),
+);
+const RANK_NAMES = [
+  "Touchline beginner",
+  "First touch",
+  "Space finder",
+  "Tempo setter",
+  "Triangle builder",
+  "Press breaker",
+  "Lane threader",
+  "Playmaker",
+  "Metronome",
+  "Pitch conductor",
+  "Master of possession",
+  "Tiki taka",
+];
 export function rank(xp) {
-  const level = 1 + Math.floor(xp / 300);
-  const names = [
-    "Touchline beginner",
-    "Space finder",
-    "Tempo setter",
-    "Press breaker",
-    "Playmaker",
-    "Master of possession",
-  ];
-  return {
-    level,
-    name: names[Math.min(names.length - 1, Math.floor((level - 1) / 2))],
-    fraction: (xp % 300) / 300,
-    next: 300 - (xp % 300),
-  };
+  const total = Number.isFinite(xp) && xp > 0 ? xp : 0;
+  let level = 1;
+  for (let i = LEVEL_XP.length - 1; i >= 0; i--) {
+    if (total >= LEVEL_XP[i]) {
+      level = i + 1;
+      break;
+    }
+  }
+  const name = RANK_NAMES[Math.min(11, Math.floor((level - 1) / 4))];
+  if (level >= MAX_LEVEL) {
+    const into = total - LEVEL_XP[MAX_LEVEL - 1];
+    return { level: MAX_LEVEL, name, into, span: 0, fraction: 1, next: 0 };
+  }
+  const into = total - LEVEL_XP[level - 1];
+  const span = LEVEL_XP[level] - LEVEL_XP[level - 1];
+  return { level, name, into, span, fraction: into / span, next: span - into };
 }

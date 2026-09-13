@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, dailyConfig, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS } from '../src/game.js';
+import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -51,26 +51,6 @@ test('seeded randomness repeats exactly and distinguishes seeds', () => {
   assert.deepEqual(sequence(41), sequence(41));
   assert.notDeepEqual(sequence(41), sequence(42));
   assert.ok(sequence(41).every(value => value >= 0 && value < 1));
-});
-
-test('daily circuit uses a reproducible UTC day and changes tomorrow', () => {
-  const morning = dailyConfig(new Date('2026-09-06T00:01:00Z'));
-  assert.deepEqual(morning, dailyConfig(new Date('2026-09-06T23:59:00Z')));
-  assert.notEqual(morning.seed, dailyConfig(new Date('2026-09-07T00:01:00Z')).seed);
-  assert.equal(morning.key, '2026-09-06');
-});
-
-test('the daily circuit is always standard, regardless of what applyDifficulty is asked for', () => {
-  const daily = dailyConfig(new Date('2026-09-06T00:01:00Z'));
-  assert.equal(daily.difficulty, 'standard');
-  assert.equal(daily.possessions, 3);
-  for (const tier of ['relaxed', 'standard', 'ruthless', 'nonsense']) {
-    const applied = applyDifficulty(daily, tier);
-    assert.equal(applied.difficulty, 'standard', tier);
-    assert.equal(applied.target, daily.target, tier);
-    assert.equal(applied.speed, daily.speed, tier);
-    assert.equal(applied.defenders, daily.defenders, tier);
-  }
 });
 
 test('DIFFICULTIES describes the three tiers in order for the UI to render directly', () => {

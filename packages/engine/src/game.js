@@ -222,33 +222,6 @@ export function bankPoint(a, b) {
       distance(a, p) + distance(p, b) - (distance(a, q) + distance(q, b)),
   )[0];
 }
-export function dailyConfig(date = new Date()) {
-  const key = date.toISOString().slice(0, 10);
-  let seed = 0;
-  for (const c of key) seed = (Math.imul(seed, 31) + c.charCodeAt(0)) >>> 0;
-  // The Daily circuit's premise is "one day, one shared course" for every
-  // player, so it is always run at the standard tier regardless of the
-  // selection remembered elsewhere. applyDifficulty forces this too (it
-  // recognizes a daily config by its `key`), but stamping it here keeps a
-  // bare `dailyConfig()` result already correct for callers that never pass
-  // it through applyDifficulty.
-  return applyDifficulty(
-    {
-      name: "Daily circuit",
-      place: "ONE DAY. ONE SHARED COURT.",
-      short: key,
-      target: 500,
-      time: 90,
-      speed: 100 + (seed % 12),
-      defenders: 3,
-      seed,
-      description:
-        "The same formation and pressure for everyone today. Beat your personal best.",
-      key,
-    },
-    "standard",
-  );
-}
 // Tier multipliers layered on top of each court's own ramp (COURTS above).
 // Standard is exactly today's numbers - it must never change these values.
 const DIFFICULTY_TIERS = {
@@ -275,12 +248,9 @@ export const DIFFICULTIES = [
 ];
 export const MAX_DEFENDERS = 5;
 // Pure: returns a new config with the tier's multipliers applied, never
-// mutating `config`. Daily configs (identified by their `key`) are always
-// forced to standard, matching the Daily circuit's "one shared course"
-// premise regardless of what tier is otherwise selected.
+// mutating `config`.
 export function applyDifficulty(config, tier) {
-  const requested = config?.key ? "standard" : tier;
-  const id = Object.hasOwn(DIFFICULTY_TIERS, requested) ? requested : "standard";
+  const id = Object.hasOwn(DIFFICULTY_TIERS, tier) ? tier : "standard";
   const scale = DIFFICULTY_TIERS[id];
   return {
     ...config,

@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { freshProgress, readProgress, saveProgress, awardMatch, rank } from '../src/progress.js';
 
-function finishedGame({ score = 200, target = 180, time = 0, turnovers = 0, key, difficulty, possessions } = {}) {
-  return { score, turnovers, time, config: { target, key, difficulty, possessions } };
+function finishedGame({ score = 200, target = 180, time = 0, turnovers = 0, key, difficulty, possessions, endless } = {}) {
+  return { score, turnovers, time, config: { target, key, difficulty, possessions, endless } };
 }
 
 test('fresh progress has a stable, independent shape', () => {
   const first = freshProgress(), second = freshProgress();
-  assert.deepEqual(first, { version: 1, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: 'balanced', difficulty: 'standard', lastCourt: 0 });
+  assert.deepEqual(first, { version: 2, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: 'balanced', difficulty: 'standard', lastCourt: 0 });
   first.courts[0] = { standard: { stars: 1 } };
   assert.deepEqual(second.courts, {});
 });
@@ -16,7 +16,7 @@ test('fresh progress has a stable, independent shape', () => {
 test('a timer-and-score clear awards stars, XP, a best, and the next court', () => {
   const progress = freshProgress();
   const result = awardMatch(progress, finishedGame({ score: 400 }), 'career', 0);
-  assert.deepEqual(result, { cleared: true, stars: 3, xp: 110, newBest: true });
+  assert.deepEqual(result, { cleared: true, stars: 3, xp: 98, newBest: true });
   assert.equal(progress.unlocked, 1);
   assert.deepEqual(progress.courts[0], { standard: { stars: 3, best: 400 } });
   assert.equal(progress.records['court-0-standard'], 400);
@@ -56,7 +56,7 @@ test('save and read round-trip while corrupt or unavailable storage fails safely
 
 test('loaded scalar values are clamped and invalid tactics fall back', () => {
   const storage = { getItem: () => JSON.stringify({
-    version: 1, xp: -5, unlocked: 99, lastCourt: 99, tactic: 'cheat', sound: 'yes', difficulty: 'nightmare',
+    version: 2, xp: -5, unlocked: 99, lastCourt: 99, tactic: 'cheat', sound: 'yes', difficulty: 'nightmare',
     courts: { 0: { standard: { stars: -9, best: -3 } }, 1: { standard: { stars: 999, best: 42 }, ruthless: { stars: 2, best: 10 } }, 99: { standard: { stars: 3, best: 1 } } },
     records: { valid: 12, negative: -1, infinite: null, text: '100' },
   }) };
@@ -76,7 +76,7 @@ test('loaded scalar values are clamped and invalid tactics fall back', () => {
 
 test('normalizeProgress survives garbage per-tier court data without throwing', () => {
   const storage = { getItem: () => JSON.stringify({
-    version: 1,
+    version: 2,
     courts: {
       0: 42,
       1: 'not an object',
@@ -91,9 +91,9 @@ test('normalizeProgress survives garbage per-tier court data without throwing', 
 });
 
 test('a stored difficulty selection round-trips and an unknown value falls back to standard', () => {
-  const storage = { getItem: () => JSON.stringify({ version: 1, difficulty: 'ruthless' }) };
+  const storage = { getItem: () => JSON.stringify({ version: 2, difficulty: 'ruthless' }) };
   assert.equal(readProgress(storage).difficulty, 'ruthless');
-  const bogus = { getItem: () => JSON.stringify({ version: 1, difficulty: 'nightmare' }) };
+  const bogus = { getItem: () => JSON.stringify({ version: 2, difficulty: 'nightmare' }) };
   assert.equal(readProgress(bogus).difficulty, 'standard');
 });
 
@@ -116,23 +116,13 @@ test('the possessions limit from config governs the clear check, not a hardcoded
   assert.equal(ruthlessResult.cleared, false);
 });
 
-test('practice remains clearable after unlimited recoveries', () => {
+test('practice remains clearable after unlimited recoveries, but earns no XP', () => {
   const progress = freshProgress();
   const result = awardMatch(progress, finishedGame({ score: 180, target: 120, turnovers: 8 }), 'practice', 0);
   assert.equal(result.cleared, true);
   assert.equal(progress.unlocked, 0);
-});
-
-test('daily records retain only the newest thirty keys without deleting permanent records', () => {
-  const progress = freshProgress();
-  progress.records.endless = 123;
-  for (let day = 1; day <= 35; day++) progress.records[`daily-2026-08-${String(day).padStart(2, '0')}`] = day;
-  awardMatch(progress, finishedGame({ key: '2026-09-01' }), 'daily', 0);
-  const daily = Object.keys(progress.records).filter(key => key.startsWith('daily-'));
-  assert.equal(daily.length, 30);
-  assert.equal(progress.records.endless, 123);
-  assert.equal(progress.records['daily-2026-09-01'], 200);
-  assert.equal('daily-2026-08-01' in progress.records, false);
+  assert.equal(result.xp, 0);
+  assert.equal(progress.xp, 0);
 });
 
 test('stars and personal bests are tracked separately per tier on the same court', () => {
@@ -153,22 +143,129 @@ test('a clear on Relaxed unlocks the next court, same as any other tier', () => 
   assert.equal(progress.unlocked, 1);
 });
 
-test('the clear bonus scales with tier while the score-based XP formula is untouched', () => {
-  for (const [difficulty, bonus] of [['relaxed', 30], ['standard', 60], ['ruthless', 90]]) {
-    const progress = freshProgress();
-    const result = awardMatch(progress, finishedGame({ score: 400, difficulty }), 'career', 0);
-    assert.equal(result.xp, Math.max(10, Math.floor(400 / 8)) + bonus, difficulty);
-  }
-  // An unknown/missing difficulty falls back to standard's bonus.
+test('the first clear of a court/tier pays far more than a repeat clear of the same one', () => {
   const progress = freshProgress();
-  const result = awardMatch(progress, finishedGame({ score: 400, difficulty: 'nightmare' }), 'career', 0);
-  assert.equal(result.xp, Math.max(10, Math.floor(400 / 8)) + 60);
+  const first = awardMatch(progress, finishedGame({ score: 200, target: 180 }), 'career', 0);
+  const repeat = awardMatch(progress, finishedGame({ score: 200, target: 180 }), 'career', 0);
+  assert.equal(first.xp, 77);
+  assert.equal(repeat.xp, 22);
+  assert.ok(first.xp > repeat.xp);
+});
+
+test('the repeat-clear bonus scales with court index too, not just the first clear', () => {
+  const cases = [
+    ['relaxed', 0, 180, 21],
+    ['standard', 0, 180, 21],
+    ['ruthless', 0, 180, 26],
+    ['standard', 3, 1600, 31],
+    ['standard', 5, 2400, 36],
+    ['ruthless', 5, 2400, 46],
+  ];
+  for (const [difficulty, courtIndex, target, expected] of cases) {
+    const progress = freshProgress();
+    awardMatch(progress, finishedGame({ score: target, target, difficulty }), 'career', courtIndex);
+    const repeat = awardMatch(progress, finishedGame({ score: target, target, difficulty }), 'career', courtIndex);
+    assert.equal(repeat.xp, expected, `${difficulty} court ${courtIndex}`);
+  }
+  // Same tier, harder court must pay a strictly bigger repeat bonus - this
+  // is the bug this test guards against: a flat per-tier repeat bonus with
+  // no court term made grinding the easiest court as efficient as the
+  // hardest.
+  const easy = freshProgress();
+  awardMatch(easy, finishedGame({ score: 180, target: 180, difficulty: 'standard' }), 'career', 0);
+  const easyRepeat = awardMatch(easy, finishedGame({ score: 180, target: 180, difficulty: 'standard' }), 'career', 0);
+  const hard = freshProgress();
+  awardMatch(hard, finishedGame({ score: 2400, target: 2400, difficulty: 'standard' }), 'career', 5);
+  const hardRepeat = awardMatch(hard, finishedGame({ score: 2400, target: 2400, difficulty: 'standard' }), 'career', 5);
+  assert.ok(hardRepeat.xp > easyRepeat.xp, 'court 5 Standard repeat must pay more than court 0 Standard repeat');
+});
+
+test('first-clear XP scales with tier and with court index', () => {
+  const cases = [
+    ['relaxed', 0, 180, 51],
+    ['standard', 0, 180, 76],
+    ['ruthless', 0, 180, 106],
+    ['relaxed', 3, 1600, 81],
+    ['standard', 3, 1600, 121],
+    ['ruthless', 3, 1600, 176],
+  ];
+  for (const [difficulty, courtIndex, target, expected] of cases) {
+    const progress = freshProgress();
+    const result = awardMatch(progress, finishedGame({ score: target, target, difficulty }), 'career', courtIndex);
+    assert.equal(result.xp, expected, `${difficulty} court ${courtIndex}`);
+  }
+});
+
+test('endless pays performance XP only - no star bonus, no clear bonus', () => {
+  const progress = freshProgress();
+  const result = awardMatch(progress, finishedGame({ score: 900, target: 0, endless: true }), 'endless', 0);
+  assert.equal(result.stars, 3); // trivially true at target 0, but must not be paid for
+  assert.equal(result.xp, 15);
+});
+
+test('a non-practice mode that fails to clear still gets the 3 XP floor', () => {
+  const progress = freshProgress();
+  const result = awardMatch(progress, finishedGame({ score: 1, target: 180 }), 'career', 0);
+  assert.equal(result.cleared, false);
+  assert.equal(result.xp, 3);
+});
+
+test('a version-1 stored progress resets xp to 0 but keeps everything else', () => {
+  const storage = { getItem: () => JSON.stringify({
+    version: 1,
+    xp: 91234,
+    unlocked: 3,
+    lastCourt: 2,
+    tactic: 'runner',
+    difficulty: 'ruthless',
+    sound: false,
+    courts: { 0: { standard: { stars: 3, best: 500 } } },
+    records: { 'court-0-standard': 500, 'daily-2026-09-01': 200 },
+  }) };
+  const progress = readProgress(storage);
+  assert.equal(progress.version, 2);
+  assert.equal(progress.xp, 0);
+  assert.equal(progress.unlocked, 3);
+  assert.equal(progress.lastCourt, 2);
+  assert.equal(progress.tactic, 'runner');
+  assert.equal(progress.difficulty, 'ruthless');
+  assert.equal(progress.sound, false);
+  assert.deepEqual(progress.courts, { 0: { standard: { stars: 3, best: 500 } } });
+  // The Daily mode no longer exists, so legacy daily-* keys are dropped
+  // rather than carried forward as dead weight.
+  assert.deepEqual(progress.records, { 'court-0-standard': 500 });
 });
 
 test('rank boundaries advance levels, names, and fractions predictably', () => {
-  assert.deepEqual(rank(0), { level: 1, name: 'Touchline beginner', fraction: 0, next: 300 });
-  assert.deepEqual(rank(299), { level: 1, name: 'Touchline beginner', fraction: 299 / 300, next: 1 });
-  assert.deepEqual(rank(300), { level: 2, name: 'Touchline beginner', fraction: 0, next: 300 });
-  assert.equal(rank(600).name, 'Space finder');
-  assert.equal(rank(99999).name, 'Master of possession');
+  assert.deepEqual(rank(0), { level: 1, name: 'Touchline beginner', into: 0, span: 70, fraction: 0, next: 70 });
+  assert.deepEqual(rank(69), { level: 1, name: 'Touchline beginner', into: 69, span: 70, fraction: 69 / 70, next: 1 });
+  assert.deepEqual(rank(70), { level: 2, name: 'Touchline beginner', into: 0, span: 80, fraction: 0, next: 80 });
+});
+
+test('rank titles change every 4 levels', () => {
+  assert.equal(rank(0).name, 'Touchline beginner'); // level 1
+  assert.equal(rank(70).name, 'Touchline beginner'); // level 2
+  assert.equal(rank(150).name, 'Touchline beginner'); // level 3
+  assert.equal(rank(230).name, 'Touchline beginner'); // level 4
+  assert.equal(rank(330).name, 'First touch'); // level 5, first title change
+  assert.equal(rank(3890).name, 'Lane threader'); // level 25
+  assert.equal(rank(10650).name, 'Tiki taka'); // level 45, final title
+});
+
+test('rank at a mid-curve level reports the right level and span', () => {
+  const r = rank(4000); // between level 25 (3890) and level 26 (4150)
+  assert.equal(r.level, 25);
+  assert.equal(r.into, 110);
+  assert.equal(r.span, 260);
+});
+
+test('rank caps at level 50 with a zero span and full bar', () => {
+  const atCap = rank(12840); // exactly the level-50 threshold
+  assert.deepEqual(atCap, { level: 50, name: 'Tiki taka', into: 0, span: 0, fraction: 1, next: 0 });
+  const beyondCap = rank(99999);
+  assert.equal(beyondCap.level, 50);
+  assert.equal(beyondCap.name, 'Tiki taka');
+  assert.equal(beyondCap.span, 0);
+  assert.equal(beyondCap.fraction, 1);
+  assert.equal(beyondCap.into, 99999 - 12840);
 });
