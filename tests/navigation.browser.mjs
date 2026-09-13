@@ -332,6 +332,16 @@ await check(
       /El Patio/i,
     );
     assert.equal(page.url().endsWith("#play"), true);
+
+    // Verify selecting a different court preserves staged practice mode
+    await leaveToHome(page);
+    await page.locator('[data-home-mode="practice"]').click();
+    assert.match(await page.locator("#title-play").textContent(), /Practice/i);
+    await page.locator(".court-item").nth(3).click();
+    assert.match(await page.locator("#title-play").textContent(), /Practice/i);
+    assert.match(await page.locator("#title-play-copy").textContent(), /Free Practice/i);
+    assert.equal(await page.locator('[data-home-mode="practice"]').getAttribute("aria-pressed"), "true");
+
     assert.deepEqual(errors, []);
     await context.close();
   },

@@ -513,7 +513,6 @@ function syncTitle() {
 function selectCourt(i) {
   if (i < 0 || i >= COURTS.length || i > progress.unlocked) return;
   selectedCourtIndex = i;
-  selectedHomeMode = "career";
   document.querySelectorAll("#court-list .court-item").forEach((b, idx) => {
     const isSelected = idx === i;
     b.classList.toggle("active", isSelected);
