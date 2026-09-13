@@ -256,7 +256,7 @@ test("a brand-new account never stores an empty save, and an empty row still loa
   const adapter = createSupabaseDataAdapter({ client: clientFor(null), storage: memoryStorage() });
   const saved = await adapter.saveUserData({});
   assert.equal(writes[0].progress.tactic, "balanced", "a new account must be written a complete progress object");
-  assert.equal(writes[0].progress.version, 1);
+  assert.equal(writes[0].progress.version, 2);
   assert.ok(writes[0].settings.bindings, "settings must be written complete too");
   assert.equal(saved.progress.tactic, "balanced");
 
@@ -265,6 +265,6 @@ test("a brand-new account never stores an empty save, and an empty row still loa
   const repaired = createSupabaseDataAdapter({ client: clientFor({ progress: {}, settings: {} }), storage: memoryStorage() });
   const data = await repaired.loadUserData();
   assert.equal(data.progress.tactic, "balanced");
-  assert.equal(data.progress.version, 1);
+  assert.equal(data.progress.version, 2);
   assert.ok(Number.isFinite(data.progress.unlocked));
 });

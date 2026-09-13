@@ -1081,7 +1081,8 @@ function syncProgress() {
   const thumbnailGeneration = ++courtThumbnailGeneration;
   const r = rank(progress.xp);
   $("level-label").textContent = `LEVEL ${r.level} · ${r.name}`;
-  $("xp-label").textContent = `${progress.xp % 300} / 300 XP`;
+  $("xp-label").textContent =
+    r.span === 0 ? `${progress.xp} XP · MAX` : `${r.into} / ${r.span} XP`;
   $("xp-fill").style.width = `${r.fraction * 100}%`;
   $("court-list").innerHTML = "";
   // Stars are tracked per tier now (progress.courts[i][tier]); the court

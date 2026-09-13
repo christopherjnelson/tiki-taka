@@ -27,6 +27,6 @@ test("shared engine entrypoint runs without browser globals", () => {
   const game = new engine.Game(engine.COURTS[0]);
   assert.equal(game.status, "playing");
   assert.equal(engine.defaultSettings().theme, "dark");
-  assert.equal(engine.freshProgress().version, 1);
+  assert.equal(engine.freshProgress().version, 2);
   assert.ok(engine.getVenue({ mode: "practice" }).id);
 });
