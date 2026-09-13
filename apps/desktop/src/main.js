@@ -539,11 +539,6 @@ function syncTitle() {
     : selectedHomeMode === "practice"
       ? `${court.name} · Free Practice`
       : `${court.name} · ${court.place}`;
-  const preview = $("home-court-preview");
-  if (preview) {
-    preview.src = renderer.courtPreview(court);
-    preview.alt = `${court.name} court preview`;
-  }
 }
 function selectCourt(i) {
   if (i < 0 || i >= COURTS.length || i > progress.unlocked) return;
@@ -559,6 +554,7 @@ function selectCourt(i) {
     btn.setAttribute("aria-pressed", String(active));
   });
   syncTitle();
+  setAttractVenue(attractVenueForCourt(i));
   selectHomeLeaderboardCourt(i);
   // A gamepad player's cursor was just sitting in the courts zone; follow the
   // flow into modes rather than leaving it stranded on the list. Mouse and
@@ -929,11 +925,175 @@ function applyView(next, { updateHash = true } = {}) {
   }
 }
 // --- Home's attract demo -------------------------------------------------
-// The attract demo canvas has been replaced by the expanded Circuit Leaderboard deck.
-// These no-op stubs preserve compatibility with external probes and lifecycle hooks.
-function startAttract() {}
-function stopAttract() {}
-function updateAttract() {}
+//
+// A second Game and a second Renderer, with the bots keeping the ball among
+// themselves, so the first thing a player sees is the game and not a
+// description of it. Three rules hold it in its place:
+//
+//   * one loop. It is stepped from the shell's existing rAF loop rather than
+//     starting a second one, so it cannot outlive the screen it belongs to or
+//     run alongside the arena;
+//   * it owns nothing. Its events feed its own renderer for the flourish and
+//     are then dropped: no progress, no records, no round stats, no sound;
+//   * it is invisible to input. The canvas is aria-hidden and not focusable,
+//     and nothing here touches `game`, `phase` or the key state.
+const attractCanvas = $("attract-court");
+let attractGame = null,
+  attractRenderer = null,
+  attractPassIn = 0,
+  // Wall passes are real gameplay the player has tuned by hand
+  // (bestTarget() picks the safest lane, which is never a bank), so the demo
+  // fakes an occasional one on top of bestTarget's normal choice rather than
+  // touching how passing itself works. attractBankEvery randomizes "every
+  // fourth to sixth pass" so it doesn't read as a metronome; the count only
+  // advances on a real reception (see updateAttract), so a turnover can't
+  // skip it early or make it lag behind.
+  attractPassCount = 0,
+  attractBankEvery = 4 + Math.floor(Math.random() * 3),
+  // Set whenever the demo's venue changes (or the demo is (re)started) so a
+  // reduced-motion viewer — who never runs the per-frame sim/paint below —
+  // still gets exactly one repainted frame reflecting the new court, rather
+  // than either a stale one or a redraw on every tick.
+  attractNeedsRepaint = false;
+// Court -> venue is read through the engine's own venue data rather than a
+// hardcoded id list: getVenue() resolves a config by its seed, and COURTS[i]
+// carries the same seed venues.js keys off, so the two can never disagree.
+function attractVenueForCourt(i) {
+  return getVenue(COURTS[i] || COURTS[0]).id;
+}
+// Re-skins the demo in place: background, accent and secondary colors only.
+// Never touches seed, defenders, speed or target, so the rally already in
+// progress keeps doing whatever it was doing — see Renderer.render(), which
+// re-derives `this.venue` from `game.config` every frame.
+function setAttractVenue(venueId) {
+  if (!attractGame || attractGame.config.venue === venueId) return;
+  attractGame.config.venue = venueId;
+  attractNeedsRepaint = true;
+}
+function startAttract() {
+  if (!attractCanvas || attractGame) return;
+  attractRenderer ||= new Renderer(attractCanvas);
+  attractRenderer.effects.length = 0;
+  attractGame = new Game(
+    {
+      ...COURTS[1],
+      name: "Attract",
+      // Marks this instance as the demo. Two Games can be alive across a view
+      // change, and anything watching from outside — a test probe on
+      // Game.prototype.update, a debugging session — needs to be able to tell
+      // the player's round from the one running behind the menu.
+      attract: true,
+      // Practice rules: unlimited possessions, so a demo left running on the
+      // home screen can never stall on a turnover it has no way to dismiss.
+      practice: true,
+      target: 0,
+      time: 120,
+      speed: 74,
+      defenders: 3,
+      seed: (Date.now() >>> 0) || 1,
+    },
+    "balanced",
+  );
+  attractPassIn = 0.9;
+  attractPassCount = 0;
+  attractBankEvery = 4 + Math.floor(Math.random() * 3);
+  // Skin the demo to whatever court is currently selected (or last selected)
+  // rather than whatever COURTS[1]'s own seed would otherwise resolve to.
+  attractGame.config.venue = attractVenueForCourt(selectedCourtIndex);
+  attractNeedsRepaint = true;
+  // Same convention as window.__game for the player's round: a stable,
+  // read-only hook for tests/debugging to confirm the demo keeps running the
+  // same instance (rather than being torn down and rebuilt) across a venue
+  // re-skin, without reaching into module-private state.
+  window.__attractGame = attractGame;
+  // A reduced-motion viewer never reaches the per-frame branch in
+  // updateAttract, so paint the one frame they get right away instead of
+  // waiting on whatever schedules the next call.
+  if (attractRenderer.reducedMotion) {
+    attractRenderer.render(attractGame, { preview: false });
+    attractNeedsRepaint = false;
+  }
+}
+function stopAttract() {
+  attractGame = null;
+  attractNeedsRepaint = false;
+  window.__attractGame = null;
+  if (attractRenderer) attractRenderer.effects.length = 0;
+}
+function updateAttract(dt) {
+  if (!attractGame || !attractRenderer) return;
+  // prefers-reduced-motion: freeze the rally. The demo still exists (so a
+  // venue re-skin from selectCourt()/hover still applies) but never steps its
+  // own simulation and only repaints when something actually changed.
+  if (attractRenderer.reducedMotion) {
+    if (attractNeedsRepaint) {
+      attractRenderer.render(attractGame, { preview: false });
+      attractNeedsRepaint = false;
+    }
+    return;
+  }
+  attractNeedsRepaint = false;
+  const demo = attractGame,
+    carrier = demo.players[demo.carrier];
+  // Drift the carrier off the nearest defender and back towards the middle, so
+  // the demo reads as play rather than as four statues. The engine moves the
+  // teammates and the press on its own.
+  let x = 0,
+    y = 0;
+  const nearest = demo.defenders
+    .map((defender) => ({ defender, gap: distance(defender, carrier) }))
+    .sort((a, b) => a.gap - b.gap)[0];
+  if (nearest && nearest.gap > 0.001) {
+    x = (carrier.x - nearest.defender.x) / nearest.gap;
+    y = (carrier.y - nearest.defender.y) / nearest.gap;
+  }
+  x += (500 - carrier.x) / 900;
+  y += (310 - carrier.y) / 560;
+  demo.update(dt, { x, y, focus: false });
+  attractPassIn -= dt;
+  if (!demo.ball && attractPassIn <= 0) {
+    // bestTarget(null) is the same smart pass the pass button gives a player,
+    // so the demo plays the game the way the game means it to be played.
+    const target = demo.bestTarget(null);
+    attractPassCount++;
+    let bank = false;
+    if (attractPassCount >= attractBankEvery) {
+      const passer = demo.players[demo.carrier],
+        receiver = demo.players[target];
+      const waypoint = bankPoint(passer, receiver);
+      const direct = distance(passer, receiver);
+      // Perpendicular distance of the bounce point from the direct line: a
+      // bank whose waypoint sits almost on that line looks identical to a
+      // normal pass, so it isn't worth spending the "every 4-6th" slot on —
+      // skip banking this cycle and try again in another 4-6 passes.
+      const offset =
+        direct > 1
+          ? Math.abs(
+              (receiver.x - passer.x) * (waypoint.y - passer.y) -
+                (receiver.y - passer.y) * (waypoint.x - passer.x),
+            ) / direct
+          : 0;
+      bank = offset > 40;
+      attractPassCount = 0;
+      attractBankEvery = 4 + Math.floor(Math.random() * 3);
+    }
+    demo.pass(target, bank);
+    attractPassIn = 0.55 + Math.random() * 0.5;
+  }
+  for (const event of demo.events) attractRenderer.addEvent(event);
+  demo.events = [];
+  if (demo.status !== "playing") {
+    // The clock ran out. Nothing is scored or saved; another round simply
+    // starts, and the next frame renders that one instead. The venue carries
+    // over onto the fresh game rather than resetting to COURTS[1]'s own.
+    const venue = attractGame.config.venue;
+    attractGame = null;
+    startAttract();
+    if (venue) attractGame.config.venue = venue;
+    return;
+  }
+  attractRenderer.render(demo, { preview: false });
+}
 function config() {
   if (mode === "endless")
     return applyDifficulty(
@@ -1114,11 +1274,6 @@ function syncProgress() {
     // Width/height preserve the existing layout while it is pending.
     btn.innerHTML = `<img class="court-thumb" data-court-index="${i}" alt="" width="48" height="30" loading="lazy" /><span class="court-number">${String(i + 1).padStart(2, "0")}</span><span><span class="court-name">${court.name}</span><span class="court-meta">${court.place}</span></span><span class="court-stars">${btn.disabled ? "↗" : `<span class="court-tier-tag">${listedTierTag}</span>${stars ? "★".repeat(stars) : "○"}`}</span>`;
     const previewHover = () => {
-      const preview = $("home-court-preview");
-      if (preview) {
-        preview.src = renderer.courtPreview(court);
-        preview.alt = `${court.name} court preview`;
-      }
       const copy = $("title-play-copy");
       if (copy && phase !== "paused" && phase !== "playing") {
         copy.textContent = `${court.name} · ${court.place}`;
@@ -1126,12 +1281,17 @@ function syncProgress() {
       document.querySelectorAll("#court-list .court-item").forEach((b, idx) => {
         b.classList.toggle("hover-preview", idx === i);
       });
+      setAttractVenue(attractVenueForCourt(i));
     };
     const previewLeave = () => {
       document.querySelectorAll("#court-list .court-item").forEach((b) => {
         b.classList.remove("hover-preview");
       });
       syncTitle();
+      // The pointer/focus left the list without selecting anything, so the
+      // demo falls back to whatever court is actually selected rather than
+      // getting stuck showing the last one hovered.
+      setAttractVenue(attractVenueForCourt(selectedCourtIndex));
     };
     btn.addEventListener("mouseenter", previewHover);
     btn.addEventListener("focus", previewHover);
@@ -1154,6 +1314,7 @@ function syncProgress() {
         b.classList.remove("hover-preview");
       });
       syncTitle();
+      setAttractVenue(attractVenueForCourt(selectedCourtIndex));
     });
   }
   document.querySelectorAll("[data-home-mode]").forEach((btn) => {
@@ -3488,7 +3649,15 @@ window.addEventListener("blur", () => {
   else clearInput();
 });
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) pause();
+  if (document.hidden) {
+    pause();
+    // Don't leave the demo's rAF work running behind a hidden/backgrounded
+    // tab; it restarts fresh (a new rally, not a resumed one) once the tab
+    // is visible again and home is still the active view.
+    stopAttract();
+  } else if (view === "home") {
+    startAttract();
+  }
 });
 // A rotation mid-round is exactly the moment a captured joystick/court
 // pointer is aimed at an axis that no longer matches what's on screen — the
