@@ -1975,7 +1975,9 @@ body.play-view .top-settings {
 /* The bar drops its explanatory labels before it drops a control: on a narrow
    window the wordmark, the track title and the three buttons survive, and the
    sub-headings that only name what you are already looking at go. */
-@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+@media (max-width: 900px),
+  (pointer: coarse) and (max-width: 1024px),
+  (max-height: 500px) and (orientation: landscape) {
   .top-brand-wordmark {
     display: none;
   }
@@ -1993,7 +1995,9 @@ body.play-view .top-settings {
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
+    grid-column: 1 / -1;
     pointer-events: none;
+    z-index: 2;
   }
   .top-brand-mark {
     pointer-events: auto;
@@ -2084,12 +2088,26 @@ body.play-view .top-settings {
     height: 12px;
   }
 }
-@media (orientation: landscape) and (max-height: 480px) {
+@media (orientation: landscape) and (max-height: 500px),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
   :root {
     --top-bar: 34px;
   }
+  .top-bar {
+    position: relative;
+  }
+  .top-brand {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    grid-column: 1 / -1;
+    pointer-events: none;
+    z-index: 2;
+  }
   .top-brand-mark {
     font-size: 16px;
+    pointer-events: auto;
   }
   .top-brand-symbol {
     height: 26px;
@@ -5942,7 +5960,9 @@ body.play-view .arena-view .below-court {
 
    Keyed on coarse pointers as well as width so a phone in landscape at 932px,
    which is wider than many small laptops, still gets the sheet. */
-@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+@media (max-width: 900px),
+  (pointer: coarse) and (max-width: 1024px),
+  (max-height: 500px) and (orientation: landscape) {
   body.play-view .game-overlay {
     position: fixed;
     inset: 0;
@@ -6003,11 +6023,14 @@ body.play-view .arena-view .below-court {
      it) and only loses its box on screen. */
   body.play-view .game-overlay:not([data-result]) .overlay-symbol {
     display: block;
-    width: min(210px, 72%);
+    width: min(230px, 75%);
     height: auto;
-    max-height: 52px;
+    max-height: 64px;
     object-fit: contain;
-    margin: 4px auto 10px;
+    padding-top: max(22px, env(safe-area-inset-top));
+    padding-bottom: 14px;
+    margin: 4px auto 8px;
+    box-sizing: content-box;
   }
   body.play-view .game-overlay:not([data-result]) #overlay-kicker {
     display: none;
@@ -6261,6 +6284,7 @@ body.play-view .arena-view .below-court {
     order: 1;
     max-height: 42px;
     margin: 2px auto 6px;
+    padding: 0;
   }
   body.play-view .game-overlay:not([data-result]) .overlay-difficulty {
     order: 2;
