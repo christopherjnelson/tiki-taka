@@ -3680,18 +3680,6 @@ body.play-view #bank-button {
   gap: 10px 6px;
   margin: 0;
 }
-/* Closing line the mockup sets under the stat grid — quiet, centred,
-   decorative (see the aria-hidden on the element in index.html). */
-.home-progress-quote {
-  margin: 2px 0 0;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-  color: var(--cyan);
-  font: italic 700 11px var(--sign);
-  letter-spacing: 1px;
-  text-align: center;
-  text-transform: uppercase;
-}
 .account-note,
 .score-save-note {
   color: var(--muted);
@@ -3901,6 +3889,7 @@ body.play-view .arena-view .below-court {
   }
   .home-intro {
     align-self: start;
+    order: 1;
   }
   .home-intro .game-title {
     justify-content: center;
@@ -3912,14 +3901,19 @@ body.play-view .arena-view .below-court {
   .home-court-card {
     display: none;
   }
-  .home-stage {
-    min-width: 0;
-  }
   .home-courts {
     min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    order: 2;
+  }
+  .home-modes {
+    order: 3;
+  }
+  .home-stage {
+    min-width: 0;
+    order: 4;
   }
   /* Reuses the desktop leaderboard's eight-column data grid (see
      .home-leaderboard inside the 980×620 tier) but at widths that actually fit
