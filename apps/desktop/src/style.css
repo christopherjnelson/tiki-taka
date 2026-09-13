@@ -4282,12 +4282,12 @@ body.play-view .arena-view .below-court {
        best" footer, so the numbers line up top to bottom. Narrower desktop
        widths shrink the shared gap and bonus-column width together (see
        the max-width tier below) rather than letting any one row diverge. */
-    --hl-cols: 32px 1fr 68px 42px 116px 78px 62px 74px;
+    --hl-cols: 32px 1fr 42px 68px 116px 78px 62px 74px;
     --hl-gap: 8px;
   }
   @media (max-width: 1180px) {
     .home-leaderboard {
-      --hl-cols: 28px 1fr 60px 36px 102px 70px 54px 66px;
+      --hl-cols: 28px 1fr 36px 60px 102px 70px 54px 66px;
       --hl-gap: 5px;
     }
   }
