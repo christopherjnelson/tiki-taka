@@ -148,8 +148,36 @@ test('the first clear of a court/tier pays far more than a repeat clear of the s
   const first = awardMatch(progress, finishedGame({ score: 200, target: 180 }), 'career', 0);
   const repeat = awardMatch(progress, finishedGame({ score: 200, target: 180 }), 'career', 0);
   assert.equal(first.xp, 77);
-  assert.equal(repeat.xp, 29);
+  assert.equal(repeat.xp, 22);
   assert.ok(first.xp > repeat.xp);
+});
+
+test('the repeat-clear bonus scales with court index too, not just the first clear', () => {
+  const cases = [
+    ['relaxed', 0, 180, 21],
+    ['standard', 0, 180, 21],
+    ['ruthless', 0, 180, 26],
+    ['standard', 3, 1600, 31],
+    ['standard', 5, 2400, 36],
+    ['ruthless', 5, 2400, 46],
+  ];
+  for (const [difficulty, courtIndex, target, expected] of cases) {
+    const progress = freshProgress();
+    awardMatch(progress, finishedGame({ score: target, target, difficulty }), 'career', courtIndex);
+    const repeat = awardMatch(progress, finishedGame({ score: target, target, difficulty }), 'career', courtIndex);
+    assert.equal(repeat.xp, expected, `${difficulty} court ${courtIndex}`);
+  }
+  // Same tier, harder court must pay a strictly bigger repeat bonus - this
+  // is the bug this test guards against: a flat per-tier repeat bonus with
+  // no court term made grinding the easiest court as efficient as the
+  // hardest.
+  const easy = freshProgress();
+  awardMatch(easy, finishedGame({ score: 180, target: 180, difficulty: 'standard' }), 'career', 0);
+  const easyRepeat = awardMatch(easy, finishedGame({ score: 180, target: 180, difficulty: 'standard' }), 'career', 0);
+  const hard = freshProgress();
+  awardMatch(hard, finishedGame({ score: 2400, target: 2400, difficulty: 'standard' }), 'career', 5);
+  const hardRepeat = awardMatch(hard, finishedGame({ score: 2400, target: 2400, difficulty: 'standard' }), 'career', 5);
+  assert.ok(hardRepeat.xp > easyRepeat.xp, 'court 5 Standard repeat must pay more than court 0 Standard repeat');
 });
 
 test('first-clear XP scales with tier and with court index', () => {

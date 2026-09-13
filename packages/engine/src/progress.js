@@ -1,14 +1,14 @@
 import { COURTS, DIFFICULTIES } from "./game.js";
 const DIFFICULTY_IDS = DIFFICULTIES.map((tier) => tier.id);
 // XP rewards clearing NEW ground, not grinding a round that's already been
-// won. Score alone pays a small, capped amount ("performance"); the big
-// payout is one-time - the first clear of a court at a given tier - and
-// replaying that same clear again pays a small flat trickle instead. This is
-// why a career clear checks whether the court/tier has ever had stars before
-// writing this round's stars.
+// won. Score alone pays a small, capped amount ("performance"); both clear
+// payouts scale with how hard the court is - later courts and higher tiers
+// pay more either way - but only the first-clear payout is large. Replaying
+// a court/tier that has already been cleared pays the same shape of bonus,
+// scaled down to a trickle. This is why a career clear checks whether the
+// court/tier has ever had stars before writing this round's stars.
 const STAR_XP = 6;
 const FIRST_CLEAR_TIER = { relaxed: 0.6, standard: 1, ruthless: 1.5 };
-const REPEAT_CLEAR = { relaxed: 8, standard: 12, ruthless: 18 };
 // Stand-in "target" for endless and other modes with no real target, so
 // performance XP still has a reference point to scale against.
 const ENDLESS_REFERENCE = 600;
@@ -148,7 +148,7 @@ export function awardMatch(progress, game, mode, courtIndex) {
     if (cleared) {
       clearBonus = isFirstClearOfCourtTier
         ? Math.round(((60 + 15 * courtIndex) * FIRST_CLEAR_TIER[tier]) / 5) * 5
-        : REPEAT_CLEAR[tier];
+        : Math.max(5, Math.round(((6 + 3 * courtIndex) * FIRST_CLEAR_TIER[tier]) / 5) * 5);
     }
     xp = Math.max(3, performance + stars * STAR_XP + clearBonus);
   } else {
