@@ -23,6 +23,7 @@
     <title>tiki-taka — No goals. All flow.</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./icon-192.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./src/style.css" />
   </head>
@@ -73,6 +74,14 @@
           </button>
         </div>
         <p class="top-brand">
+          <img
+            class="top-brand-symbol"
+            src="./src/brand/tiki-taka-symbol.png"
+            alt=""
+            aria-hidden="true"
+            width="20"
+            height="20"
+          />
           <span class="top-brand-mark">tiki<span>-</span>taka</span>
         </p>
         <div class="top-bar-right">
@@ -123,9 +132,16 @@
         <section id="home-view" class="home-view" aria-labelledby="title-heading">
           <div class="home-intro console-panel console-panel-notch-tr">
             <h1 id="title-heading" class="game-title">
-              tiki<span>-</span>taka
+              <img
+                class="brand-logo-lockup"
+                src="./src/brand/tiki-taka-logo-lockup.png"
+                alt="tiki-taka — No goals. All flow."
+                width="384"
+                height="195"
+              />
+              <span class="sr-only">tiki-taka — No goals. All flow.</span>
             </h1>
-            <p class="title-tagline">NO GOALS. ALL FLOW.</p>
+            <p class="title-tagline sr-only">NO GOALS. ALL FLOW.</p>
             <nav id="title-menu" class="menu-list" aria-label="Main menu">
               <button id="title-play" type="button" class="menu-item primary">
                 <span class="menu-key" aria-hidden="true">▸</span> Play
