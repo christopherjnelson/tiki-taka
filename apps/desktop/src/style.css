@@ -2875,7 +2875,14 @@ body.play-view #bank-button {
     pointer-events: auto;
   }
   /* Score keeps the left gutter, stacked above the joystick it already
-     shares a corner with. */
+     shares a corner with. Energy joins it below (see `.court-toolbar`
+     further down) — the two used to split across both gutters purely
+     because Energy had nowhere else to go, which left this column mostly
+     empty above the joystick (94px of pod against ~300px of gutter) while
+     the right gutter carried two pods stacked tight. Reading order is
+     score, then Energy, then match on the other side — a player checks
+     score against Energy (what they've banked vs. what they can still
+     spend) at least as often as score against the clock. */
   body.play-view .hud-group-score {
     top: calc(var(--top-bar, 34px) + 8px);
     left: max(8px, env(safe-area-inset-left));
@@ -2886,19 +2893,12 @@ body.play-view #bank-button {
     border-top: 1px solid #ffffff1c;
     padding-top: 3px;
   }
-  /* Match numbers and Energy share the right gutter, stacked above the
-     action cluster: they're the two readouts a player checks together
-     mid-press (how much clock/multiplier is left, how much Energy is left
-     to spend on Focus or Boost), so keeping them in one column instead of
-     splitting them across both gutters reads as one decision, not two.
-     `top` clears the pause button (`.arena-venue-banner`, still pinned at
-     `top: 10px` in the phone rule that predates this file) — see that
-     rule's own comment for why it isn't moved here too. Three stacked stats
-     plus Energy below have to share the same strip of height the bottom-
-     centre dock never had to fit inside, so both this pod's stat numbers
-     and Energy's own type below are set in size explicitly rather than
-     inheriting the larger sizing built for a wide dock or a full-width
-     portrait band. */
+  /* Match numbers now have the whole right gutter to themselves — Energy's
+     departure (see `.court-toolbar` below) is what frees the room this
+     spends on bigger type. `top` still clears the pause button
+     (`.arena-venue-banner`, pinned at `top: 10px` in the phone rule that
+     predates this file) — see that rule's own comment for why it isn't
+     moved here too. */
   body.play-view .hud-group-match {
     top: calc(var(--top-bar, 34px) + 59px);
     right: max(8px, env(safe-area-inset-right));
@@ -2910,43 +2910,68 @@ body.play-view #bank-button {
     width: 100%;
     align-items: flex-end;
     padding-left: 0;
-    padding-top: 2px;
+    padding-top: 4px;
     border-left: none;
   }
   body.play-view .hud-group-match .stat:not(:first-child) {
     border-top: 1px solid #ffffff1c;
   }
+  /* Both gutters sat on a lot of unused height (a ~94px score pod and a
+     ~114px match pod inside a ~350px-tall gutter), so the numbers read as an
+     afterthought next to the pitch they're reporting on. Scaled up well past
+     the old 15px/20px pairing now that Energy's move has given both pods a
+     full column to themselves instead of splitting one. */
+  body.play-view .hud-group-match .stat-label,
+  body.play-view .hud-group-score .stat-label {
+    font-size: 10px;
+  }
   body.play-view .hud-group-match .stat strong,
   body.play-view .hud-group-score .stat strong {
-    font-size: 15px;
+    font-size: 24px;
   }
   body.play-view .hud-group-score .score-stat strong {
-    font-size: 20px;
+    font-size: 38px;
   }
-  /* Energy sits directly under the match pod in the same column: still the
-     compact label/value-then-track pill the shared coarse-pointer block
-     above already builds, just narrower (this gutter is 138px wide, not the
-     open floor space the bottom-centre dock had) and re-timed to start
-     right after the match pod's own real height instead of a guess. */
+  /* Energy moves into the left gutter, stacked under the score pod instead
+     of under the match pod on the other side: it and score are the two
+     numbers a player reads together (what's banked, what's left to spend),
+     and the left gutter had the room this needs — see the `.hud-group-score`
+     comment above. `top` is measured off the score pod's own real height
+     (103px at this width, with the enlarged type above) plus a 6px gap, not
+     guessed, matching how the old right-gutter version keyed off the match
+     pod's own height. */
   body.play-view .court-toolbar {
-    top: calc(var(--top-bar, 34px) + 59px + 122px);
-    right: max(8px, env(safe-area-inset-right));
-    left: auto;
+    top: calc(var(--top-bar, 34px) + 8px + 103px + 6px);
+    left: max(8px, env(safe-area-inset-left));
+    right: auto;
     bottom: auto;
     width: var(--gutter-pod-width);
-    padding: 4px 6px;
+    padding: 6px 8px;
     transform: none;
   }
   body.play-view .court-toolbar .energy-info {
-    gap: 2px;
-    padding: 3px 8px 8px;
+    gap: 4px;
+    padding: 4px 8px 10px;
   }
-  body.play-view .court-toolbar .energy-label,
+  /* Label above value instead of side by side — at this pod's 122px width,
+     "ENERGY" and "0 / 10" sharing one row at the enlarged size below left
+     barely 30px for the value and wrapped it mid-number. Stacking costs
+     nothing here: the pod has height to spare now that it isn't squeezed
+     under the match card any more (see the `.court-toolbar` rule above). */
+  body.play-view .court-toolbar .energy-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+  body.play-view .court-toolbar .energy-label {
+    font-size: 10px;
+  }
   body.play-view .court-toolbar .energy-value {
-    font-size: 9px;
+    font-size: 16px;
   }
   body.play-view .court-toolbar .energy-track {
-    bottom: 2px;
+    height: 6px;
+    bottom: 3px;
   }
 }
 /* Portrait's own delta: the court rotates to a 620:1000 box (long axis down
@@ -3005,6 +3030,21 @@ body.play-view #bank-button {
      continuous strip. */
   body.play-view .scoreboard {
     position: absolute;
+    /* Above `.court-toolbar`'s own z-index — 12 here, the shared
+       coarse-pointer block's value for its floating-pill treatment (see the
+       `@media (max-width: 900px), (pointer: coarse)…` rule), which this
+       breakpoint's own `.court-toolbar` rule never overrides. TIME docks
+       into row 2 as a `position: fixed` descendant of this box (see
+       `.clock-stat` below), and a fixed element still paints inside
+       whichever ancestor's stacking context it belongs to — it does not
+       escape one just by being fixed. Without this, the toolbar's near-
+       opaque row-2 background, later in the document and stacked higher,
+       painted over TIME almost entirely (a faint ghost was still visible
+       through its ~5% alpha, which is what made this so easy to miss). The
+       two rows never overlap geometrically (this box is row 1's own
+       height), so raising it only settles that one paint order, nothing
+       else. */
+    z-index: 13;
     top: 0;
     left: 0;
     width: 100%;
@@ -3065,13 +3105,26 @@ body.play-view #bank-button {
        the same defect one line up. The narrow tier below widens this. */
     padding-right: 56px;
   }
-  /* Three stats plus their dividers in the room the row and the docked pause
+  /* TIME used to be this pod's first stat, competing with MULTIPLIER and
+     POSSESSIONS for the same crowded row and pushing the score pod's own
+     "SCORE / 600" label into a wrap. It reads better next to Energy anyway —
+     both are the "how much do I have left" readouts a player checks together
+     — so it moves down to row 2 instead of DOM (see the clock-stat rule
+     under the Energy band below). Taking it out of flow here leaves
+     MULTIPLIER as the pod's first *visible* stat, but it is still the DOM's
+     second child, so the divider reset below is still needed on it
+     specifically rather than on `:first-child`. */
+  body.play-view .hud-group-match .stat:nth-child(2) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  /* Two stats plus their divider in the room the row and the docked pause
      button leave behind is tight enough at 320px that the shared card's own
-     16px divider gap, POSSESSIONS' own label tracking, and `.lives-stat`'s
-     letter-spacing (both built for a lone wide pill, not a crowded row)
-     push "3 / 3" onto two lines and crowd its label against the pause
-     button next to it. Nothing here is wider than the numbers actually need
-     once the wrap and the extra tracking are both trimmed back. */
+     16px divider gap and POSSESSIONS' own label tracking (both built for a
+     lone wide pill, not a crowded row) push "3 / 3" onto two lines and crowd
+     its label against the pause button next to it. Nothing here is wider
+     than the numbers actually need once the wrap and the extra tracking are
+     both trimmed back. */
   body.play-view .hud-group-match .stat {
     padding-left: 8px;
   }
@@ -3106,6 +3159,14 @@ body.play-view #bank-button {
     bottom: auto;
     left: 0;
     width: 100%;
+    /* The plain `.court-toolbar` rule at max-width:900px (no `body.play-view`
+       prefix, so lower specificity — but this block never set the property
+       at all, so it still won by cascade) stacks the toolbar into a column
+       for the floating pill layout every other phone width uses. This row is
+       a single strip, not a stack, and TIME's own fixed placement to its
+       right (below) assumes `.energy-info` is free to grow horizontally
+       instead of shrink-wrapping to a column's cross-axis width. */
+    flex-direction: row;
     transform: none;
     min-height: var(--mobile-energy-band, 44px);
     padding: 0 14px;
@@ -3119,14 +3180,52 @@ body.play-view #bank-button {
      whatever width is left — instead of the two-line stack the shared
      coarse-pointer block gives the floating pill (label/value row, then the
      track below it): a single row is shorter, and shorter is the entire
-     point of this band. */
+     point of this band. Width stops short of the toolbar's own full box
+     (`calc(100% - 58px)`, not 100%) to leave TIME's own reserved column at
+     the row's right edge — see the clock-stat rule below — so the meter
+     never draws under it. */
   body.play-view .court-toolbar .energy-info {
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 10px;
-    width: 100%;
+    width: auto;
+    max-width: calc(100% - 58px);
+    flex: 1 1 auto;
     padding: 0;
+  }
+  /* TIME, relocated from the crowded row above (see the `.hud-group-match`
+     rule higher up): still the same DOM node inside `.hud-group-match`, just
+     docked past this row's own right edge the way the pause button docks
+     past row 1's, so it reads as Energy's row-mate without either card
+     needing to know about the other's markup. Right-aligned to match the
+     numbers in row 1's own match pod, and centred on the same
+     `--mobile-energy-band` height the Energy row itself uses, so the two
+     rows' right edges land in one clean column. This is what gives row 2 the
+     full-width, edge-to-edge composition row 1 already had — Energy filling
+     the left, TIME anchoring the right, instead of a lone pill adrift in an
+     otherwise empty strip. */
+  body.play-view .scoreboard .hud-group-match .clock-stat {
+    position: fixed;
+    top: calc(var(--top-bar, 44px) + var(--scoreboard-height, 56px));
+    right: max(14px, env(safe-area-inset-right));
+    left: auto;
+    width: 48px;
+    height: var(--mobile-energy-band, 44px);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    z-index: 5;
+  }
+  body.play-view .scoreboard .hud-group-match .clock-stat .stat-label {
+    letter-spacing: 0.5px;
+  }
+  body.play-view .scoreboard .hud-group-match .clock-stat strong {
+    font-size: 15px;
+    white-space: nowrap;
   }
   body.play-view .court-toolbar .energy-row {
     flex: 0 0 auto;
@@ -4698,7 +4797,14 @@ body.play-view .arena-view .below-court {
     top: 0;
     left: auto;
     right: 6px;
-    height: var(--mobile-hud-row, 50px);
+    /* `--mobile-hud-row` is only ever a guess at the row's height; the row's
+       real height is `--scoreboard-height`, measured live off the actual
+       rendered row (see main.js) because a long venue name or a display-
+       scaled font can grow it past the guess. Sizing the pause button off
+       the guess instead of the measurement is exactly why it used to ride a
+       few px higher than the score and match pods next to it: its own box
+       stayed at 50px while theirs grew to whatever they actually needed. */
+    height: var(--scoreboard-height, 50px);
     transform: none;
     display: flex;
     align-items: center;
