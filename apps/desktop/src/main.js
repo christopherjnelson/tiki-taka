@@ -1236,7 +1236,7 @@ function showRoundResults({
     ? `THE COURT ERUPTS${stars ? ` · ${"★".repeat(stars)}` : ""}`
     : "THE CROWD IS STILL WITH YOU";
   $("invitation-note").textContent = "CHOOSE YOUR NEXT MOVE";
-  actions.hidden = true;
+  actions.hidden = false;
   $("start-button").disabled = true;
   $("secondary-button").disabled = true;
   if ($("tertiary-button")) $("tertiary-button").disabled = true;
@@ -1245,7 +1245,6 @@ function showRoundResults({
   resultRevealTimeout = setTimeout(() => {
     resultActionsReady = true;
     overlay.dataset.actions = "ready";
-    actions.hidden = false;
     $("start-button").disabled = false;
     $("secondary-button").disabled = false;
     if ($("tertiary-button")) $("tertiary-button").disabled = false;
@@ -1336,13 +1335,6 @@ function prepare() {
   $("eyebrow").textContent = game.config.place;
   $("court-title").textContent = game.config.name;
   $("court-description").textContent = game.config.description;
-  // Same mechanism the home screen uses for #home-court-preview: one
-  // renderer.courtPreview() call per court, not a second preview pipeline
-  // for the pre-round card (see .overlay-court-preview in style.css, phone
-  // widths only — it fills the space that card otherwise left empty).
-  if ($("overlay-court-preview")) {
-    $("overlay-court-preview").src = renderer.courtPreview(game.config);
-  }
   $("mode-label").textContent =
     mode === "career"
       ? `THE CIRCUIT / ${String(courtIndex + 1).padStart(2, "0")}`
@@ -1392,7 +1384,7 @@ function prepare() {
         ? "HOW LONG CAN YOU KEEP IT?"
         : mode === "practice"
           ? "A LITTLE SPACE TO LEARN"
-          : "NO GOALS. ALL FLOW.",
+          : "FOUR PLAYERS. ONE BALL.",
     mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
       ? "Connect triangles to buy time. Survive the rising press."
@@ -2597,7 +2589,7 @@ $("tertiary-button").addEventListener("click", () => {
 // The phone sheet's way out. It lands on home rather than merely hiding the
 // sheet: the round behind it is over, so dismissing to a dead arena with no
 // live controls would strand the player with nothing to press.
-$("overlay-close").addEventListener("click", () => {
+$("overlay-close")?.addEventListener("click", () => {
   if (phase === "finished" && !resultActionsReady) return;
   applyView("home");
 });

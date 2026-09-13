@@ -646,8 +646,8 @@ await check('full-time results consume early gamepad presses before revealing ac
               // check reports the beat never happened. What is being tested is
               // that the press during the beat was swallowed, and that is
               // settled by now regardless of how slow the trip back is.
-              window.__actionsHiddenDuringBeat =
-                document.querySelector('#overlay-actions').hidden;
+              window.__actionsDisabledDuringBeat =
+                document.querySelector('#start-button').disabled;
               window.__overlayVisibleDuringBeat =
                 !document.querySelector('#game-overlay').hidden;
               window.__resultPulseComplete = true;
@@ -665,8 +665,8 @@ await check('full-time results consume early gamepad presses before revealing ac
   await page.waitForFunction(() => window.__resultPulseComplete === true);
   assert.equal(await page.evaluate(() => window.__overlayVisibleDuringBeat), true,
     'A during the result beat must not replay the round');
-  assert.equal(await page.evaluate(() => window.__actionsHiddenDuringBeat), true,
-    'actions stay absent during the result beat');
+  assert.equal(await page.evaluate(() => window.__actionsDisabledDuringBeat), true,
+    'actions stay disabled during the result beat');
   await page.locator('#game-overlay[data-actions="ready"]').waitFor({ state: 'visible', timeout: 4000 });
   assert.equal(await page.locator('#overlay-actions').isVisible(), true);
   const replayed = await padUntil(page, 0,
@@ -876,10 +876,8 @@ async function offlineReload(baseURL) {
     // Play view hides the court heading, so read the arena's live labels instead.
     assert.match(await page.locator('#court-title').textContent(), /Courtyard/);
     // The kicker is the pre-round card's own copy, read here to prove the
-    // offline reload served the real app and not a cached shell. It said
-    // "FOUR PLAYERS. ONE BALL." until the card was reworked around the brand
-    // line; what matters to this check is that some live kicker text arrives.
-    await expectText(page.locator('#overlay-kicker'), /NO GOALS/i);
+    // offline reload served the real app and not a cached shell.
+    await expectText(page.locator('#overlay-kicker'), /FOUR PLAYERS/i);
     await page.locator('#start-button').click();
     assert.equal(await page.locator('#game-overlay').isHidden(), true);
     // Audio is not install-time precached. The fetch above proves that the
