@@ -637,7 +637,21 @@ await check('full-time results consume early gamepad presses before revealing ac
         requestAnimationFrame(() => {
           window.__setTestPad({ button: 0, pressed: false });
           requestAnimationFrame(() =>
-            requestAnimationFrame(() => { window.__resultPulseComplete = true; }),
+            requestAnimationFrame(() => {
+              // Capture the state here, in the page, at the moment the pulse
+              // finishes — not over a round-trip afterwards. The actions are
+              // revealed on a 1200ms wall-clock timer (RESULT_ACTION_DELAY in
+              // main.js), so querying them from the test after the fact races
+              // that timer: on a loaded runner the reveal lands first and the
+              // check reports the beat never happened. What is being tested is
+              // that the press during the beat was swallowed, and that is
+              // settled by now regardless of how slow the trip back is.
+              window.__actionsHiddenDuringBeat =
+                document.querySelector('#overlay-actions').hidden;
+              window.__overlayVisibleDuringBeat =
+                !document.querySelector('#game-overlay').hidden;
+              window.__resultPulseComplete = true;
+            }),
           );
         }),
       );
@@ -649,9 +663,9 @@ await check('full-time results consume early gamepad presses before revealing ac
   });
   await page.locator('#game-overlay[data-result="defeat"]').waitFor({ state: 'visible' });
   await page.waitForFunction(() => window.__resultPulseComplete === true);
-  assert.equal(await page.locator('#game-overlay').isVisible(), true,
+  assert.equal(await page.evaluate(() => window.__overlayVisibleDuringBeat), true,
     'A during the result beat must not replay the round');
-  assert.equal(await page.locator('#overlay-actions').isHidden(), true,
+  assert.equal(await page.evaluate(() => window.__actionsHiddenDuringBeat), true,
     'actions stay absent during the result beat');
   await page.locator('#game-overlay[data-actions="ready"]').waitFor({ state: 'visible', timeout: 4000 });
   assert.equal(await page.locator('#overlay-actions').isVisible(), true);

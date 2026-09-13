@@ -36,10 +36,14 @@ jobs:
         run: npm run build
       - name: Check the phone layouts
         run: npm run test:mobile-smoke
-      - name: Run required desktop browser suites
-        run: npm run test:web
-      - name: Run the full mobile layout suites
-        run: npm run test:mobile-layouts
+      # MOBILE_LAYOUTS=1 here rather than as a second step. The mobile groups
+      # live inside the same three suites as the desktop checks, so running
+      # `test:mobile-layouts` afterwards re-ran browser, interface and
+      # navigation in full a second time — doubling CI's slowest stage to gain
+      # a handful of extra assertions, and loading the runner enough to surface
+      # timing flakes. One pass with the flag set covers both.
+      - name: Run required desktop and mobile browser suites
+        run: MOBILE_LAYOUTS=1 npm run test:web
       - name: Upload browser screenshots on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
