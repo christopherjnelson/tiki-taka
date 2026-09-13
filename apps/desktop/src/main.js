@@ -3141,23 +3141,40 @@ document.querySelectorAll("[data-gamepad-action]").forEach((select) => {
   });
 });
 
+// The Fullscreen API is not a given: iPhone Safari has no
+// `requestFullscreen` at all (iPad does), and this control now lives in the
+// top bar on every screen rather than behind a Settings dialog a player has
+// to go find, so there is no dialog wrapper left to quietly no-op inside.
+// A button that does nothing when pressed is worse than no button, so the
+// single fullscreen control is hidden outright — not just disabled — on any
+// browser that lacks the API, decided once at startup rather than re-checked
+// on every click.
+const fullscreenSupported =
+  typeof document.documentElement.requestFullscreen === "function";
+if (fullscreenSupported) $("fullscreen-button").hidden = false;
+
 function syncFullscreen() {
+  if (!fullscreenSupported) return;
   const active = document.fullscreenElement === document.documentElement;
   document.body.classList.toggle("fullscreen-game", active);
-  $("fullscreen-button").setAttribute("aria-pressed", String(active));
-  $("fullscreen-button").innerHTML =
-    `<span aria-hidden="true">⌗</span> ${active ? "Exit fullscreen" : "Fullscreen"}`;
+  const button = $("fullscreen-button");
+  button.setAttribute("aria-pressed", String(active));
+  const label = active ? "Exit fullscreen" : "Enter fullscreen";
+  button.title = label;
+  button.setAttribute("aria-label", label);
 }
-$("fullscreen-button").addEventListener("click", async () => {
-  try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else await document.documentElement.requestFullscreen();
-  } catch {
-    toast("Fullscreen is not available in this browser.");
-  }
-  syncFullscreen();
-});
-document.addEventListener("fullscreenchange", syncFullscreen);
+if (fullscreenSupported) {
+  $("fullscreen-button").addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch {
+      toast("Fullscreen is not available in this browser.");
+    }
+    syncFullscreen();
+  });
+  document.addEventListener("fullscreenchange", syncFullscreen);
+}
 function playFromMenu() {
   $("title-play").classList.remove("pad-focus");
   if (document.activeElement === $("title-play")) $("title-play").blur();
