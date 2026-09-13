@@ -359,8 +359,23 @@ await check('a complete playable career run clears and unlocks the next court', 
   await runRound(page, {
     steps: 180,
     async onStep() {
+      // Always attempt a pass, never only when a target can be parsed.
+      //
+      // This drives a real 90-second round through the DOM, and the round is
+      // lost after three turnovers. One of the ways to turn the ball over is
+      // simply holding it: MAX_HOLD in packages/engine/src/game.js is 6s, and
+      // a step here is 500ms of game time, so twelve steps that press nothing
+      // hand the ball straight to the press. Reading #target-label and acting
+      // only on a match meant every unreadable frame — the ball in flight, the
+      // label a frame behind reception — was such a step. Locally that cost
+      // one step a run and the round still won by an order of magnitude on
+      // score; on a loaded CI runner the misses cluster, three holds run out,
+      // and the run ends DEFEAT · POSSESSIONS LOST with nothing wrong but the
+      // driving. Space is the smart pass and picks its own receiver, so it is
+      // the right thing to fall back to: the ball keeps moving on every step
+      // whether or not the label was legible at the instant we looked.
       const target = (await page.locator('#target-label').textContent())?.match(/→\s*([1-4])/);
-      if (target) await page.keyboard.press(`Digit${target[1]}`);
+      await page.keyboard.press(target ? `Digit${target[1]}` : 'Space');
     },
   });
   await expectText(page.locator('#overlay-kicker'), /^VICTORY · COURT CLEARED/);
