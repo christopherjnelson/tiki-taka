@@ -1143,11 +1143,7 @@ kbd {
   -webkit-user-select: none;
   user-select: none;
 }
-/* The result is a full-screen sheet on a phone, and a sheet covering the court
-   makes the live controls beneath it both useless and visible through it. */
-body.round-over .touch-controls {
-  display: none;
-}
+
 /* The vertical "MOVE" hint next to the joystick read as a rendering
    accident once the joystick had five siblings to share the row with
    instead of the empty space it used to have — sideways text wedged between
@@ -5336,7 +5332,7 @@ body.play-view .arena-view .below-court {
   }
   /* The stats were the worst of the squeeze: three columns in a 154px-wide
      card clipped every label. Two columns at full width fit the words. */
-  body.play-view .game-overlay .result-stats {
+  body.play-view .game-overlay .result-breakdown {
     grid-template-columns: 1fr 1fr;
   }
   body.play-view .game-overlay .overlay-actions {
@@ -5412,8 +5408,14 @@ body.play-view .arena-view .below-court {
   }
 }
 
-/* With the result taking the whole phone screen, everything belonging to the
-   live round has to get out of the way — not just the controls. The HUD, the
+/* Whenever the sheet is up, everything belonging to the live round gets out of
+   the way — not just the controls.
+
+   Keyed on the overlay's own `hidden` attribute rather than a class set when
+   the round ends, because this is the same modal at kick-off as at full time
+   and both need the screen. A class set only in finish() covered half of it
+   and left the score, clock, multiplier, Energy and the thumb controls sitting
+   over the opening card. The HUD, the
    Energy pill, the pause control and any hint toast all still painted over the
    sheet, so "FULL TIME." read through a scoreboard and the close control sat
    underneath the pause button. The toast in particular outranks the sheet on
@@ -5424,12 +5426,12 @@ body.play-view .arena-view .below-court {
    coarse-pointer query the sheet itself uses. Desktop keeps its HUD, where the
    result is a panel over a still-visible court rather than a sheet. */
 @media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
-  body.play-view.round-over .touch-controls,
-  body.play-view.round-over .scoreboard,
-  body.play-view.round-over .court-toolbar,
-  body.play-view.round-over .arena-venue-banner,
-  body.play-view.round-over .one-touch-readout,
-  body.play-view.round-over .toast {
+  body.play-view:has(#game-overlay:not([hidden])) .touch-controls,
+  body.play-view:has(#game-overlay:not([hidden])) .scoreboard,
+  body.play-view:has(#game-overlay:not([hidden])) .court-toolbar,
+  body.play-view:has(#game-overlay:not([hidden])) .arena-venue-banner,
+  body.play-view:has(#game-overlay:not([hidden])) .one-touch-readout,
+  body.play-view:has(#game-overlay:not([hidden])) .toast {
     display: none;
   }
 }

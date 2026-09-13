@@ -1282,7 +1282,6 @@ function clearAnnouncement() {
 }
 function prepare() {
   resetHudCache();
-  document.body.classList.remove("round-over");
   renderer.effects.length = 0;
   game = new Game(config(), progress.tactic);
   window.__game = game;
@@ -2415,12 +2414,6 @@ function finish() {
   renderer.effects.length = 0;
   finished = true;
   phase = "finished";
-  // A phone shows the result as a full-screen sheet, which means the live
-  // controls and the hint toast underneath it have to go — they are affordances
-  // for a round that is over, and on a small screen they showed through and
-  // competed with the buttons that actually do something now. CSS keys off this
-  // rather than reading `phase`, which is module-local.
-  document.body.classList.add("round-over");
   focusToggle = false;
   boostToggle = false;
   clearInput();
