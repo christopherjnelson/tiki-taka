@@ -1599,11 +1599,10 @@ body.play-view .ambience {
 }
 .top-brand-wordmark {
   display: block;
-  height: 24px;
+  height: 28px;
   width: auto;
-  max-width: 105px;
+  max-width: 160px;
   object-fit: contain;
-  filter: drop-shadow(0 2px 6px rgba(39, 234, 216, 0.35));
 }
 .top-brand-sub {
   color: var(--muted);
@@ -3320,7 +3319,8 @@ body.play-view .arena-view .below-court {
     justify-content: center;
   }
   .brand-logo-lockup {
-    max-width: 230px;
+    max-width: 200px;
+    max-height: 52px;
   }
   .home-court-card {
     display: none;
@@ -4074,7 +4074,7 @@ body.play-view .arena-view .below-court {
    longer has to carry the branding on its own — and it has a 24% column to sit
    in rather than half the window. */
 .game-title {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4088,11 +4088,11 @@ body.play-view .arena-view .below-court {
 .brand-logo-lockup {
   display: block;
   width: 100%;
-  max-width: clamp(200px, 22vw, 290px);
+  max-width: clamp(170px, 18vw, 230px);
+  max-height: clamp(42px, 4.8vw, 56px);
   height: auto;
   margin: 0 auto;
   object-fit: contain;
-  filter: drop-shadow(0 4px 14px rgba(16, 11, 37, 0.55));
 }
 .game-title span {
   color: var(--cyan);
@@ -4106,7 +4106,7 @@ body.play-view .arena-view .below-court {
 .menu-list {
   display: grid;
   gap: 9px;
-  margin: 18px 0 0;
+  margin: 8px 0 0;
 }
 .menu-item {
   display: flex;
@@ -4173,7 +4173,7 @@ body.play-view .arena-view .below-court {
   color: #100923;
 }
 .title-note {
-  margin: 13px 0 0;
+  margin: 6px 0 0;
   color: var(--cyan);
   font: 700 9px var(--sign);
   letter-spacing: 2px;
