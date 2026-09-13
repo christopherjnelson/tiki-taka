@@ -801,6 +801,9 @@ dialog h2 {
 .game-overlay[data-result] .invitation-note {
   margin: 12px 0 0;
 }
+.game-overlay:not([data-result]) .invitation-note {
+  display: none;
+}
 .game-overlay[data-actions="waiting"] .overlay-actions button {
   opacity: 0.55;
   cursor: default;
@@ -6033,6 +6036,9 @@ body.play-view .arena-view .below-court {
     box-sizing: content-box;
   }
   body.play-view .game-overlay:not([data-result]) #overlay-kicker {
+    display: none;
+  }
+  body.play-view .game-overlay:not([data-result]) .invitation-note {
     display: none;
   }
   body.play-view .game-overlay:not([data-result]) #overlay-title {
