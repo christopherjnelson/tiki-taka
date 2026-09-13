@@ -634,7 +634,7 @@
                 reserve (engine field `game.focus`); the UI calls it Energy so
                 the two abilities below can keep their own names. -->
                 <div class="energy-row">
-                  <span class="energy-label">BOOST</span>
+                  <span class="energy-label">ENERGY</span>
                   <span id="energy-value" class="energy-value">0 / 10</span>
                 </div>
                 <span
@@ -712,24 +712,64 @@
               ><span id="joystick-thumb"></span>
             </div>
             <span class="touch-hint">MOVE</span>
+            <!-- Five actions, weighted by frequency: Pass and Wall are the
+            primaries a player reaches for on almost every possession, so they
+            sit in their own row, biggest and closest to the thumb's resting
+            edge. Focus, Boost and Shout are holds/occasionals and share a
+            lighter secondary row above. Same grouping works stacked (portrait,
+            below the court) or floating (landscape, over it) — only the
+            container's own position changes between them. -->
             <div class="touch-actions">
-              <button
-                id="touch-focus"
-                aria-pressed="false"
-                title="Earn Focus with wall passes, triangles, or bonus zones."
-                disabled
-              >
-                <span>Focus</span
-                ><span id="touch-focus-value" class="touch-focus-value"
-                  >0 / 10</span
-                ><span class="touch-focus-track" aria-hidden="true"
-                  ><span id="touch-focus-fill"></span
-                ></span></button
-              ><button id="touch-bank" aria-pressed="false" disabled>
-                Wall</button
-              ><button id="touch-pass" disabled>
-                Pass <span aria-hidden="true">↗</span>
-              </button>
+              <div class="touch-actions-secondary">
+                <button
+                  id="touch-shout"
+                  class="touch-action-btn touch-action-shout"
+                  title="Shout target to bonus zone."
+                  disabled
+                >
+                  Shout
+                </button>
+                <button
+                  id="touch-focus"
+                  class="touch-action-btn touch-action-focus"
+                  aria-pressed="false"
+                  title="Earn Focus with wall passes, triangles, or bonus zones."
+                  disabled
+                >
+                  <span>Focus</span
+                  ><span id="touch-focus-value" class="touch-focus-value"
+                    >0 / 10</span
+                  ><span class="touch-focus-track" aria-hidden="true"
+                    ><span id="touch-focus-fill"></span
+                  ></span>
+                </button>
+                <button
+                  id="touch-boost"
+                  class="touch-action-btn touch-action-boost"
+                  aria-pressed="false"
+                  title="Hold Boost. Boost uses Energy."
+                  disabled
+                >
+                  Boost
+                </button>
+              </div>
+              <div class="touch-actions-primary">
+                <button
+                  id="touch-bank"
+                  class="touch-action-btn touch-action-wall"
+                  aria-pressed="false"
+                  disabled
+                >
+                  Wall
+                </button>
+                <button
+                  id="touch-pass"
+                  class="touch-action-btn touch-action-pass"
+                  disabled
+                >
+                  Pass <span aria-hidden="true">↗</span>
+                </button>
+              </div>
             </div>
           </div>
 

@@ -1156,6 +1156,8 @@ function setControlsEnabled(enabled) {
     "touch-pass",
     "touch-bank",
     "touch-focus",
+    "touch-shout",
+    "touch-boost",
   ].forEach((id) => ($(id).disabled = !enabled));
   $("joystick").setAttribute("aria-disabled", String(!enabled));
 }
@@ -1248,6 +1250,7 @@ function prepare() {
   $("boost-button").setAttribute("aria-pressed", "false");
   $("touch-bank").setAttribute("aria-pressed", "false");
   $("touch-focus").setAttribute("aria-pressed", "false");
+  $("touch-boost").setAttribute("aria-pressed", "false");
   // Every branch below reads the possession count off game.config
   // (possessionLimit(), the same fallback the engine itself uses) rather
   // than a literal 3 — Relaxed/Ruthless move it to 4/2, and endless mode is
@@ -1482,6 +1485,7 @@ function pause() {
   $("focus-button").setAttribute("aria-pressed", "false");
   $("boost-button").setAttribute("aria-pressed", "false");
   $("touch-focus").setAttribute("aria-pressed", "false");
+  $("touch-boost").setAttribute("aria-pressed", "false");
   setPauseState(true);
   syncResumePrompt();
   openMenu();
@@ -1678,6 +1682,7 @@ function syncBoostButtons() {
   const active = Boolean(boostToggle || game?.boostActive);
   if (active !== hudCache.boostActive) {
     $("boost-button").setAttribute("aria-pressed", String(active));
+    $("touch-boost").setAttribute("aria-pressed", String(active));
     hudCache.boostActive = active;
   }
 }
@@ -2472,7 +2477,9 @@ $("touch-bank").addEventListener("click", toggleBank);
 $("focus-button").addEventListener("click", toggleFocus);
 $("touch-focus").addEventListener("click", toggleFocus);
 $("boost-button").addEventListener("click", toggleBoost);
+$("touch-boost").addEventListener("click", toggleBoost);
 $("shout-button").addEventListener("click", shoutTarget);
+$("touch-shout").addEventListener("click", shoutTarget);
 $("tactic-select").addEventListener("change", (e) => {
   progress.tactic = e.target.value;
   persist();
