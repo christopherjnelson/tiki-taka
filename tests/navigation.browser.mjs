@@ -301,7 +301,30 @@ await check(
     assert.equal(await page.locator("#arena-view").isHidden(), true);
     await page.locator("#home-view").waitFor({ state: "visible" });
     await page.locator(".court-item").nth(4).click();
+    assert.match(
+      await page.locator("#title-play-copy").textContent(),
+      /The Cage|Tokyo/i,
+    );
+    await page.locator("#title-play").click();
     assert.match(await page.locator("#court-title").textContent(), /The Cage/i);
+    assert.equal(page.url().endsWith("#play"), true);
+
+    // Verify selecting a different court and launching Free practice on it
+    await leaveToHome(page);
+    await page.locator(".court-item").nth(2).click();
+    assert.match(
+      await page.locator("#title-play-copy").textContent(),
+      /El Patio|Barcelona/i,
+    );
+    await page.locator('[data-home-mode="practice"]').click();
+    assert.match(
+      await page.locator("#mode-label").textContent(),
+      /PRACTICE|WARM-UP/i,
+    );
+    assert.match(
+      await page.locator("#court-title").textContent(),
+      /El Patio/i,
+    );
     assert.equal(page.url().endsWith("#play"), true);
     assert.deepEqual(errors, []);
     await context.close();
@@ -934,11 +957,13 @@ await check(
     assert.equal(await page.locator("#top-home").isVisible(), false);
     // Escape and the gamepad's Start still do exactly what they did.
     await page.locator("#court-list button").first().click();
+    await page.locator("#title-play").click();
     await page.locator("#arena-view").waitFor({ state: "visible" });
     assert.equal(await page.locator("#top-home").isVisible(), true);
     await page.locator("#top-home").click();
     await page.locator("#home-view").waitFor({ state: "visible" });
     await page.locator("#court-list button").first().click();
+    await page.locator("#title-play").click();
     await page.locator("#arena-view").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
     await page.locator("#pause-menu").waitFor({ state: "visible" });

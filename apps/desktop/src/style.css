@@ -2974,6 +2974,24 @@ body.play-view #bank-button {
   color: var(--mode-accent);
   transform: translateX(2px);
 }
+.home-modes button.active,
+.home-modes button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--mode-accent), transparent 20%);
+  border-top-color: var(--mode-accent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface), var(--mode-accent) 18%) 0%,
+    color-mix(in srgb, var(--surface), var(--mode-accent) 8%) 100%
+  );
+  box-shadow:
+    0 4px 16px color-mix(in srgb, var(--mode-accent), transparent 75%),
+    inset 0 1px 0 color-mix(in srgb, var(--ink), transparent 75%);
+}
+.home-modes button.active::after,
+.home-modes button[aria-pressed="true"]::after {
+  color: var(--mode-accent);
+  transform: translateX(2px);
+}
 .home-modes button:disabled,
 .home-modes button[aria-disabled="true"] {
   cursor: not-allowed;
@@ -4161,6 +4179,32 @@ body.play-view .arena-view .below-court {
   color: var(--ink);
   font: italic 800 clamp(20px, 1.9vw, 32px) / 0.9 var(--display);
   letter-spacing: -1px;
+}
+.courts-pad-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: auto;
+  align-self: center;
+}
+.courts-pad-hint[hidden] {
+  display: none;
+}
+.courts-pad-hint .pad-chip {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--cyan);
+  font-weight: 700;
+  font-size: 9px;
+  line-height: 1.2;
 }
 /* One column of six on home: the courts sit beside the demo rather than under
    it, so they read as a list you scan down and never need a second page.

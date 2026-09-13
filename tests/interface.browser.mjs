@@ -735,6 +735,7 @@ await check(
         await page.locator("#home-view").waitFor({ state: "visible" });
       }
       await page.locator(".court-item").nth(i).click();
+      await page.locator("#title-play").click();
       await page.locator("#arena-view").waitFor({ state: "visible" });
       await page.evaluate(
         () =>

@@ -179,6 +179,8 @@ let courtThumbnailGeneration = 0;
 const viewForHash = () => (location.hash === "#play" ? "arena" : "home");
 let mode = "career",
   courtIndex = progress.lastCourt,
+  selectedCourtIndex = Math.min(progress.lastCourt || 0, progress.unlocked ?? 0),
+  selectedHomeMode = "career",
   game,
   phase = "ready",
   // A cold load always opens home. applyView() pushes #play when a round
@@ -484,20 +486,46 @@ function dismissPauseMenu() {
 }
 function syncTitle() {
   const resumable = phase === "paused" || phase === "playing";
-  const court = COURTS[resumable ? courtIndex : progress.lastCourt] || COURTS[0];
-  $("title-play").lastChild.textContent = resumable
+  const isResumingSelected =
+    resumable &&
+    selectedCourtIndex === courtIndex &&
+    selectedHomeMode === mode;
+  const court =
+    COURTS[isResumingSelected ? courtIndex : selectedCourtIndex] || COURTS[0];
+  $("title-play").lastChild.textContent = isResumingSelected
     ? " Resume"
-    : progress.xp > 0
-      ? " Continue"
-      : " Play";
-  $("title-play-copy").textContent = resumable
+    : selectedHomeMode === "practice"
+      ? " Practice"
+      : progress.xp > 0
+        ? " Continue"
+        : " Play";
+  $("title-play-copy").textContent = isResumingSelected
     ? `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`
-    : `${court.name} · ${court.place}`;
+    : selectedHomeMode === "practice"
+      ? `${court.name} · Free Practice`
+      : `${court.name} · ${court.place}`;
   const preview = $("home-court-preview");
   if (preview) {
     preview.src = renderer.courtPreview(court);
     preview.alt = `${court.name} court preview`;
   }
+}
+function selectCourt(i) {
+  if (i < 0 || i >= COURTS.length || i > progress.unlocked) return;
+  selectedCourtIndex = i;
+  selectedHomeMode = "career";
+  document.querySelectorAll("#court-list .court-item").forEach((b, idx) => {
+    const isSelected = idx === i;
+    b.classList.toggle("active", isSelected);
+    b.setAttribute("aria-current", isSelected ? "true" : "false");
+  });
+  document.querySelectorAll("[data-home-mode]").forEach((btn) => {
+    const active = btn.dataset.homeMode === selectedHomeMode;
+    btn.classList.toggle("active", active);
+    btn.setAttribute("aria-pressed", String(active));
+  });
+  syncTitle();
+  selectHomeLeaderboardCourt(i);
 }
 function deferCourtThumbnails(list, generation) {
   const thumbnails = [...list.querySelectorAll(".court-thumb")];
@@ -813,8 +841,13 @@ function applyView(next, { updateHash = true } = {}) {
   if (view !== "arena") closePauseMenu({ restoreFocus: false });
   // Exactly one game is live at a time: the demo is built on the way into home
   // and dropped on the way out, before the arena starts drawing.
-  if (view === "home") startAttract();
-  else stopAttract();
+  if (view === "home") {
+    if (phase === "paused" || phase === "playing") {
+      selectedCourtIndex = courtIndex;
+      selectedHomeMode = mode;
+    }
+    startAttract();
+  } else stopAttract();
   syncProgress();
   syncSettingChrome();
   syncPauseMenu();
@@ -859,22 +892,21 @@ function config() {
       },
       progress.difficulty,
     );
-  if (mode === "practice")
+  if (mode === "practice") {
+    const court = COURTS[courtIndex] || COURTS[0];
     return applyDifficulty(
       {
-        ...COURTS[0],
-        name: "The warm-up",
-        place: "YOUR SPACE TO EXPERIMENT",
+        ...court,
         target: 120,
         time: 90,
-        speed: 58,
-        defenders: 2,
+        speed: Math.min(court.speed, 65),
         practice: true,
         description:
           "A gentle press and unlimited recoveries. Learn the rhythm, try the walls, find your triangle.",
       },
       progress.difficulty,
     );
+  }
   return applyDifficulty(COURTS[courtIndex], progress.difficulty);
 }
 // The single source of truth for "how many possessions does this round
@@ -1004,7 +1036,8 @@ function syncProgress() {
   const listedTierTag = shortTierLabel(listedTier);
   COURTS.forEach((court, i) => {
     const btn = document.createElement("button");
-    btn.className = `court-item ${i === courtIndex && mode === "career" ? "active" : ""}`;
+    const isSelected = i === selectedCourtIndex;
+    btn.className = `court-item ${isSelected ? "active" : ""}`;
     btn.disabled = i > progress.unlocked;
     const stars = starsForTier(i, listedTier);
     btn.setAttribute(
@@ -1013,7 +1046,7 @@ function syncProgress() {
     );
     btn.setAttribute(
       "aria-current",
-      i === courtIndex && mode === "career" ? "true" : "false",
+      isSelected ? "true" : "false",
     );
     // The thumb source is intentionally populated after first paint below.
     // Width/height preserve the existing layout while it is pending.
@@ -1045,7 +1078,14 @@ function syncProgress() {
         previewLeave();
       }
     });
-    btn.addEventListener("click", () => switchMode("career", i));
+    btn.addEventListener("click", () => {
+      if (btn.disabled) return;
+      selectCourt(i);
+    });
+    btn.addEventListener("dblclick", () => {
+      if (btn.disabled) return;
+      switchMode(selectedHomeMode, i);
+    });
     $("court-list").append(btn);
   });
   deferCourtThumbnails($("court-list"), thumbnailGeneration);
@@ -1059,7 +1099,10 @@ function syncProgress() {
     });
   }
   document.querySelectorAll("[data-home-mode]").forEach((btn) => {
-    const active = view === "arena" && btn.dataset.homeMode === mode;
+    const active =
+      view === "arena"
+        ? btn.dataset.homeMode === mode
+        : btn.dataset.homeMode === selectedHomeMode;
     btn.classList.toggle("active", active);
     btn.setAttribute("aria-pressed", String(active));
   });
@@ -1312,6 +1355,8 @@ function prepare() {
 function switchMode(next, index = courtIndex) {
   if (next === "daily" || next === "endless") return;
   closePauseMenu({ restoreFocus: false });
+  selectedCourtIndex = index;
+  selectedHomeMode = next;
   if (phase === "playing" || phase === "paused") {
     pause();
     applyView("arena");
@@ -2688,6 +2733,8 @@ function setInputSource(source) {
   if (inputSource === source) return;
   inputSource = source;
   refreshToolbarChips();
+  const padHint = $("courts-pad-hint");
+  if (padHint) padHint.hidden = source !== "gamepad";
 }
 function syncSettingChrome() {
   syncAudioChrome();
@@ -2698,6 +2745,8 @@ function syncSettingChrome() {
   if ($("preset-select")) $("preset-select").value = settings.preset;
   syncGamepadDropdowns();
   refreshToolbarChips();
+  const padHint = $("courts-pad-hint");
+  if (padHint) padHint.hidden = inputSource !== "gamepad";
   // The court's own aria-label stays keyboard-phrased: it is read once by a
   // screen reader, not glanced at mid-play, so it is not worth chasing the
   // live input source the way the visible chips are.
@@ -3029,14 +3078,16 @@ $("fullscreen-button").addEventListener("click", async () => {
 });
 document.addEventListener("fullscreenchange", syncFullscreen);
 function playFromMenu() {
-  const resumeRound = phase === "paused";
+  const resumeRound =
+    phase === "paused" &&
+    selectedCourtIndex === courtIndex &&
+    selectedHomeMode === mode;
   if (!resumeRound) {
-    mode = "career";
-    courtIndex = progress.lastCourt;
-    prepare();
+    switchMode(selectedHomeMode, selectedCourtIndex);
+  } else {
+    applyView("arena");
+    resume();
   }
-  applyView("arena");
-  if (resumeRound) resume();
 }
 $("title-play").addEventListener("click", playFromMenu);
 $("pause-resume").addEventListener("click", dismissPauseMenu);
@@ -3055,7 +3106,14 @@ $("pause-settings").addEventListener("click", openSettings);
 document.querySelectorAll("[data-home-mode]").forEach((button) => {
   button.addEventListener("click", () => {
     if (button.disabled || button.dataset.homeMode === "daily") return;
-    switchMode(button.dataset.homeMode, courtIndex);
+    selectedHomeMode = button.dataset.homeMode;
+    document.querySelectorAll("[data-home-mode]").forEach((btn) => {
+      const active = btn === button;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    });
+    syncTitle();
+    switchMode(button.dataset.homeMode, selectedCourtIndex);
   });
 });
 const courtLeaderboardTabs = Array.from(document.querySelectorAll(".hl-tab"));
@@ -3567,6 +3625,29 @@ function pollGamepad(dt) {
     else if (phase !== "finished" || resultActionsReady)
       nav($("game-overlay"), () => $("start-button").click());
   } else if (view === "home") {
+    const focused = document.activeElement;
+    const isCourtItem = focused?.classList.contains("court-item");
+    if (isCourtItem) {
+      const idx = Number(
+        focused.querySelector(".court-thumb")?.dataset.courtIndex ??
+          selectedCourtIndex,
+      );
+      if (tap(2)) {
+        selectedHomeMode = "practice";
+        switchMode("practice", idx);
+        padPrevious = pressed;
+        return;
+      }
+      if (tap(0)) {
+        if (selectedCourtIndex === idx) {
+          switchMode(selectedHomeMode, idx);
+        } else {
+          selectCourt(idx);
+        }
+        padPrevious = pressed;
+        return;
+      }
+    }
     // Home is one list: the menu, then the demo's neighbours — the courts and
     // the modes — then the bar. The menu comes first so the first d-pad step
     // from a fresh load is still the next menu item, and B has nowhere to go
