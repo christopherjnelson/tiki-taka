@@ -1776,6 +1776,21 @@ body.play-view .top-settings {
   .top-brand-mark {
     font-size: 15px;
   }
+  /* The transport-button shrink above clears 320px for the home screen's
+     top bar, which only carries Settings + the profile chip on its right.
+     Play view's right side carries Home and Menu instead of Settings — two
+     labelled buttons, not one — and at their text-plus-icon width that pair
+     still overflows its grid column into the centred wordmark (see the
+     `.bar-button-label` this targets, added in index.html). The label text
+     is what gives way, not either control: both stay tappable and named
+     (the `title` attribute already on each becomes its accessible name once
+     the visible text is gone), they just read as icons here the way the
+     soundtrack transport buttons already do. Unqualified by `body.play-view`
+     this would also mute Settings' label on the screens where it already
+     fits — scoping to play view keeps this to the width it actually broke. */
+  body.play-view .top-bar-right .bar-button-label {
+    display: none;
+  }
 }
 @media (orientation: landscape) and (max-height: 480px) {
   :root {
@@ -2509,10 +2524,20 @@ body.play-view #bank-button {
    court/pitch below that band, though landscape in particular has no truly
    dead space there — the scoreboard already floats on top of the court by
    design (see body.play-view .scoreboard) — so "below the HUD" is the best
-   available spot rather than a fully empty one. */
+   available spot rather than a fully empty one.
+
+   `.one-touch-readout` sits right below the court's top edge on the exact
+   same formula (`--top-bar` + `--scoreboard-height` + 8px — see its own
+   comment in index.html/style.css), which was fine while only one of the
+   two was ever on screen at once in practice, but they are independent
+   (a streak can be live when a hint fires) and land on the same rectangle
+   when they are. The toast is the transient one, so it gives way: the
+   extra 36px is the one-touch pill's own height plus a matching 8px gap,
+   pushing the toast below it rather than through it, whether or not the
+   pill actually happens to be visible at the time. */
 @media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
   body.play-view .toast {
-    top: calc(var(--top-bar, 44px) + var(--scoreboard-height, 56px) + 8px);
+    top: calc(var(--top-bar, 44px) + var(--scoreboard-height, 56px) + 8px + 36px);
     bottom: auto;
     max-width: min(84vw, 340px);
     text-align: center;
@@ -2535,14 +2560,24 @@ body.play-view #bank-button {
        the field, translucent and blurred so the pitch reads through them;
      - the joystick pins to the bottom-left corner and the action cluster to
        the bottom-right — split, not stacked together on one side — which is
-       also how the same two elements will anchor in a portrait floating
-       layout later (Phase B), so this rule shape is written to be reused
-       rather than replaced;
+       also how the same two elements anchor in the portrait floating layout
+       below (Phase B);
      - Energy moves into .court-toolbar's own floating pill, bottom-center,
        in the gap between the two thumb clusters, since a player cannot
-       spend Energy (Focus and Boost both draw from it) they cannot see. */
-@media (max-width: 900px) and (orientation: landscape),
-  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
+       spend Energy (Focus and Boost both draw from it) they cannot see.
+
+   Phase B (portrait) needs this same floating treatment, not a parallel
+   set: the joystick/action-cluster/Energy-pill markup already shares one
+   set of classes across both orientations (that is what the "written to be
+   reused" plan above was for), so this query no longer requires
+   `orientation: landscape` — it now applies to both, and only the three
+   rules that are genuinely shaped by the court's aspect ratio (`#court`
+   itself, `.scoreboard`, `.one-touch-readout`) get a portrait-specific
+   width formula in the small orientation-qualified blocks right after this
+   one, the same way `OLD-mobile-styles.css` split only its aspect-ratio
+   rule between two tiny `@media (orientation: …)` blocks and kept
+   everything else shared. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
   body.play-view {
     overflow: hidden;
   }
@@ -2563,8 +2598,17 @@ body.play-view #bank-button {
     height: auto;
     min-height: 0;
   }
+  /* A fixed height (not just min-height) was safe while this rule only ever
+     matched landscape: at 844px+ of width the score card, match card and
+     pause button always fit on one row. Reusing the same rule for portrait
+     (see the note above this query) breaks that assumption — a narrow
+     phone's court can be under 320px wide, `.scoreboard`'s `flex-wrap: wrap`
+     pushes the match card to a second row, and a fixed height clipped
+     nothing but also grew nothing, so the wrapped row rendered underneath
+     the hint toast instead of pushing it down. min-height alone lets the
+     box (and the --scoreboard-height it publishes, see main.js) grow to
+     whatever it actually wrapped to, in either orientation. */
   body.play-view .scoreboard {
-    height: 50px;
     min-height: 50px;
   }
   /* Energy is the one readout Focus/Boost gate on, so it keeps its own
@@ -2606,8 +2650,11 @@ body.play-view #bank-button {
     max-height: none;
     overflow: hidden;
   }
+  /* #court's own width formula depends on which way it's rotated — see the
+     two small orientation blocks right after this one — so only the parts
+     of its box model that don't move (no more max-width/max-height ceiling
+     from the desktop rule, height driven by the aspect ratio) live here. */
   body.play-view #court {
-    width: min(100cqw, 161.2903cqh);
     height: auto;
     max-width: none;
     max-height: none;
@@ -2723,6 +2770,141 @@ body.play-view #bank-button {
   }
   body.play-view .invitation-note {
     margin-top: 7px;
+  }
+}
+/* The two aspect-specific deltas the shared block above points at. Landscape
+   keeps the 1000:620 court it always had, sized by whichever dimension runs
+   out first (100cqw if the window is narrow, 161.2903cqh — i.e. height
+   scaled by 1000/620 — if it's short). `.scoreboard` and `.one-touch-readout`
+   use the same formula because they're laid out to the court's own width,
+   not the window's: on a landscape phone the two already agree by
+   construction (the container is exactly the court's own box), so this is
+   only carried forward rather than changed. */
+@media (max-width: 900px) and (orientation: landscape),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
+  body.play-view #court {
+    width: min(100cqw, 161.2903cqh);
+  }
+  body.play-view .scoreboard,
+  body.play-view .one-touch-readout {
+    width: min(100cqw, 161.2903cqh);
+  }
+}
+/* Portrait's own delta: the court rotates to a 620:1000 box (long axis down
+   the screen, the point of Phase B) sized by 62cqh — height scaled by
+   620/1000 — instead of landscape's 161.2903cqh. `.scoreboard` and
+   `.one-touch-readout` inherited the landscape formula from the base rule
+   (`body.play-view .scoreboard` etc., unqualified by orientation) even
+   after the court itself rotated: on anything shaped like a real phone the
+   court is width-limited in portrait too, so `min(100cqw, …)` already
+   clamps to the same width the court lands on and the mismatch never shows
+   — but on a squarer portrait window (a tablet, not a phone) the unfixed
+   formula would draw the HUD wider than the pitch underneath it. Matching
+   the court's own formula here is what the pre-audit flagged as the actual
+   portrait risk (see SPEC.md's Phase B item 4 addendum): none of this is a
+   canvas problem, it's these three DOM boxes disagreeing about the shape
+   the court just took. */
+@media (max-width: 900px) and (orientation: portrait),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: portrait) {
+  body.play-view #court {
+    width: min(100cqw, 62cqh);
+    aspect-ratio: 620 / 1000;
+  }
+  body.play-view .scoreboard,
+  body.play-view .one-touch-readout {
+    width: min(100cqw, 62cqh);
+  }
+  /* Landscape has the width to put the Energy pill bottom-centre, in the
+     horizontal gap between the joystick and the action cluster (see the
+     shared block above) — the two thumb clusters and the pill live side by
+     side, clear of both. Portrait doesn't have that gap: the joystick and
+     the action cluster are the same two corners, so a centred pill sized to
+     its own content lands with an edge under the action buttons (worst at
+     320px, where Wall draws on top of it) and its other edge under the
+     joystick's bezel — moving it up to clear *that* band (a first attempt)
+     just walked it onto the pitch instead, over the bonus zone's own badge:
+     trading a control collision for occluding a scoring opportunity, which
+     is worse (a button can be found by feel; a zone a player cannot see
+     cannot be played). The actual dead space in portrait is between the
+     scoreboard and the court — see `.court-wrap`'s own `top` below — so
+     that is where this puts it: its own row, directly under the scoreboard,
+     which also reads correctly (it *is* HUD, not something floating over
+     play). `--mobile-energy-band` is this row's total reserved height
+     (pill + the gaps above and below it); `.court-wrap`'s `top` and
+     `.toast`'s `top` both build on the same number so the three stay in
+     sync rather than three copies of one measurement drifting apart. */
+  body.play-view {
+    --mobile-energy-band: 54px;
+  }
+  /* `.court-toolbar` is `position: fixed` (see the shared block above), so
+     its `top` is a viewport offset, not one relative to `.game-panel` the
+     way `.court-wrap`'s `top` below is — it needs `--top-bar` added
+     explicitly, the same way `.toast`'s own `top` already does, or it lands
+     `--top-bar`'s worth of pixels too high and back on the scoreboard. */
+  body.play-view .court-toolbar {
+    top: calc(var(--top-bar, 44px) + var(--scoreboard-height, 56px) + 6px);
+    bottom: auto;
+  }
+  /* Tightened from the shared block's padding/gap (built for the spare
+     bottom-corner space landscape has) so the whole pill fits inside the
+     narrowest scoreboard-to-court gap this query has to work with — 320px
+     wide, where `.scoreboard` is still its single-row 50px self. Legibility
+     is the floor this was tightened down to, not past: label, value and the
+     progress track all keep their own line/space, just with less air
+     around them. */
+  body.play-view .court-toolbar .energy-info {
+    gap: 3px;
+    padding: 4px 14px 8px;
+  }
+  /* `.energy-track` (see its base rule) sits `bottom: 3px` inside
+     `.energy-info`'s own padding box; shrinking that padding-bottom to 8px
+     above still leaves it the room it needs without the pill growing past
+     `--mobile-energy-band`. */
+  body.play-view .court-toolbar .energy-track {
+    bottom: 2px;
+  }
+  /* Moving the pill off the bottom-corner band it inherited from landscape
+     means it no longer sits over the ready/paused/full-time overlay's own
+     vertically-centred Start/Resume button either, so the pointer-events
+     workaround that fix needed is not needed here — left as the shared
+     block's own `pointer-events: none` default. */
+  /* The scoreboard is allowed to float over the top of the court everywhere
+     else in this file (see the "HUD band hugging the court's top edge"
+     comment in index.html) — that overlap is the intended look. Portrait
+     can't keep it: once the Energy pill has to live between the scoreboard
+     and the court (above), the court has to actually start below both of
+     them, not just clear the scoreboard's own height as an earlier version
+     of this rule did (`--scoreboard-height + 8px` — that fit the scoreboard
+     alone, but the pill's row didn't exist yet and the two would have
+     landed on top of each other). Building this off `--scoreboard-height`
+     rather than a fixed number is still what makes it correct whether or
+     not `.scoreboard` has wrapped to its two-row form at a given width; the
+     `--mobile-energy-band` on top of that is what changed. */
+  body.play-view .court-wrap {
+    top: calc(var(--scoreboard-height, 56px) + var(--mobile-energy-band, 47px));
+  }
+  /* `.one-touch-readout`'s own `top` (see its base rule) is `--scoreboard-
+     height + 8px`, sized for a `.court-wrap` that starts at the
+     game-panel's own top (y0) everywhere else. `.court-wrap` no longer
+     starts there in portrait (the rule above), so re-adding the same
+     scoreboard height here would double-count it and the second copy would
+     also miss the pill's band entirely — a flat 8px is the correct
+     "clear the top of whatever `.court-wrap` now is" offset instead. */
+  body.play-view .one-touch-readout {
+    top: 8px;
+  }
+  /* The toast/one-touch collision fix (see the shared block's own `.toast`
+     rule) added a flat 36px on top of `--scoreboard-height` to clear a
+     one-touch pill that, at the time, sat directly under the scoreboard.
+     It now sits under the Energy band too (`.court-wrap`'s new `top`, and
+     `.one-touch-readout`'s own 8px on top of that) — so the toast needs the
+     same `--mobile-energy-band` added to keep clearing it, on top of (not
+     instead of) that original 36px. */
+  body.play-view .toast {
+    top: calc(
+      var(--top-bar, 44px) + var(--scoreboard-height, 56px) +
+        var(--mobile-energy-band, 47px) + 8px + 36px
+    );
   }
 }
 

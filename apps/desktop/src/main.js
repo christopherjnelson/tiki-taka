@@ -328,6 +328,17 @@ let awaitingResume = false,
 let pointerId = null,
   joystickId = null,
   joystickOrigin = null;
+// The renderer only rotates the pitch when told to (see renderer.render's
+// `orientation` option and its `screenToWorld`/`screenVectorToWorld`
+// helpers, which every touch/mouse input below is routed through) — without
+// this it draws landscape forever, and touch input would keep mapping to the
+// un-rotated court underneath a rotated pitch. `viewportOrientation` tracks
+// the same query so a genuine rotation (not just a resize) can clear a
+// captured pointer and pause, matching the deleted APK's own resize
+// listener: a joystick pointer captured before the rotation is now aimed at
+// the wrong axis, and a stuck capture reads as a dead stick.
+const portraitQuery = matchMedia("(orientation: portrait)");
+let viewportOrientation = portraitQuery.matches ? "portrait" : "landscape";
 function persist() {
   if (remoteDataUnavailable && onlineAccount()) {
     void recoverRemoteDataContext();
@@ -3215,12 +3226,29 @@ window.addEventListener("blur", () => {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) pause();
 });
+// A rotation mid-round is exactly the moment a captured joystick/court
+// pointer is aimed at an axis that no longer matches what's on screen — the
+// deleted APK's own resize listener cleared pointers and paused for the same
+// reason. `resize` (not the query's own `change` event) is what actually
+// fires across the phones this targets, and `viewportOrientation` filters
+// it down to genuine orientation flips rather than every keyboard-open or
+// URL-bar-collapse resize a phone browser sends.
+window.addEventListener("resize", () => {
+  const next = portraitQuery.matches ? "portrait" : "landscape";
+  if (next === viewportOrientation) return;
+  viewportOrientation = next;
+  if (phase === "playing") pause();
+  else clearInput();
+});
+// Raw `(clientX - rect.left) / rect.width * 1000`-style math assumes the
+// canvas's own box is laid out the same way its 1000x620 world is drawn.
+// That's true in landscape but not in portrait, where the renderer draws the
+// pitch rotated 90° inside a 620x1000 box (see renderer.resize()) — the same
+// un-rotated arithmetic would then take a tap at 90° to what the player
+// sees. renderer.screenToWorld() knows which way the court is currently
+// rotated and de-rotates the point before handing back world coordinates.
 function courtPoint(e) {
-  const r = $("court").getBoundingClientRect();
-  return {
-    x: ((e.clientX - r.left) / r.width) * 1000,
-    y: ((e.clientY - r.top) / r.height) * 620,
-  };
+  return renderer.screenToWorld(e.clientX, e.clientY);
 }
 $("court").addEventListener("pointermove", (e) => {
   const p = courtPoint(e);
@@ -3287,7 +3315,14 @@ function moveJoystick(e) {
     dy = e.clientY - joystickOrigin.y,
     m = Math.hypot(dx, dy);
   const scale = Math.min(1, 36 / (m || 1));
-  stick = { x: (dx * scale) / 36, y: (dy * scale) / 36 };
+  // The thumb's own translate stays in raw screen pixels — it has to follow
+  // the finger, whichever way the court is drawn. The *world* movement it
+  // produces does not: on a rotated pitch, "push up" has to mean "toward the
+  // far end of the court", not "toward smaller world Y", so the screen-space
+  // vector is de-rotated the same way a tap is (screenToWorld above).
+  const screenX = (dx * scale) / 36,
+    screenY = (dy * scale) / 36;
+  stick = renderer.screenVectorToWorld(screenX, screenY);
   $("joystick-thumb").style.transform =
     `translate(${dx * scale}px, ${dy * scale}px)`;
 }
@@ -3699,6 +3734,7 @@ function frame(now) {
       bank: bank || actionDown(settings.bindings, keys, "wallHold"),
       paused: phase === "paused" || phase === "finished" || awaitingResume,
       shoutVisual,
+      orientation: portraitQuery.matches ? "portrait" : "landscape",
     });
     drawTargetHighlight(target);
     const courtTargetStr = Number.isInteger(target) ? String(target) : "";

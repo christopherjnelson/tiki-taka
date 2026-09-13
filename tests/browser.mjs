@@ -677,16 +677,32 @@ if (includeMobileLayouts) await check('portrait and landscape touch layouts rema
   await page.locator('#touch-pass').tap();
   await page.waitForFunction(() => document.querySelector('#touch-bank')?.getAttribute('aria-pressed') === 'false');
   await waitForPassToSettle(page);
-  assert.equal(await focusSeconds(page), 0.5, 'touch wall pass should earn focus');
+  // A wall pass banks; it does not pay Energy. This asserted 0.5 Energy until
+  // FOCUS_REWARDS.wall became 0, when Energy was restricted to Triangle, Zone
+  // and Split — the assertion outlived the rule by several releases because
+  // the mobile groups it lives in were frozen behind MOBILE_LAYOUTS. What the
+  // check is actually for is that the touch Wall button arms and then fires a
+  // real wall pass, so it now counts the bank the engine records.
+  assert.equal(await page.evaluate(() => window.__observedGame.game.banks), 1, 'the touch Wall button should bank a pass off the boundary');
   const joystick = await page.locator('#joystick').boundingBox();
   assert.ok(joystick);
   await page.waitForFunction(() => !window.__observedGame.game.ball && window.__observedGame.game.lock === 0);
   const touchStart = await page.evaluate(() => window.__observedGame.movementX);
   const center = { x: joystick.x + joystick.width / 2, y: joystick.y + joystick.height / 2 };
+  // Which way to push depends on the orientation, because the stick is read in
+  // screen space and converted to the world by renderer.screenVectorToWorld():
+  // in portrait the pitch is drawn rotated a quarter turn, so world +x (the
+  // direction movementX below measures) is *down* the screen, not right. This
+  // pushed right unconditionally and passed for as long as the court was always
+  // landscape; once portrait actually rotated, the drag moved the carrier along
+  // world y and input.x never rose, so the wait timed out. Pushing the way the
+  // player sees the pitch run keeps the assertion measuring what it means to.
+  const portrait = await page.evaluate(() => matchMedia('(orientation: portrait)').matches);
+  const push = portrait ? { x: 0, y: 34 } : { x: 34, y: 0 };
   const cdp = browserName === 'chromium' ? await context.newCDPSession(page) : null;
   if (cdp) {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: center.x, y: center.y, id: 7 }] });
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: center.x + 34, y: center.y, id: 7 }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: center.x + push.x, y: center.y + push.y, id: 7 }] });
   } else {
     await page.locator('#joystick').evaluate(element => {
       // Synthetic PointerEvents do not enter Firefox's native active-pointer registry.
@@ -694,15 +710,24 @@ if (includeMobileLayouts) await check('portrait and landscape touch layouts rema
       element.releasePointerCapture = () => {};
     });
     await page.locator('#joystick').dispatchEvent('pointerdown', { pointerId: 7, pointerType: 'touch', clientX: center.x, clientY: center.y, buttons: 1 });
-    await page.locator('#joystick').dispatchEvent('pointermove', { pointerId: 7, pointerType: 'touch', clientX: center.x + 34, clientY: center.y, buttons: 1 });
+    await page.locator('#joystick').dispatchEvent('pointermove', { pointerId: 7, pointerType: 'touch', clientX: center.x + push.x, clientY: center.y + push.y, buttons: 1 });
   }
   await page.waitForFunction(() => window.__observedGame.input?.x > .5);
   await page.waitForTimeout(250);
   const touchMoved = await page.evaluate(() => window.__observedGame.movementX);
   assert.ok(touchMoved > touchStart + 1, 'joystick drag should move the carrier');
   if (cdp) await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  else await page.locator('#joystick').dispatchEvent('pointerup', { pointerId: 7, pointerType: 'touch', clientX: center.x + 34, clientY: center.y });
+  else await page.locator('#joystick').dispatchEvent('pointerup', { pointerId: 7, pointerType: 'touch', clientX: center.x + push.x, clientY: center.y + push.y });
   await page.waitForFunction(() => Math.abs(window.__observedGame.input?.x || 0) < .05);
+  // The wall pass above used to leave 0.5 Energy behind, and that is what made
+  // Focus available to toggle here. Wall stopped paying Energy when rewards
+  // were restricted to Triangle, Zone and Split, so Focus now has nothing to
+  // spend and the button correctly refuses to arm. Grant the charge directly
+  // rather than scripting a triangle: what this section is for is the touch
+  // Focus button's wiring and its auto-toggle-off after a pass, not the
+  // earning rules, which tests/game.test.mjs covers on the engine directly.
+  await page.evaluate(() => { window.__observedGame.game.focus = 0.5; });
+  await page.waitForFunction(() => !document.querySelector('#touch-focus')?.disabled);
   await page.locator('#touch-focus').tap();
   assert.equal(await page.locator('#touch-focus').getAttribute('aria-pressed'), 'true');
   await page.locator('#touch-bank').tap();

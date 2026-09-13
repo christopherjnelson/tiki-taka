@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { accessSync, constants, statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { freePort } from "./free-port.mjs";
-import { gotoArena } from "./open-arena.mjs";
+import { gotoArena, expectedCourtAspect } from "./open-arena.mjs";
 
 const playwright = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -616,7 +616,9 @@ await check(
       await page.waitForTimeout(300);
       const box = await page.locator("#court").boundingBox();
       assert.ok(
-        box && Math.abs(box.width / box.height - 1000 / 620) < 0.01,
+        box &&
+          Math.abs(box.width / box.height - expectedCourtAspect(viewport)) <
+            0.01,
         `${viewport.width}x${viewport.height} canvas aspect ${box ? box.width / box.height : "missing"} ${JSON.stringify(box)}`,
       );
       assert.ok(
@@ -840,7 +842,8 @@ if (includeMobileLayouts) await check(
       }
       const court = await page.locator("#court").boundingBox();
       assert.ok(
-        Math.abs(court.width / court.height - 1000 / 620) < 0.01,
+        Math.abs(court.width / court.height - expectedCourtAspect(viewport)) <
+          0.01,
         `${viewport.width}x${viewport.height} Play view court aspect`,
       );
       assert.deepEqual(errors, []);

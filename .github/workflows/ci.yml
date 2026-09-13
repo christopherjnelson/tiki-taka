@@ -34,8 +34,12 @@ jobs:
         run: npm test
       - name: Build the web app
         run: npm run build
+      - name: Check the phone layouts
+        run: npm run test:mobile-smoke
       - name: Run required desktop browser suites
         run: npm run test:web
+      - name: Run the full mobile layout suites
+        run: npm run test:mobile-layouts
       - name: Upload browser screenshots on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

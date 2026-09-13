@@ -13,7 +13,26 @@ Tiki Taka is an arcade soccer possession browser game (no shots or goals: keep p
 - **Install dependencies**: `npm ci`
 - **Install Playwright Chromium**: `npx playwright install chromium`
 
-*Note: Mobile layouts are frozen (`npm run test:mobile-layouts`). Do not gate desktop UI changes on mobile suites.*
+- **Phone layout check**: `npm run test:mobile-smoke` (~3s, four phone viewports)
+- **Full mobile suites**: `npm run test:mobile-layouts` (slow; CI runs it)
+
+*Mobile is no longer frozen. The browser build is meant to be playable on a phone
+in both orientations, and the arena renders a rotated 620:1000 court in portrait.*
+
+*Which mobile check to run: `test:mobile-smoke` is the one to run while working.
+It boots one browser, walks into a round at four phone sizes and asserts court
+aspect, court share of screen, that every control and readout exists with real
+size, that none of them cover each other, and that nothing overflows — in about
+three seconds. Nearly every phone layout defect is one of those.*
+
+*`test:mobile-layouts` re-runs three full gameplay suites with `MOBILE_LAYOUTS=1`
+and takes the better part of half an hour. Leave it to CI. Do not fold it into
+`test:web`: making every change pay that cost is what got mobile abandoned once
+already.*
+
+*Neither check can tell you whether a floating control has landed somewhere that
+hides play — a bonus zone behind the Energy pill, say. That needs a screenshot
+and a look.*
 
 ## Architecture & Code Organization
 

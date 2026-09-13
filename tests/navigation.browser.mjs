@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { freePort } from "./free-port.mjs";
-import { gotoArena } from "./open-arena.mjs";
+import { gotoArena, expectedCourtAspect } from "./open-arena.mjs";
 
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -526,7 +526,10 @@ await check(
       const court = await page.locator("#court").boundingBox();
       const wrap = await page.locator("#court-wrap").boundingBox();
       assert.ok(
-        court && Math.abs(court.width / court.height - 1000 / 620) < 0.01,
+        court &&
+          Math.abs(
+            court.width / court.height - expectedCourtAspect({ width, height }),
+          ) < 0.01,
         `${width}x${height} ratio ${JSON.stringify(court)}`,
       );
       assert.ok(
