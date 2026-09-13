@@ -789,6 +789,16 @@ if (includeMobileLayouts) await check(
       const page = await context.newPage(),
         errors = errorsFor(page);
       await gotoArena(page, baseURL);
+      // Kick off first. Arriving in the arena puts the opening card on screen,
+      // and on a phone that card is a full-screen sheet with the round's own
+      // chrome — score, clock, Energy, the thumb controls — hidden behind it,
+      // so asserting the controls are visible before starting asserts against
+      // the moment they are deliberately gone. They belong to a live round, so
+      // the check belongs after one begins.
+      await page.locator("#start-button").tap();
+      await page.waitForFunction(
+        () => document.querySelector("#game-overlay")?.hidden === true,
+      );
       assert.equal(
         await page.locator("#touch-pass").isVisible(),
         true,
