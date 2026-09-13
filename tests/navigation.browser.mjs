@@ -1247,6 +1247,28 @@ await check(
       "court-0-player",
     );
 
+    // Bonus columns run OLÉ, TRIANGLE, SPLIT THE PRESS, ZONE PASS (OLÉ leads
+    // the group since it sits beside the yellow triangle/split/zone cells) —
+    // pin the header and the "your best" footer to the same order so they
+    // can't silently diverge from each other or from a row.
+    const bonusOrder = ["hl-cell-ole", "hl-cell-tri", "hl-cell-split", "hl-cell-zone"];
+    const headBonusClasses = await page.locator(".hl-head > .hl-cell-bonus").evaluateAll((els) =>
+      els.map((el) => [...el.classList].find((c) => c.startsWith("hl-cell-") && c !== "hl-cell-bonus")),
+    );
+    assert.deepEqual(headBonusClasses, bonusOrder, "leaderboard header bonus columns");
+    const rowBonusClasses = await page
+      .locator("#home-leaderboard-list .hl-row")
+      .first()
+      .locator(".hl-cell-bonus")
+      .evaluateAll((els) =>
+        els.map((el) => [...el.classList].find((c) => c.startsWith("hl-cell-") && c !== "hl-cell-bonus")),
+      );
+    assert.deepEqual(rowBonusClasses, bonusOrder, "leaderboard row bonus columns");
+    const userBonusClasses = await page.locator(".hl-user-cells > .hl-cell-bonus").evaluateAll((els) =>
+      els.map((el) => [...el.classList].find((c) => c.startsWith("hl-cell-") && c !== "hl-cell-bonus")),
+    );
+    assert.deepEqual(userBonusClasses, bonusOrder, "leaderboard your-best bonus columns");
+
     // Switching to London (court 1) updates tab and loads court 1 scores
     const tab1 = page.locator("#hl-tab-1");
     await tab1.click();

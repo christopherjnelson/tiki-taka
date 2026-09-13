@@ -746,7 +746,7 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
         score.className = "hl-cell-score";
         score.textContent = Number(entry.score).toLocaleString();
 
-        li.append(rank, player, triangles, oles, splits, zones, passes, score);
+        li.append(rank, player, oles, triangles, splits, zones, passes, score);
         return li;
       }),
     );
