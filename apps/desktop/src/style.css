@@ -1128,6 +1128,26 @@ kbd {
 .touch-controls {
   display: none;
 }
+/* Every touch surface opts out of the browser's gesture handling, the joystick
+   and the five action buttons alike. This is what lets two fingers work at
+   once: with the default touch-action, a press on an action button while the
+   movement thumb is already down is held back as a possible pan or zoom, and
+   the tap does not resolve until the first finger lifts. The pre-deletion
+   Capacitor build carried the same rule for the same reason — it is listed in
+   its stylesheet as `#court, #touch-controls, #touch-controls button`. Losing
+   it in the port is why passing while moving stopped working. */
+.touch-controls,
+.touch-controls button,
+.joystick {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* The result is a full-screen sheet on a phone, and a sheet covering the court
+   makes the live controls beneath it both useless and visible through it. */
+body.round-over .touch-controls {
+  display: none;
+}
 /* The vertical "MOVE" hint next to the joystick read as a rendering
    accident once the joystick had five siblings to share the row with
    instead of the empty space it used to have — sideways text wedged between
@@ -5254,4 +5274,177 @@ body.play-view .arena-view .below-court {
   font-weight: 600;
   color: #fff;
   text-align: right;
+}
+
+/* ── The full-time result on a phone ────────────────────────────────────────
+   A sheet, not a card. On desktop the result floats over the court as a panel
+   with the arena still legible around it, which reads as "the round is over,
+   here is how it went". At phone width that same panel had nowhere to go: it
+   was squeezed into a column barely half the screen wide, its stat labels
+   truncated mid-word ("TRIANGLI", "TURNOVE"), and it was taller than the
+   viewport with no way to scroll — so in portrait the buttons sat on the very
+   edge of the screen, and in landscape the card started 98px above the top of
+   the viewport and two of its three actions were off-screen entirely and
+   simply unreachable. There was nothing to salvage in shrinking it further.
+
+   So the phone gets the whole screen and stops trying to show the court
+   behind it. The sheet scrolls if the content is taller than the viewport,
+   which landscape needs, and carries its own close control — a full-screen
+   sheet has to offer a way out that is not "commit to Retry or Home".
+
+   Keyed on coarse pointers as well as width so a phone in landscape at 932px,
+   which is wider than many small laptops, still gets the sheet. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+  body.play-view .game-overlay {
+    position: fixed;
+    inset: 0;
+    /* Above the top bar (6) and the toast (80), because "fills the screen"
+       has to mean the whole screen — with the sheet under the bar, the close
+       control sat behind the Menu button and could not be pressed. The
+       soundtrack controls go with it; the round is over, and the three
+       actions plus the close are the only things worth offering here. */
+    z-index: 120;
+    width: auto;
+    height: auto;
+    padding: 0;
+    background: var(--bg, #07081a);
+  }
+  body.play-view .game-overlay .invitation,
+  body.play-view .game-overlay[data-result] .invitation {
+    position: relative;
+    left: auto;
+    top: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    margin: 0;
+    /* Room for the close control, and for the phone's own rounded corners and
+       home indicator. */
+    padding: calc(52px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-left))
+      max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right));
+    border: 0;
+    border-radius: 0;
+    transform: none;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    text-align: center;
+  }
+  /* The stats were the worst of the squeeze: three columns in a 154px-wide
+     card clipped every label. Two columns at full width fit the words. */
+  body.play-view .game-overlay .result-stats {
+    grid-template-columns: 1fr 1fr;
+  }
+  body.play-view .game-overlay .overlay-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    margin-top: auto;
+  }
+  body.play-view .game-overlay .overlay-actions button {
+    width: 100%;
+    min-height: 48px;
+  }
+  /* Qualified so it beats the bare `.overlay-close { display: none }` default
+     below on specificity rather than on source order — the default has to sit
+     after this block to read as "hidden unless the sheet is on screen", and an
+     unqualified selector here would lose to it. */
+  body.play-view .overlay-close {
+    /* Absolute, deliberately. `fixed` would be the instinct for a control that
+       must not scroll with the sheet, but an ancestor here establishes a
+       containing block (a transform/filter does that to fixed children), which
+       positioned it against the card rather than the viewport and threw it
+       ~100px off the top in landscape. Absolute is well-defined against the
+       card, and now that the landscape actions sit in a row the sheet no
+       longer scrolls at these sizes, so there is nothing to scroll away from. */
+    position: absolute;
+    z-index: 1;
+    /* Below the top bar, not over it. The bar sits in an ancestor stacking
+       context the sheet cannot reliably out-rank from where it lives in the
+       DOM, so raising z-index alone left the close control underneath the
+       Menu button and unpressable. Anchoring below the bar is stable however
+       that context resolves. */
+    top: calc(var(--top-bar, 44px) + max(8px, env(safe-area-inset-top)));
+    right: max(10px, env(safe-area-inset-right));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    color: var(--ink, #f3f1e6);
+    background: #0c0620c2;
+    border: 1px solid #ffffff2e;
+    border-radius: 50%;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+  }
+}
+/* Desktop dismisses the result with one of the three actions or Escape, and a
+   close affordance floating on the panel there would just be a fourth way to
+   do what Home already does. */
+.overlay-close {
+  display: none;
+}
+
+/* A landscape phone is short, and stacking three full-width actions pushed the
+   last two below the fold — reachable only by scrolling the sheet, which is a
+   poor way to answer "what now?". There is width to spare here even if there
+   is no height, so the actions run as a row and the whole sheet fits. */
+@media (max-height: 500px) and (orientation: landscape),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
+  body.play-view .game-overlay .invitation {
+    gap: 8px;
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+  body.play-view .game-overlay .overlay-actions {
+    flex-direction: row;
+    gap: 8px;
+  }
+  body.play-view .game-overlay .overlay-actions button {
+    min-height: 42px;
+  }
+}
+
+/* With the result taking the whole phone screen, everything belonging to the
+   live round has to get out of the way — not just the controls. The HUD, the
+   Energy pill, the pause control and any hint toast all still painted over the
+   sheet, so "FULL TIME." read through a scoreboard and the close control sat
+   underneath the pause button. The toast in particular outranks the sheet on
+   z-index (80 against 60) and so could never be covered, only hidden.
+
+   Two classes on <body> to outrank the body.play-view rules that turn these on;
+   the phone sheet is the only place this applies, so it stays inside the same
+   coarse-pointer query the sheet itself uses. Desktop keeps its HUD, where the
+   result is a panel over a still-visible court rather than a sheet. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+  body.play-view.round-over .touch-controls,
+  body.play-view.round-over .scoreboard,
+  body.play-view.round-over .court-toolbar,
+  body.play-view.round-over .arena-venue-banner,
+  body.play-view.round-over .one-touch-readout,
+  body.play-view.round-over .toast {
+    display: none;
+  }
+}
+
+/* A landscape phone has roughly 300px of usable height once the bar is out.
+   The nine-cell bonus breakdown does not fit alongside the headline, the score
+   and three actions, and making it fit meant scrolling the sheet — which put
+   the result's own headline off-screen. The breakdown is the least of what a
+   player wants at this moment: they want to know the score and to choose what
+   happens next. It stays on the portrait sheet, where there is room, and on
+   desktop. */
+@media (max-height: 500px) and (orientation: landscape),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
+  body.play-view .game-overlay .result-breakdown,
+  body.play-view .game-overlay #overlay-copy {
+    display: none;
+  }
 }

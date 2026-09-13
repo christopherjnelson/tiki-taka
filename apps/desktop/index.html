@@ -517,6 +517,19 @@
                 aria-modal="true"
                 aria-labelledby="overlay-title"
               >
+                  <!-- Only rendered on the phone sheet (see .overlay-close in
+                     style.css). A desktop player dismisses the result with
+                     one of the three actions or Escape; a phone player gets
+                     a full-screen sheet, and a full-screen sheet needs a way
+                     out that does not commit them to Retry or Home. -->
+                <button
+                  id="overlay-close"
+                  class="overlay-close"
+                  type="button"
+                  aria-label="Close the result"
+                >
+                  <span aria-hidden="true">✕</span>
+                </button>
                 <div id="overlay-card" class="invitation" tabindex="-1">
                   <div id="result-burst" class="result-burst" aria-hidden="true" hidden>
                     <span></span><span></span><span></span>

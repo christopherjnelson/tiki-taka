@@ -1282,6 +1282,7 @@ function clearAnnouncement() {
 }
 function prepare() {
   resetHudCache();
+  document.body.classList.remove("round-over");
   renderer.effects.length = 0;
   game = new Game(config(), progress.tactic);
   window.__game = game;
@@ -2414,6 +2415,12 @@ function finish() {
   renderer.effects.length = 0;
   finished = true;
   phase = "finished";
+  // A phone shows the result as a full-screen sheet, which means the live
+  // controls and the hint toast underneath it have to go — they are affordances
+  // for a round that is over, and on a small screen they showed through and
+  // competed with the buttons that actually do something now. CSS keys off this
+  // rather than reading `phase`, which is module-local.
+  document.body.classList.add("round-over");
   focusToggle = false;
   boostToggle = false;
   clearInput();
@@ -2560,17 +2567,56 @@ $("tertiary-button").addEventListener("click", () => {
   if (phase === "finished" && !resultActionsReady) return;
   applyView("home");
 });
+// The phone sheet's way out. It lands on home rather than merely hiding the
+// sheet: the round behind it is over, so dismissing to a dead arena with no
+// live controls would strand the player with nothing to press.
+$("overlay-close").addEventListener("click", () => {
+  if (phase === "finished" && !resultActionsReady) return;
+  applyView("home");
+});
 $("pause-button").addEventListener("click", togglePause);
 $("pass-button").addEventListener("click", () => doPass());
-$("touch-pass").addEventListener("click", () => doPass());
 $("bank-button").addEventListener("click", toggleBank);
-$("touch-bank").addEventListener("click", toggleBank);
 $("focus-button").addEventListener("click", toggleFocus);
-$("touch-focus").addEventListener("click", toggleFocus);
 $("boost-button").addEventListener("click", toggleBoost);
-$("touch-boost").addEventListener("click", toggleBoost);
 $("shout-button").addEventListener("click", shoutTarget);
-$("touch-shout").addEventListener("click", shoutTarget);
+// The five touch actions bind the pointer, not the click.
+//
+// A click on a touchscreen is synthesised only after the browser has decided
+// the touch was not the start of a gesture, and while another finger is
+// already down — one holding the joystick, say — that decision is deferred.
+// The result was that a pass would not register until the movement thumb was
+// lifted, which is not how anyone plays: moving and passing at the same time
+// is the whole point of a possession game. Acting on pointerdown makes each
+// finger independent and removes the synthesis delay for every input, not just
+// the second one.
+//
+// `click` is kept for everything that is not a touch, so a keyboard player
+// reaching these with Enter or Space still triggers them; the pointerType
+// guard is what stops a touch firing both.
+for (const [id, run] of [
+  ["touch-pass", () => doPass()],
+  ["touch-bank", toggleBank],
+  ["touch-focus", toggleFocus],
+  ["touch-boost", toggleBoost],
+  ["touch-shout", shoutTarget],
+]) {
+  const button = $(id);
+  button.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "touch") return;
+    if (button.disabled) return;
+    // Claiming the pointer keeps a slide off the button from becoming a
+    // gesture on whatever is underneath, and stops the court's own
+    // pointer handlers seeing this finger at all.
+    event.preventDefault();
+    event.stopPropagation();
+    run();
+  });
+  button.addEventListener("click", (event) => {
+    if (event.pointerType === "touch") return;
+    run();
+  });
+}
 $("tactic-select").addEventListener("change", (e) => {
   progress.tactic = e.target.value;
   persist();
