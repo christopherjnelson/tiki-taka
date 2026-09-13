@@ -256,11 +256,41 @@ await check('the volumes are reachable and operable by gamepad and survive a rel
     'effects should default well below the ceiling the constants set');
   assert.equal(await page.locator('#music-volume').inputValue(), '100');
 
-  // Reach Settings from the home screen / top bar with the d-pad only, then open it with A.
-  for (let step = 0; step < 8 && await page.evaluate(() => document.activeElement?.id) !== 'settings-button'; step++)
-    await pulsePad(page, 12);
+  // Reach Settings from the home screen with the d-pad only, then open it with A.
+  // Under the home zone model (apps/desktop/src/pad-zones.mjs), a zone's own
+  // data-pad-axis decides which direction walks it: #top-bar is
+  // data-pad-axis="row" in index.html, a real horizontal strip of buttons, so
+  // once focus is inside it up/down hops back OUT to a neighbouring zone and
+  // only left/right steps along the bar. (This used to be one flat list where
+  // any direction repeated eventually reached everything; that assumption is
+  // deliberately gone under zones — do not "fix" this back to a single
+  // up-only walk, it would just re-break.) The action zone holds only
+  // #title-play, fewer than two focusables, so it has no axis of its own and
+  // any direction leaves it immediately: one UP is enough to land in the bar.
+  //
+  // In this test's own environment (no Supabase config, so #profile-button
+  // stays hidden; 1200px wide, so #top-home is JS-reparented out past
+  // #settings-button by syncHomePlacement() in main.js, and .music-more is
+  // CSS-hidden above the 901px breakpoint) padFocusables' visible order for
+  // the bar is: music-prev, music-toggle, music-skip, fullscreen-button,
+  // settings-button — landing on music-prev needs 4 RIGHT presses to reach
+  // Settings, the floor. Use padUntil (defined above), not a fixed-count
+  // loop: as tests/browser.mjs:538 notes, activation is edge-sampled once per
+  // animation frame, so a short synthetic pulse can land entirely between two
+  // polls and simply not register on a slow runner — a fixed count that only
+  // covers the floor with a little slack (the previous bound of 8 against a
+  // floor of 4) is exactly what broke in CI. padUntil re-checks before every
+  // press and retries until it lands, so give it real headroom instead of a
+  // tight multiple.
+  await padUntil(page, 12, () =>
+    page.evaluate(() => Boolean(document.getElementById('top-bar')?.contains(document.activeElement))), 30);
+  assert.equal(
+    await page.evaluate(() => Boolean(document.getElementById('top-bar')?.contains(document.activeElement))),
+    true, 'the d-pad must reach the top bar');
+  await padUntil(page, 15, () =>
+    page.evaluate(() => document.activeElement?.id === 'settings-button'), 30);
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'settings-button',
-    'the d-pad must reach Settings with the d-pad');
+    'the d-pad must reach Settings by walking the top bar with left/right');
   await padUntil(page, 0, () => page.locator('#settings-dialog').isVisible());
   await page.locator('#settings-dialog').waitFor({ state: 'visible' });
 

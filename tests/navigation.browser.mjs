@@ -191,6 +191,67 @@ await check(
 );
 
 await check(
+  "home's zones cover every focusable control, for the gamepad zone nav pad-zones.mjs drives",
+  async () => {
+    // pollGamepad's home branch (apps/desktop/src/main.js) reads
+    // data-pad-zone containers to build the zone list zoneContaining()/
+    // nextZone()/restoreInZone() (apps/desktop/src/pad-zones.mjs) then act
+    // on. Playwright cannot synthesize a real Gamepad object, so it cannot
+    // drive that logic end to end — what it CAN verify is the DOM contract
+    // the logic depends on: every zone id it expects exists, and no enabled,
+    // visible focusable inside #home-view has been left outside all of them,
+    // which is exactly the kind of thing a future home redesign could break
+    // silently.
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(baseURL, { waitUntil: "networkidle" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
+    const expectedZones = ["action", "leaderboard", "courts", "modes"];
+    for (const zone of expectedZones) {
+      assert.equal(
+        await page.locator(`#home-view [data-pad-zone="${zone}"]`).count(),
+        1,
+        `#home-view is missing its "${zone}" pad zone`,
+      );
+    }
+    // The top bar sits outside #home-view (it is a shared page header), so it
+    // is checked separately rather than folded into the #home-view sweep
+    // below.
+    assert.equal(
+      await page.locator('[data-pad-zone="topbar"]').count(),
+      1,
+      "the top bar is missing its pad zone",
+    );
+    assert.equal(
+      await page.locator("#top-bar").getAttribute("data-pad-zone"),
+      "topbar",
+    );
+    const orphans = await page.evaluate(() => {
+      const home = document.getElementById("home-view");
+      const focusables = [
+        ...home.querySelectorAll(
+          "button:not(:disabled),select:not(:disabled),input:not(:disabled)",
+        ),
+      ].filter((el) => !el.closest("[hidden]") && el.getClientRects().length);
+      return focusables
+        .filter((el) => !el.closest("[data-pad-zone]"))
+        .map((el) => el.id || el.className || el.tagName);
+    });
+    assert.deepEqual(
+      orphans,
+      [],
+      "every enabled, visible focusable in #home-view must sit inside a data-pad-zone container",
+    );
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
   "Play, modes, unlocked courts, the leave confirmation and history all preserve rounds",
   async () => {
     const context = await browser.newContext({

@@ -38,7 +38,7 @@
       that is always on screen. It reserves its own row above <main>, so it can
       never overlap the court, and it is walked by the d-pad alongside whatever
       menu is open. -->
-      <header id="top-bar" class="top-bar">
+      <header id="top-bar" class="top-bar" data-pad-zone="topbar" data-pad-axis="row">
         <div id="top-bar-left" class="top-bar-left">
           <!-- Home reads as Back when it sits at the edge people already scan
           first, instead of buried on the right with Menu and fullscreen — the
@@ -235,7 +235,7 @@
               <span class="sr-only">tiki-taka — No goals. All flow.</span>
             </h1>
             <p class="title-tagline sr-only">NO GOALS. ALL FLOW.</p>
-            <nav id="title-menu" class="menu-list" aria-label="Main menu">
+            <nav id="title-menu" class="menu-list" aria-label="Main menu" data-pad-zone="action">
               <button id="title-play" type="button" class="menu-item primary">
                 <span class="menu-key" aria-hidden="true">▸</span> Play
               </button>
@@ -299,7 +299,7 @@
           </div>
           <!-- Expanded Circuit Leaderboard deck replacing the attract demo -->
           <div class="home-stage console-panel console-panel-notch-tr">
-            <section id="home-leaderboard" class="home-leaderboard" aria-label="Circuit Leaderboards">
+            <section id="home-leaderboard" class="home-leaderboard" aria-label="Circuit Leaderboards" data-pad-zone="leaderboard" data-pad-axis="row">
               <header class="hl-header">
                 <div class="hl-header-title">
                   <span class="hl-icon" aria-hidden="true">🏆</span>
@@ -380,9 +380,11 @@
               id="court-list"
               class="court-list"
               aria-label="Choose a court"
+              data-pad-zone="courts"
+              data-pad-axis="column"
             ></div>
           </div>
-          <div class="home-modes" aria-label="Choose a game mode">
+          <div class="home-modes" aria-label="Choose a game mode" data-pad-zone="modes" data-pad-axis="row">
             <button data-home-mode="career" type="button">
               <svg
                 class="mode-icon"
