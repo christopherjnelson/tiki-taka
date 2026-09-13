@@ -43,6 +43,7 @@ import {
   nextZone,
   restoreInZone,
   zoneContaining,
+  resolveHomeMove,
 } from "./pad-zones.mjs";
 const $ = (id) => document.getElementById(id);
 // Vite replaces this allowlisted object during a build. The fallback keeps
@@ -3636,13 +3637,19 @@ const HOME_ZONE_SELECTORS = {
 // back (via left/right) restores where the player was rather than always
 // snapping to the zone's first control.
 const padHomeZoneMemory = {};
-// Reads the live DOM into the { id, elements } shape pad-zones.mjs's pure
-// helpers expect. Called fresh every poll — nothing here is cached, so a
-// re-render (a new court list, a leaderboard tab switch) is always current.
+// Reads the live DOM into the { id, axis, elements } shape pad-zones.mjs's
+// pure helpers expect. Called fresh every poll — nothing here is cached, so
+// a re-render (a new court list, a leaderboard tab switch) is always
+// current. `axis` comes straight off the container's data-pad-axis
+// attribute ("column" when absent, matching pad-zones.mjs's own default).
 function homePadZones() {
   return HOME_ZONE_ORDER.map((id) => {
     const node = document.querySelector(HOME_ZONE_SELECTORS[id]);
-    return { id, elements: node ? padFocusables(node) : [] };
+    return {
+      id,
+      axis: node?.dataset.padAxis || "column",
+      elements: node ? padFocusables(node) : [],
+    };
   });
 }
 // Focuses an element that belongs to a home zone and remembers it as that
@@ -3892,13 +3899,20 @@ function pollGamepad(dt) {
         return;
       }
     }
-    // Home is zoned rather than one flat list: up/down moves within whichever
-    // zone the cursor is in, left/right hops between zones (action ->
-    // leaderboard -> courts -> modes -> topbar, see HOME_ZONE_ORDER), and each
-    // zone remembers the control it last held focus on. This is the one place
-    // in pollGamepad that does not go through the shared padNavigate/nav —
-    // that helper only understands one flat focusable list, and home's whole
-    // point here is that it is not one.
+    // Home is zoned rather than one flat list. Each zone has its own internal
+    // axis (data-pad-axis in index.html; resolveHomeMove/zoneAxisIsVertical
+    // in pad-zones.mjs) — up/down steps through a "column" zone like the
+    // court list, left/right steps through a "row" zone like the mode grid
+    // or the leaderboard's tab strip — and whichever direction is NOT that
+    // zone's own axis instead hops to a neighbouring zone in HOME_ZONE_ORDER.
+    // A zone with fewer than two focusables (the action zone, today) has no
+    // internal axis at all, so both directions leave it; without that, the
+    // first d-pad press after a fresh load — landing on the lone Play button
+    // — would just wrap that one button onto itself and do nothing. Each
+    // zone remembers the control it last held focus on. This is the one
+    // place in pollGamepad that does not go through the shared
+    // padNavigate/nav — that helper only understands one flat focusable
+    // list, and home's whole point here is that it is not one.
     const zones = homePadZones();
     const currentZoneId =
       zoneContaining(zones, focused) ||
@@ -3916,11 +3930,12 @@ function pollGamepad(dt) {
           : 0;
     menuRepeat -= dt;
     if ((vertical || horizontal) && menuRepeat <= 0) {
-      if (vertical && currentZoneId) {
-        const zone = zones.find((z) => z.id === currentZoneId);
-        focusHomeZone(currentZoneId, withinZone(zone.elements, focused, vertical));
-      } else if (horizontal) {
-        const targetZone = nextZone(zones, currentZoneId || HOME_ZONE_ORDER[0], horizontal);
+      const currentZone = zones.find((zone) => zone.id === currentZoneId) || null;
+      const move = resolveHomeMove(currentZone, { vertical, horizontal });
+      if (move?.within && currentZone) {
+        focusHomeZone(currentZoneId, withinZone(currentZone.elements, focused, move.within));
+      } else if (move?.between) {
+        const targetZone = nextZone(zones, currentZoneId || HOME_ZONE_ORDER[0], move.between);
         if (targetZone) {
           focusHomeZone(
             targetZone.id,

@@ -6,6 +6,8 @@ import {
   nextZone,
   restoreInZone,
   zoneContaining,
+  zoneAxisIsVertical,
+  resolveHomeMove,
 } from "../apps/desktop/src/pad-zones.mjs";
 
 // Fake "elements" are just plain objects — pad-zones.mjs never touches the
@@ -124,4 +126,58 @@ test("zoneContaining returns null when the element is in no zone, or is nullish"
   assert.equal(zoneContaining(zones, el("stranger")), null);
   assert.equal(zoneContaining(zones, null), null);
   assert.equal(zoneContaining(zones, undefined), null);
+});
+
+test("zoneAxisIsVertical reads column as vertical and row as horizontal", () => {
+  const twoElements = [el("a"), el("b")];
+  assert.equal(zoneAxisIsVertical({ axis: "column", elements: twoElements }), true);
+  assert.equal(zoneAxisIsVertical({ axis: "row", elements: twoElements }), false);
+});
+
+test("zoneAxisIsVertical defaults an unset axis to column (vertical)", () => {
+  assert.equal(zoneAxisIsVertical({ elements: [el("a"), el("b")] }), true);
+});
+
+test("zoneAxisIsVertical has no internal axis for a zone with fewer than two elements, whatever its axis says", () => {
+  assert.equal(zoneAxisIsVertical({ axis: "column", elements: [el("a")] }), null);
+  assert.equal(zoneAxisIsVertical({ axis: "row", elements: [el("a")] }), null);
+  assert.equal(zoneAxisIsVertical({ axis: "row", elements: [] }), null);
+  assert.equal(zoneAxisIsVertical(null), null);
+});
+
+test("resolveHomeMove moves within a column zone on vertical input, between zones on horizontal", () => {
+  const zone = { axis: "column", elements: [el("a"), el("b")] };
+  assert.deepEqual(resolveHomeMove(zone, { vertical: 1 }), { within: 1 });
+  assert.deepEqual(resolveHomeMove(zone, { vertical: -1 }), { within: -1 });
+  assert.deepEqual(resolveHomeMove(zone, { horizontal: 1 }), { between: 1 });
+});
+
+test("resolveHomeMove moves within a row zone on horizontal input, between zones on vertical", () => {
+  const zone = { axis: "row", elements: [el("a"), el("b"), el("c")] };
+  assert.deepEqual(resolveHomeMove(zone, { horizontal: 1 }), { within: 1 });
+  assert.deepEqual(resolveHomeMove(zone, { horizontal: -1 }), { within: -1 });
+  assert.deepEqual(resolveHomeMove(zone, { vertical: 1 }), { between: 1 });
+});
+
+test("resolveHomeMove sends both directions between zones for a single-element zone", () => {
+  // This is the fresh-load case: the action zone holds only #title-play.
+  // Without this fallthrough, the first d-pad press after loading the page
+  // would wrap that lone button onto itself and appear completely dead.
+  const zone = { axis: "column", elements: [el("title-play")] };
+  assert.deepEqual(resolveHomeMove(zone, { vertical: 1 }), { between: 1 });
+  assert.deepEqual(resolveHomeMove(zone, { vertical: -1 }), { between: -1 });
+  assert.deepEqual(resolveHomeMove(zone, { horizontal: 1 }), { between: 1 });
+  assert.deepEqual(resolveHomeMove(zone, { horizontal: -1 }), { between: -1 });
+});
+
+test("resolveHomeMove sends both directions between zones for an empty zone", () => {
+  const zone = { axis: "row", elements: [] };
+  assert.deepEqual(resolveHomeMove(zone, { vertical: 1 }), { between: 1 });
+  assert.deepEqual(resolveHomeMove(zone, { horizontal: 1 }), { between: 1 });
+});
+
+test("resolveHomeMove returns null when there is no input", () => {
+  const zone = { axis: "column", elements: [el("a"), el("b")] };
+  assert.equal(resolveHomeMove(zone, { vertical: 0, horizontal: 0 }), null);
+  assert.equal(resolveHomeMove(zone, {}), null);
 });
