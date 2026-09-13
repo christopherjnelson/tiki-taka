@@ -5350,7 +5350,13 @@ body.play-view .arena-view .below-court {
      below on specificity rather than on source order — the default has to sit
      after this block to read as "hidden unless the sheet is on screen", and an
      unqualified selector here would lose to it. */
-  body.play-view .overlay-close {
+  /* Only on the result. The pre-round card is reached from home and the top
+     bar's Home button is still there to back out with, so a close control
+     there would be a second way to do what is already one tap away — and an
+     ambiguous one, since "close" on a card that starts a round reads as
+     "don't play". The result has no such escape: its three actions all commit
+     to something. */
+  body.play-view .game-overlay[data-result] .overlay-close {
     /* Absolute, deliberately. `fixed` would be the instinct for a control that
        must not scroll with the sheet, but an ancestor here establishes a
        containing block (a transform/filter does that to fixed children), which
