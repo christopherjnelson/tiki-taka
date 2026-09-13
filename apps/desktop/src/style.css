@@ -1675,10 +1675,18 @@ body.play-view .ambience {
   padding: 0;
   letter-spacing: 0;
 }
+#music-toggle {
+  width: 36px;
+  min-width: 36px;
+  max-width: 36px;
+  box-sizing: border-box;
+}
 .music-player .bar-button span {
   display: inline-flex;
+  width: 14px;
   align-items: center;
   justify-content: center;
+  text-align: center;
   line-height: 1;
 }
 #music-toggle[aria-pressed="false"] span {
@@ -1743,6 +1751,13 @@ body.play-view .ambience {
   flex: 1 0 0;
   padding: 0;
   letter-spacing: 0;
+}
+.music-popup-transport .bar-button span {
+  display: inline-flex;
+  width: 14px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 /* Empty and hidden today — see the markup comment. Reserved so the eventual
    track list has a home inside the popup that already exists, instead of a
@@ -1958,9 +1973,22 @@ body.play-view .top-settings {
   }
   .top-brand-symbol {
     display: block;
-    height: 26px;
-    width: 26px;
+    height: 32px;
+    width: 32px;
     object-fit: contain;
+  }
+  .top-bar {
+    position: relative;
+  }
+  .top-brand {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  .top-brand-mark {
+    pointer-events: auto;
   }
 }
 @media (max-width: 900px) {
@@ -2007,8 +2035,13 @@ body.play-view .top-settings {
     max-width: 72px;
   }
   .top-brand-symbol {
-    height: 22px;
-    width: 22px;
+    height: 30px;
+    width: 30px;
+  }
+  .top-bar-left #music-toggle {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
   }
   /* The label text is what gives way here, not any control: every button
      already carries a `title`, which becomes its accessible name once the
@@ -2051,8 +2084,13 @@ body.play-view .top-settings {
     font-size: 16px;
   }
   .top-brand-symbol {
-    height: 22px;
-    width: 22px;
+    height: 26px;
+    width: 26px;
+  }
+  .top-bar-left #music-toggle {
+    width: 32px;
+    min-width: 32px;
+    max-width: 32px;
   }
   .bar-button {
     min-height: 26px;
