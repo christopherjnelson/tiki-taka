@@ -851,11 +851,19 @@ dialog h2 {
   letter-spacing: 1px;
 }
 .secondary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   min-height: 42px;
   margin-top: 8px;
   border: 1px solid var(--cyan);
   background: transparent;
+  color: #fff;
+  text-transform: uppercase;
+  font: 700 12px var(--sign);
+  letter-spacing: 1px;
+  cursor: pointer;
 }
 .invitation-note {
   color: #aba0ba;
@@ -6080,10 +6088,27 @@ body.play-view .arena-view .below-court {
     width: 100%;
     margin-top: auto;
   }
+  body.play-view .game-overlay .result-headline dt {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+  }
+  body.play-view .game-overlay .result-headline dd {
+    font-size: 26px;
+  }
+  body.play-view .game-overlay .result-stat dt {
+    font-size: 8px;
+    letter-spacing: 0.8px;
+  }
+  body.play-view .game-overlay .result-stat dd {
+    font-size: 16px;
+  }
   body.play-view .game-overlay .overlay-actions button {
     width: 100%;
     min-height: 48px;
     margin: 0;
+    font: 700 13px / 1.2 var(--sign);
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
   }
 }
 
@@ -6095,7 +6120,7 @@ body.play-view .arena-view .below-court {
   body.play-view .game-overlay .invitation,
   body.play-view .game-overlay[data-result] .invitation {
     gap: 4px;
-    padding-top: max(8px, env(safe-area-inset-top));
+    padding-top: calc(var(--top-bar, 34px) + max(8px, env(safe-area-inset-top)));
     padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
   body.play-view .game-overlay .overlay-actions {
@@ -6105,6 +6130,7 @@ body.play-view .arena-view .below-court {
     gap: 8px;
     width: 100%;
     margin-top: auto;
+    order: 10;
   }
   body.play-view .game-overlay .overlay-actions button {
     flex: 1 1 0;
@@ -6113,8 +6139,8 @@ body.play-view .arena-view .below-court {
     min-height: 40px;
     margin: 0;
     padding: 0 8px;
-    font: 700 11px / 1.2 var(--sign);
-    letter-spacing: 0.8px;
+    font: 700 12px / 1.2 var(--sign);
+    letter-spacing: 1px;
     text-transform: uppercase;
     display: flex;
     align-items: center;
@@ -6129,21 +6155,21 @@ body.play-view .arena-view .below-court {
     justify-content: center;
     gap: 10px;
     width: 100%;
-    max-width: 680px;
+    max-width: 700px;
     margin: 0 auto 4px;
   }
   body.play-view .game-overlay .result-headline {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    min-width: 130px;
+    min-width: 135px;
     border-block: 0;
     border: 1px solid #ffffff24;
     border-radius: 6px;
     overflow: hidden;
   }
   body.play-view .game-overlay .result-headline > div {
-    padding: 4px 8px;
+    padding: 5px 8px;
     border-left: 0;
     border-top: 1px solid #ffffff24;
     text-align: center;
@@ -6152,11 +6178,11 @@ body.play-view .arena-view .below-court {
     border-top: 0;
   }
   body.play-view .game-overlay .result-headline dt {
-    font-size: 7px;
-    letter-spacing: 1px;
+    font-size: 8.5px;
+    letter-spacing: 1.2px;
   }
   body.play-view .game-overlay .result-headline dd {
-    font-size: 18px;
+    font-size: 22px;
     margin: 2px 0 0;
   }
   body.play-view .game-overlay .result-breakdown {
@@ -6168,14 +6194,14 @@ body.play-view .arena-view .below-court {
     overflow: hidden;
   }
   body.play-view .game-overlay .result-stat {
-    padding: 3px 4px 2px;
+    padding: 4px 6px 3px;
   }
   body.play-view .game-overlay .result-stat dt {
-    font-size: 6px;
-    letter-spacing: 0.5px;
+    font-size: 7.5px;
+    letter-spacing: 0.8px;
   }
   body.play-view .game-overlay .result-stat dd {
-    font-size: 13px;
+    font-size: 15px;
     margin: 1px 0 0;
   }
 }
@@ -6256,6 +6282,9 @@ body.play-view .arena-view .below-court {
     font-size: 11px;
     line-height: 1.35;
     margin-top: 3px;
+  }
+  body.play-view .game-overlay:not([data-result]) .invitation-note {
+    display: none;
   }
   body.play-view .game-overlay[data-result] #overlay-copy {
     display: none;
