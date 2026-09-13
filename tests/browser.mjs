@@ -351,33 +351,55 @@ await check('desktop gameplay, controls, progression, help, and full run', async
 
 await check('a complete playable career run clears and unlocks the next court', async () => {
   const context = await browser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  // Play this one on Relaxed. What is under test is the career loop — play a
+  // court through the DOM, clear it, bank the stars, unlock the next — not the
+  // balance of a tier, which tests/game.test.mjs covers directly on the engine.
+  //
+  // The tier decides whether that loop can be tested at all. Standard allows
+  // three lost possessions against a 600 target; this scripted player passes on
+  // a fixed cadence without reading the press and scores about 10,000, so the
+  // target was never in doubt and the three possessions always were. Relaxed
+  // gives five possessions against 420 (DIFFICULTY_TIERS in the engine) and a
+  // slightly slower press, which turns a coin flip into a margin.
+  await context.addInitScript(() =>
+    localStorage.setItem(
+      'tiki-taka.progress.v1',
+      JSON.stringify({ version: 1, difficulty: 'relaxed' }),
+    ),
+  );
   const page = await context.newPage();
   const errors = watchErrors(page);
   await gotoArena(page, baseURL);
   await page.clock.install();
   await page.locator('#start-button').click();
+  let held = 0;
   await runRound(page, {
     steps: 180,
     async onStep() {
-      // Always attempt a pass, never only when a target can be parsed.
-      //
-      // This drives a real 90-second round through the DOM, and the round is
-      // lost after three turnovers. One of the ways to turn the ball over is
-      // simply holding it: MAX_HOLD in packages/engine/src/game.js is 6s, and
-      // a step here is 500ms of game time, so twelve steps that press nothing
-      // hand the ball straight to the press. Reading #target-label and acting
-      // only on a match meant every unreadable frame — the ball in flight, the
-      // label a frame behind reception — was such a step. Locally that cost
-      // one step a run and the round still won by an order of magnitude on
-      // score; on a loaded CI runner the misses cluster, three holds run out,
-      // and the run ends DEFEAT · POSSESSIONS LOST with nothing wrong but the
-      // driving. Space is the smart pass and picks its own receiver, so it is
-      // the right thing to fall back to: the ball keeps moving on every step
-      // whether or not the label was legible at the instant we looked.
       const target = (await page.locator('#target-label').textContent())?.match(/→\s*([1-4])/);
-      await page.keyboard.press(target ? `Digit${target[1]}` : 'Space');
+      if (target) {
+        held = 0;
+        await page.keyboard.press(`Digit${target[1]}`);
+        return;
+      }
+      // No readable receiver. Pressing Space anyway looks like the obvious fix
+      // and is worse: with the ball already in flight a smart pass is queued
+      // rather than thrown, and fires the instant the receiver takes it — a
+      // blind one-touch into the press, which is a turnover by interception
+      // instead of by holding. Most unreadable steps are exactly that case and
+      // want nothing done at all.
+      //
+      // What must not happen is standing still: MAX_HOLD is 6s and a step is
+      // 500ms of game time, so twelve idle steps concede possession on the
+      // clock. Force a pass only once a hold is genuinely close.
+      held += 1;
+      if (held >= 8) {
+        held = 0;
+        await page.keyboard.press('Space');
+      }
     },
   });
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('tiki-taka.progress.v1')).difficulty), 'relaxed', 'the run must have been played on the tier this check selected');
   await expectText(page.locator('#overlay-kicker'), /^VICTORY · COURT CLEARED/);
   assert.equal(await page.locator('#game-overlay').getAttribute('data-result'), 'victory');
   await expectText(page.locator('#result-cheer'), /COURT ERUPTS/);
@@ -391,10 +413,10 @@ await check('a complete playable career run clears and unlocks the next court', 
   await expectText(page.locator('#tertiary-button'), /^Home$/);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('tiki-taka.progress.v1')));
   assert.equal(saved.unlocked, 1);
-  // Stars and bests are tracked per difficulty tier now; the default
-  // selection is Standard, so that is the tier this run's clear lands under.
-  assert.ok(saved.courts['0'].standard.stars >= 1);
-  assert.ok(saved.records['court-0-standard'] >= 180);
+  // Stars and bests are tracked per difficulty tier, so the clear lands under
+  // the tier this check selected above rather than the default.
+  assert.ok(saved.courts['0'].relaxed.stars >= 1);
+  assert.ok(saved.records['court-0-relaxed'] >= 180);
   assert.equal(await page.locator('.court-item').nth(1).isDisabled(), false);
   assert.deepEqual(errors, []);
   await context.close();
