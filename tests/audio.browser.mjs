@@ -267,18 +267,28 @@ await check('the volumes are reachable and operable by gamepad and survive a rel
   // up-only walk, it would just re-break.) The action zone holds only
   // #title-play, fewer than two focusables, so it has no axis of its own and
   // any direction leaves it immediately: one UP is enough to land in the bar.
-  let inBar = false;
-  for (let step = 0; step < 8 && !inBar; step++) {
-    await pulsePad(page, 12);
-    inBar = await page.evaluate(() =>
-      Boolean(document.getElementById('top-bar')?.contains(document.activeElement)));
-  }
-  assert.equal(inBar, true, 'the d-pad must reach the top bar');
-  let onSettings = await page.evaluate(() => document.activeElement?.id === 'settings-button');
-  for (let step = 0; step < 8 && !onSettings; step++) {
-    await pulsePad(page, 15);
-    onSettings = await page.evaluate(() => document.activeElement?.id === 'settings-button');
-  }
+  //
+  // In this test's own environment (no Supabase config, so #profile-button
+  // stays hidden; 1200px wide, so #top-home is JS-reparented out past
+  // #settings-button by syncHomePlacement() in main.js, and .music-more is
+  // CSS-hidden above the 901px breakpoint) padFocusables' visible order for
+  // the bar is: music-prev, music-toggle, music-skip, fullscreen-button,
+  // settings-button — landing on music-prev needs 4 RIGHT presses to reach
+  // Settings, the floor. Use padUntil (defined above), not a fixed-count
+  // loop: as tests/browser.mjs:538 notes, activation is edge-sampled once per
+  // animation frame, so a short synthetic pulse can land entirely between two
+  // polls and simply not register on a slow runner — a fixed count that only
+  // covers the floor with a little slack (the previous bound of 8 against a
+  // floor of 4) is exactly what broke in CI. padUntil re-checks before every
+  // press and retries until it lands, so give it real headroom instead of a
+  // tight multiple.
+  await padUntil(page, 12, () =>
+    page.evaluate(() => Boolean(document.getElementById('top-bar')?.contains(document.activeElement))), 30);
+  assert.equal(
+    await page.evaluate(() => Boolean(document.getElementById('top-bar')?.contains(document.activeElement))),
+    true, 'the d-pad must reach the top bar');
+  await padUntil(page, 15, () =>
+    page.evaluate(() => document.activeElement?.id === 'settings-button'), 30);
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'settings-button',
     'the d-pad must reach Settings by walking the top bar with left/right');
   await padUntil(page, 0, () => page.locator('#settings-dialog').isVisible());
