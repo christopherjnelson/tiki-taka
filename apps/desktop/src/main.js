@@ -1236,7 +1236,7 @@ function showRoundResults({
     ? `THE COURT ERUPTS${stars ? ` · ${"★".repeat(stars)}` : ""}`
     : "THE CROWD IS STILL WITH YOU";
   $("invitation-note").textContent = "CHOOSE YOUR NEXT MOVE";
-  actions.hidden = true;
+  actions.hidden = false;
   $("start-button").disabled = true;
   $("secondary-button").disabled = true;
   if ($("tertiary-button")) $("tertiary-button").disabled = true;
@@ -1245,7 +1245,6 @@ function showRoundResults({
   resultRevealTimeout = setTimeout(() => {
     resultActionsReady = true;
     overlay.dataset.actions = "ready";
-    actions.hidden = false;
     $("start-button").disabled = false;
     $("secondary-button").disabled = false;
     if ($("tertiary-button")) $("tertiary-button").disabled = false;
@@ -2597,7 +2596,7 @@ $("tertiary-button").addEventListener("click", () => {
 // The phone sheet's way out. It lands on home rather than merely hiding the
 // sheet: the round behind it is over, so dismissing to a dead arena with no
 // live controls would strand the player with nothing to press.
-$("overlay-close").addEventListener("click", () => {
+$("overlay-close")?.addEventListener("click", () => {
   if (phase === "finished" && !resultActionsReady) return;
   applyView("home");
 });

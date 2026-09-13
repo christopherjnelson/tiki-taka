@@ -664,9 +664,9 @@ dialog h2 {
 .game-overlay[data-result] .invitation {
   position: relative;
   overflow: hidden;
-  width: min(620px, 48vw);
-  min-height: min(430px, 48vh);
-  padding: clamp(30px, 4vh, 48px) clamp(34px, 4vw, 58px) 30px;
+  width: min(580px, 46vw);
+  min-height: min(400px, 46vh);
+  padding: clamp(20px, 2.5vh, 30px) clamp(28px, 3vw, 44px) 20px;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -696,20 +696,20 @@ dialog h2 {
   color: var(--pink);
 }
 .game-overlay[data-result] #overlay-title {
-  margin: 9px 0 6px;
-  font-size: clamp(44px, 5vw, 72px);
+  margin: 6px 0 4px;
+  font-size: clamp(38px, 4.5vw, 60px);
 }
 .game-overlay[data-result] #overlay-copy {
-  margin: 7px auto 22px;
+  margin: 4px auto 12px;
   max-width: 46ch;
   font-size: 12px;
 }
 .result-stats {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  margin: 0 0 14px;
+  margin: 0 0 10px;
 }
 .result-headline {
   display: grid;
@@ -775,7 +775,7 @@ dialog h2 {
   color: #9c8fb3;
 }
 .result-cheer {
-  margin: 0 0 17px;
+  margin: 0 0 10px;
   color: var(--pink);
   font: 700 10px var(--sign);
   letter-spacing: 2.5px;
@@ -802,12 +802,18 @@ dialog h2 {
 .game-overlay[data-result] .invitation-note {
   margin: 12px 0 0;
 }
+.game-overlay[data-actions="waiting"] .overlay-actions button {
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+}
+.game-overlay[data-actions="ready"] .overlay-actions button {
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
 @media (prefers-reduced-motion: no-preference) {
   .game-overlay[data-result] .invitation {
     animation: result-card-in 0.36s ease-out both;
-  }
-  .game-overlay[data-actions="ready"] .overlay-actions {
-    animation: result-actions-in 0.24s ease-out both;
   }
   .game-overlay[data-result="victory"] .result-burst span {
     animation: result-cheer 0.7s ease-in-out 2 alternate;
@@ -6027,80 +6033,100 @@ body.play-view .arena-view .below-court {
   body.play-view .game-overlay .overlay-actions button {
     width: 100%;
     min-height: 48px;
+    margin: 0;
   }
-  /* Qualified so it beats the bare `.overlay-close { display: none }` default
-     below on specificity rather than on source order — the default has to sit
-     after this block to read as "hidden unless the sheet is on screen", and an
-     unqualified selector here would lose to it. */
-  /* Only on the result. The pre-round card is reached from home and the top
-     bar's Home button is still there to back out with, so a close control
-     there would be a second way to do what is already one tap away — and an
-     ambiguous one, since "close" on a card that starts a round reads as
-     "don't play". The result has no such escape: its three actions all commit
-     to something. */
-  body.play-view .game-overlay[data-result] .overlay-close {
-    /* Absolute, deliberately. `fixed` would be the instinct for a control that
-       must not scroll with the sheet, but an ancestor here establishes a
-       containing block (a transform/filter does that to fixed children), which
-       positioned it against the card rather than the viewport and threw it
-       ~100px off the top in landscape. Absolute is well-defined against the
-       card, and now that the landscape actions sit in a row the sheet no
-       longer scrolls at these sizes, so there is nothing to scroll away from. */
-    position: absolute;
-    z-index: 1;
-    /* Below the top bar, not over it. The bar sits in an ancestor stacking
-       context the sheet cannot reliably out-rank from where it lives in the
-       DOM, so raising z-index alone left the close control underneath the
-       Menu button and unpressable. Anchoring below the bar is stable however
-       that context resolves. */
-    top: calc(var(--top-bar, 44px) + max(8px, env(safe-area-inset-top)));
-    right: max(10px, env(safe-area-inset-right));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    padding: 0;
-    color: var(--ink, #f3f1e6);
-    background: #0c0620c2;
-    border: 1px solid #ffffff2e;
-    border-radius: 50%;
-    font-size: 15px;
-    line-height: 1;
-    cursor: pointer;
-  }
-}
-/* Desktop dismisses the result with one of the three actions or Escape, and a
-   close affordance floating on the panel there would just be a fourth way to
-   do what Home already does. */
-.overlay-close {
-  display: none;
 }
 
 /* A landscape phone is short, and stacking three full-width actions pushed the
-   last two below the fold — reachable only by scrolling the sheet, which is a
-   poor way to answer "what now?". There is width to spare here even if there
-   is no height, so the actions run as a row and the whole sheet fits. */
+   last two below the fold. Actions run in a row with uniform sizing, and the
+   result stats present score/xp alongside the bonus breakdown. */
 @media (max-height: 500px) and (orientation: landscape),
   (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
-  /* Both branches, matching the shared block's own selector list above
-     (not just `.game-overlay .invitation`): the result sheet's element also
-     carries `[data-result]`, which makes that branch of the shared rule
-     more specific than a plain `.game-overlay .invitation` override here —
-     without repeating it, this block would win on the pre-round card and
-     silently lose on the result sheet, the one case it exists for. */
   body.play-view .game-overlay .invitation,
   body.play-view .game-overlay[data-result] .invitation {
     gap: 4px;
-    padding-top: max(12px, env(safe-area-inset-top));
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
   body.play-view .game-overlay .overlay-actions {
+    display: flex;
     flex-direction: row;
+    align-items: stretch;
     gap: 8px;
+    width: 100%;
+    margin-top: auto;
   }
   body.play-view .game-overlay .overlay-actions button {
-    min-height: 42px;
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    min-height: 40px;
+    margin: 0;
+    padding: 0 8px;
+    font: 700 11px / 1.2 var(--sign);
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    box-sizing: border-box;
+  }
+  body.play-view .game-overlay .result-stats {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 680px;
+    margin: 0 auto 4px;
+  }
+  body.play-view .game-overlay .result-headline {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 130px;
+    border-block: 0;
+    border: 1px solid #ffffff24;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  body.play-view .game-overlay .result-headline > div {
+    padding: 4px 8px;
+    border-left: 0;
+    border-top: 1px solid #ffffff24;
+    text-align: center;
+  }
+  body.play-view .game-overlay .result-headline > div:first-child {
+    border-top: 0;
+  }
+  body.play-view .game-overlay .result-headline dt {
+    font-size: 7px;
+    letter-spacing: 1px;
+  }
+  body.play-view .game-overlay .result-headline dd {
+    font-size: 18px;
+    margin: 2px 0 0;
+  }
+  body.play-view .game-overlay .result-breakdown {
+    flex: 1 1 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  body.play-view .game-overlay .result-stat {
+    padding: 3px 4px 2px;
+  }
+  body.play-view .game-overlay .result-stat dt {
+    font-size: 6px;
+    letter-spacing: 0.5px;
+  }
+  body.play-view .game-overlay .result-stat dd {
+    font-size: 13px;
+    margin: 1px 0 0;
   }
 }
 
@@ -6143,16 +6169,8 @@ body.play-view .arena-view .below-court {
     display: none;
   }
 }
-/* A landscape phone has roughly 300px of usable height once the bar is out.
-   The nine-cell bonus breakdown does not fit alongside the headline, the score
-   and three actions, and making it fit meant scrolling the sheet — which put
-   the result's own headline off-screen. The breakdown is the least of what a
-   player wants at this moment: they want to know the score and to choose what
-   happens next. It stays on the portrait sheet, where there is room, and on
-   desktop. */
 @media (max-height: 500px) and (orientation: landscape),
   (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
-  body.play-view .game-overlay .result-breakdown,
   body.play-view .game-overlay #overlay-copy {
     display: none;
   }

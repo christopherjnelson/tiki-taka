@@ -646,8 +646,8 @@ await check('full-time results consume early gamepad presses before revealing ac
               // check reports the beat never happened. What is being tested is
               // that the press during the beat was swallowed, and that is
               // settled by now regardless of how slow the trip back is.
-              window.__actionsHiddenDuringBeat =
-                document.querySelector('#overlay-actions').hidden;
+              window.__actionsDisabledDuringBeat =
+                document.querySelector('#start-button').disabled;
               window.__overlayVisibleDuringBeat =
                 !document.querySelector('#game-overlay').hidden;
               window.__resultPulseComplete = true;
@@ -665,8 +665,8 @@ await check('full-time results consume early gamepad presses before revealing ac
   await page.waitForFunction(() => window.__resultPulseComplete === true);
   assert.equal(await page.evaluate(() => window.__overlayVisibleDuringBeat), true,
     'A during the result beat must not replay the round');
-  assert.equal(await page.evaluate(() => window.__actionsHiddenDuringBeat), true,
-    'actions stay absent during the result beat');
+  assert.equal(await page.evaluate(() => window.__actionsDisabledDuringBeat), true,
+    'actions stay disabled during the result beat');
   await page.locator('#game-overlay[data-actions="ready"]').waitFor({ state: 'visible', timeout: 4000 });
   assert.equal(await page.locator('#overlay-actions').isVisible(), true);
   const replayed = await padUntil(page, 0,
