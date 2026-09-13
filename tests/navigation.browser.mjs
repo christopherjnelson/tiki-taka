@@ -147,9 +147,20 @@ await check(
         .evaluate((button) => button.classList.contains("hover-preview")),
       true,
     );
-    assert.match(
-      await page.locator("#home-court-preview").getAttribute("alt"),
-      /court preview$/i,
+    // The attract demo behind the menu is a live rally, not a still image:
+    // it exposes window.__attractGame the same way the player's round exposes
+    // window.__game, and it advances on its own without any input.
+    await page.locator("#attract-court").waitFor({ state: "visible" });
+    assert.equal(
+      await page.evaluate(() => window.__attractGame?.config?.attract),
+      true,
+      "the attract demo game must be running behind home",
+    );
+    const firstPasses = await page.evaluate(() => window.__attractGame.passes);
+    await page.waitForFunction(
+      (before) => window.__attractGame && window.__attractGame.passes > before,
+      firstPasses,
+      { timeout: 10_000 },
     );
     await page.locator("#title-play").focus();
     assert.equal(await page.locator(".court-item.hover-preview").count(), 0);
@@ -185,6 +196,70 @@ await check(
     await settled(page);
     assert.equal(await page.locator("#home-view").isVisible(), true);
     assert.equal(await page.locator("#court-list button").count(), 6);
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
+  "selecting a different court re-skins the attract demo's venue without replacing the running game",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    // Courts past 0 are locked by default; unlock through 4 so the clicks
+    // and hovers below actually select rather than being no-ops.
+    await context.addInitScript(() =>
+      localStorage.setItem(
+        "tiki-taka.progress.v1",
+        JSON.stringify({ version: 1, xp: 0, unlocked: 5, courts: {}, records: {} }),
+      ),
+    );
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(baseURL, { waitUntil: "networkidle" });
+    await page.locator("#attract-court").waitFor({ state: "visible" });
+    await page.waitForFunction(() => !!window.__attractGame);
+    // Court 0 is Lisbon, court 2 is Barcelona (see packages/engine/src/venues.js
+    // and COURTS in packages/engine/src/game.js — both keyed off the same
+    // seeds). Hovering/selecting must change the venue colors without ever
+    // tearing down and rebuilding window.__attractGame.
+    await page.locator(".court-item").nth(0).click();
+    const before = await page.evaluate(() => ({
+      instanceTag: (window.__attractGame.__navTestTag ??=
+        Math.random().toString(36).slice(2)),
+      passes: window.__attractGame.passes,
+      venue: window.__attractGame.config.venue,
+    }));
+    assert.equal(before.venue, "lisbon");
+    await page.locator(".court-item").nth(2).click();
+    const after = await page.evaluate(() => ({
+      instanceTag: window.__attractGame.__navTestTag,
+      venue: window.__attractGame.config.venue,
+    }));
+    assert.equal(
+      after.instanceTag,
+      before.instanceTag,
+      "selecting a different court must not replace the attract demo's Game instance",
+    );
+    assert.equal(after.venue, "barcelona");
+    // Hovering another court item previews its venue, and leaving the list
+    // without selecting falls back to the court that is actually selected
+    // (Barcelona, from the click above) rather than getting stuck.
+    await page.locator(".court-item").nth(4).dispatchEvent("mouseenter");
+    await page.waitForFunction(
+      () => window.__attractGame.config.venue === "sao-paulo",
+    );
+    await page.locator("#court-list").dispatchEvent("mouseleave");
+    await page.waitForFunction(
+      () => window.__attractGame.config.venue === "barcelona",
+    );
+    assert.equal(
+      await page.evaluate(() => window.__attractGame.__navTestTag),
+      before.instanceTag,
+      "hover preview and its fallback must not replace the Game instance either",
+    );
     assert.deepEqual(errors, []);
     await context.close();
   },
