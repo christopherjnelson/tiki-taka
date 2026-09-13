@@ -634,6 +634,14 @@ dialog h2 {
   text-transform: uppercase;
   font: italic 800 clamp(36px, 5vw, 55px) / 0.95 var(--display);
 }
+/* Both hidden on desktop by default: the symbol stands in for #overlay-title
+   on the phone pre-round card only (that headline stays as text everywhere
+   else — see the phone query below), and the court preview only exists to
+   fill space the phone sheet has spare, which desktop's panel does not. */
+.overlay-symbol,
+.overlay-court-card {
+  display: none;
+}
 .invitation #overlay-copy {
   margin: 14px 0 19px;
   color: #d0c4dd;
@@ -1310,10 +1318,73 @@ dialog::backdrop {
 .audio-hint {
   color: var(--cyan);
 }
-.settings-gamepad {
+.settings-gamepad,
+.settings-bindings {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
+}
+/* Both sections are <details> now (see the markup comments in index.html)
+   so a phone can collapse them; the marker says so on every size rather
+   than only once space actually forces it, so opening one never looks like
+   a layout glitch. */
+summary.settings-audio-heading {
+  cursor: pointer;
+  margin: 0;
+}
+.settings-gamepad[open] summary.settings-audio-heading,
+.settings-bindings[open] summary.settings-audio-heading {
+  margin: 0 0 10px;
+}
+/* Driven off the `[open]` attribute explicitly rather than left to the
+   details/summary default: the collapse only has to work, not to be the
+   platform's own mechanism for it, and doing it this way also gives the
+   gamepad grid and the bindings body their own real `display` (grid, in both
+   cases) when open instead of whatever the browser's built-in disclosure
+   would fall back to. */
+.settings-gamepad > .gamepad-grid,
+.settings-bindings > .details-body {
+  display: none;
+}
+.settings-gamepad[open] > .gamepad-grid {
+  display: grid;
+}
+.settings-bindings[open] > .details-body {
+  display: block;
+}
+/* A landscape phone has ~300px of usable height once the top bar and the
+   dialog's own outer margin are out, and this dialog's headline is sized
+   for a screen with room to spare (see `dialog h2`'s clamp). Collapsing the
+   two <details> above already gets the common case (audio) to fit; this
+   trims the decorative rest — the oversized headline, the loose paragraph
+   spacing between sections — the same way the pre-round card and the result
+   sheet already give up size before content. */
+@media (max-height: 500px) and (orientation: landscape),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
+  #settings-dialog {
+    padding: 12px 20px;
+  }
+  #settings-dialog h2 {
+    margin: 4px 0;
+    font-size: 22px;
+  }
+  #settings-dialog .utility-buttons {
+    margin: 8px 0 10px;
+  }
+  #settings-dialog .settings-audio {
+    padding: 6px 0;
+  }
+  #settings-dialog .audio-row {
+    margin-bottom: 6px;
+  }
+  #settings-dialog .settings-note {
+    margin: 4px 0 0;
+  }
+  #settings-dialog .settings-gamepad,
+  #settings-dialog .settings-bindings {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
 }
 .gamepad-grid {
   display: grid;
@@ -1558,12 +1629,24 @@ body.play-view .ambience {
   border-bottom: 1px solid var(--line);
 }
 
+/* .top-bar-left, not .music-player, is the grid item now that Home sits
+   beside the player (see the markup note in index.html) — position: relative
+   here is only so `.music-popup` below can anchor under `#music-more`
+   wherever this row ends up sitting. */
+.top-bar-left {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  justify-self: start;
+}
 .music-player {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  justify-self: start;
 }
 .music-player-heading {
   color: var(--cyan);
@@ -1595,6 +1678,67 @@ body.play-view .ambience {
 }
 #music-toggle[aria-pressed="false"] span {
   margin-left: 1px;
+}
+/* The opener stays out of the layout entirely on desktop (not just visually
+   hidden) — see the mobile tier below for where it turns on — so it never
+   claims a gap in the flex row or a stop in padFocusables() where the three
+   full-size transport buttons already do the job. Selector is `.bar-button
+   .music-more`'s combined specificity, not just `.music-more`, because
+   `.bar-button` itself sets `display: inline-flex` and is declared later in
+   this file — same specificity, later rule wins, which silently undid this
+   without the extra class to break the tie. */
+.bar-button.music-more {
+  display: none;
+}
+#music-popup-toggle[aria-pressed="false"] span {
+  margin-left: 1px;
+}
+/* A plain positioned panel, not a <dialog> — it doesn't pause the round or
+   block input the way Settings/Account do (see menuBlocking() in main.js),
+   because skipping a track mid-possession shouldn't cost you the ball.
+   `[hidden]` needs the explicit `display: none` below because an attribute
+   selector and a class selector tie on specificity and this rule would
+   otherwise win by coming later in the sheet (same fix as `.pause-menu`). */
+.music-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 168px;
+  padding: 10px;
+  background: #150c30;
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 28px #00000080;
+}
+.music-popup[hidden] {
+  display: none;
+}
+.music-popup-track {
+  overflow: hidden;
+  margin: 0;
+  color: #efe7ff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 11px var(--sign);
+  letter-spacing: 1px;
+}
+.music-popup-transport {
+  display: flex;
+  gap: 8px;
+}
+.music-popup-transport .bar-button {
+  flex: 1 0 0;
+  padding: 0;
+  letter-spacing: 0;
+}
+/* Empty and hidden today — see the markup comment. Reserved so the eventual
+   track list has a home inside the popup that already exists, instead of a
+   second popup being built later. */
+.music-popup-tracks {
+  display: none;
 }
 .top-brand {
   grid-column: 2;
@@ -1640,6 +1784,10 @@ body.play-view .ambience {
 .bar-button {
   display: inline-flex;
   align-items: center;
+  /* Was left-aligned: a button wider than its icon+label (every one of these
+     is at least 40px) drew the icon hugging the left edge instead of sitting
+     in the middle of the tap target. */
+  justify-content: center;
   gap: 6px;
   min-width: 40px;
   min-height: 30px;
@@ -1741,6 +1889,50 @@ body.play-view .top-settings {
   font: 700 7px var(--sign);
   letter-spacing: 2px;
 }
+/* Home moving into the left group (see the markup comment on `#top-home`)
+   adds a fourth 40px-ish control to a row that, between 901px and 1024px,
+   still carries the full three-button transport and the full-text profile
+   chip — neither shrinks until the 900px tier below. The sum overflows the
+   grid's minmax(0, 1fr) column at those widths and the overflow paints
+   straight over the centred wordmark (measured at 901–1023px; the collision
+   is worst just above 900 and shrinks to nothing by 1024). This tier exists
+   only to close that gap, so it repeats two of the 900px tier's rules early
+   rather than lowering that tier's own breakpoint and pulling in its
+   unrelated label/height changes (`--top-bar`, the SOUNDTRACK heading, the
+   wordmark font-size) at a width where nothing forced those. Comfortably
+   inside the "must not move" floor of 1025px. */
+@media (max-width: 1024px) {
+  /* The heading and the track name are the other half of the same overflow —
+     trimming the transport down to two buttons wasn't enough on its own
+     because "SOUNDTRACK" plus an 18-character track name is wider than the
+     buttons it sat beside. The 900px tier below re-hides/reflows these for
+     its own reasons; repeating the hide here (not lowering that tier's
+     breakpoint) keeps this fix scoped to the collision it's fixing. */
+  .music-player-heading {
+    display: none;
+  }
+  .music-track {
+    display: none;
+  }
+  .bar-button.music-transport {
+    display: none;
+  }
+  .bar-button.music-more {
+    display: inline-flex;
+  }
+  .profile-chip {
+    min-width: 30px;
+    padding: 0;
+    justify-content: center;
+  }
+  .profile-chip-text {
+    display: none;
+  }
+  .profile-avatar {
+    width: 22px;
+    height: 22px;
+  }
+}
 /* The bar drops its explanatory labels before it drops a control: on a narrow
    window the wordmark, the track title and the three buttons survive, and the
    sub-headings that only name what you are already looking at go. */
@@ -1772,16 +1964,14 @@ body.play-view .top-settings {
   .profile-chip-name {
     max-width: 8ch;
   }
-  /* Below ~340px the three transport buttons (still at their 900px-tier
-     min-width, gap and the 18px wordmark) add up to more than the grid's
-     minmax(0, 1fr) side columns actually have once the centred wordmark
-     claims its auto column — .music-player already has min-width: 0, so it
-     doesn't get clipped, it just renders wider than its track and spills
-     into the wordmark next to it. Shrinking the transport buttons, the gaps
-     around them, and the wordmark keeps all three controls (this bar's
-     stated rule — see the comment above the 900px tier) rather than
-     dropping one, and the given widths clear a 320px viewport with room to
-     spare. */
+  /* Below ~340px, Home + play/pause + the popup opener on the left (three
+     40px-ish controls) and fullscreen + Menu + the icon-only profile chip on
+     the right add up to more than the grid's minmax(0, 1fr) side columns
+     actually have once the centred wordmark claims its auto column — both
+     side groups already have min-width: 0, so they don't get clipped, they
+     just render wider than their content and spill into the wordmark next to
+     them. Shrinking the buttons, the gaps around them, and the wordmark
+     clears a 320px viewport with room to spare without dropping a control. */
   .top-bar {
     gap: 6px;
   }
@@ -1789,34 +1979,30 @@ body.play-view .top-settings {
     height: 18px;
     max-width: 72px;
   }
-  /* The transport-button shrink above used to be enough to clear 320px on
-     its own: the home screen's right side only carried Settings + the
-     profile chip, and play view's carried Home + Menu — either pair still
-     fit their grid column at this width. The always-present fullscreen
-     toggle (see `.top-fullscreen` in index.html) sits in that same column on
-     every screen now, and a third control tips both pairs over into the
-     centred wordmark. The label text is what gives way, not any control:
-     all three stay tappable and named (each already carries a `title`,
-     which becomes its accessible name once the visible text is gone), they
-     just read as icons here the way the soundtrack transport buttons
-     already do. Unqualified by `body.play-view` on purpose — the home
-     screen needs this exactly as much as play view does now. */
+  /* The label text is what gives way here, not any control: every button
+     already carries a `title`, which becomes its accessible name once the
+     visible text is gone, so it stays tappable and named — it just reads as
+     an icon here the way the soundtrack transport already did before it
+     moved into the popup. Unqualified by `body.play-view` on purpose — the
+     home screen needs this exactly as much as play view does. */
+  .top-bar-left .bar-button-label,
   .top-bar-right .bar-button-label {
     display: none;
   }
-  /* Losing the label text above isn't enough on its own once there are three
-     icons in this column (play view: fullscreen + Home + Menu) — three
+  /* Losing the label text above isn't enough on its own once a side is
+     carrying three controls (left, in the arena: Home + play/pause + the
+     popup opener; right: fullscreen + Menu + the profile chip) — three
      buttons at the wider tiers' 40px min-width and 10px gap add up to more
-     than this column's actual share of a 320px bar (~110px, once the centred
-     wordmark and the grid's own gaps take theirs), and the overflow paints
-     straight over the wordmark next to it, the same way the transport
-     buttons on the other side already do at this width. Shrinking the icon
-     box and closing the gap between them buys back exactly that difference;
-     three buttons still stay tappable and named (labels moved to `title` /
-     `aria-label`, not removed), just packed tighter. */
+     than a side's actual share of a 320px bar, and the overflow paints
+     straight over the wordmark next to it. Shrinking the icon box and
+     closing the gap between them buys back exactly that difference; every
+     control stays tappable and named (labels moved to `title` / `aria-label`,
+     not removed), just packed tighter. */
+  .top-bar-left,
   .top-bar-right {
     gap: 4px;
   }
+  .top-bar-left .bar-button,
   .top-bar-right .bar-button {
     min-width: 32px;
     padding: 0 5px;
@@ -2543,33 +2729,25 @@ body.play-view #bank-button {
 /* The hint toast defaults to hugging the bottom edge (see #toast above),
    which is exactly where the touch controls live on a phone — in portrait it
    lands squarely on the Pass button, and in landscape it sits inside the
-   floating control band. Moving it to a flat offset from the top fixed that,
-   but landed it on the scoreboard instead (the SCORE card in portrait, SCORE
-   and POSSESSIONS in landscape) — trading one occluded readout for another.
-   --scoreboard-height is the scoreboard's own live-measured height (see
-   publishScoreboardHeight() in main.js and .one-touch-readout's identical
-   use of it below the court), so anchoring off --top-bar + that height
-   always clears the HUD band itself, in both orientations, however tall it
-   is at a given width. Narrowing it too means less of it sits over the
-   court/pitch below that band, though landscape in particular has no truly
-   dead space there — the scoreboard already floats on top of the court by
-   design (see body.play-view .scoreboard) — so "below the HUD" is the best
-   available spot rather than a fully empty one.
-
-   `.one-touch-readout` sits right below the court's top edge on the exact
-   same formula (`--top-bar` + `--scoreboard-height` + 8px — see its own
-   comment in index.html/style.css), which was fine while only one of the
-   two was ever on screen at once in practice, but they are independent
-   (a streak can be live when a hint fires) and land on the same rectangle
-   when they are. The toast is the transient one, so it gives way: the
-   extra 36px is the one-touch pill's own height plus a matching 8px gap,
-   pushing the toast below it rather than through it, whether or not the
-   pill actually happens to be visible at the time. */
+   floating control band. A flat offset from the top used to chase the
+   scoreboard's own live-measured height instead, which only ever bought a
+   near miss: the scoreboard floats on top of the court by design (see
+   body.play-view .scoreboard), so anything anchored "just below" it is still
+   floating over the pitch, and landscape in particular has no band there
+   that is genuinely clear of play. The one rectangle on this screen that is
+   never the court, the HUD or the thumb controls — in either orientation, at
+   any width this file supports — is the top bar's own row: everything else
+   lives inside .main, which only starts under it. Anchoring the toast there
+   instead, sized to the bar's own height, is what actually keeps the "never
+   over the court" promise rather than approximating it. */
 @media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
   body.play-view .toast {
-    top: calc(var(--top-bar, 44px) + var(--scoreboard-height, 56px) + 8px + 36px);
+    top: 0;
     bottom: auto;
-    max-width: min(84vw, 340px);
+    height: var(--top-bar);
+    max-width: min(84vw, 300px);
+    padding: 0 14px;
+    font-size: 11px;
     text-align: center;
   }
 }
@@ -2875,7 +3053,14 @@ body.play-view #bank-button {
     pointer-events: auto;
   }
   /* Score keeps the left gutter, stacked above the joystick it already
-     shares a corner with. */
+     shares a corner with. Energy joins it below (see `.court-toolbar`
+     further down) — the two used to split across both gutters purely
+     because Energy had nowhere else to go, which left this column mostly
+     empty above the joystick (94px of pod against ~300px of gutter) while
+     the right gutter carried two pods stacked tight. Reading order is
+     score, then Energy, then match on the other side — a player checks
+     score against Energy (what they've banked vs. what they can still
+     spend) at least as often as score against the clock. */
   body.play-view .hud-group-score {
     top: calc(var(--top-bar, 34px) + 8px);
     left: max(8px, env(safe-area-inset-left));
@@ -2886,19 +3071,12 @@ body.play-view #bank-button {
     border-top: 1px solid #ffffff1c;
     padding-top: 3px;
   }
-  /* Match numbers and Energy share the right gutter, stacked above the
-     action cluster: they're the two readouts a player checks together
-     mid-press (how much clock/multiplier is left, how much Energy is left
-     to spend on Focus or Boost), so keeping them in one column instead of
-     splitting them across both gutters reads as one decision, not two.
-     `top` clears the pause button (`.arena-venue-banner`, still pinned at
-     `top: 10px` in the phone rule that predates this file) — see that
-     rule's own comment for why it isn't moved here too. Three stacked stats
-     plus Energy below have to share the same strip of height the bottom-
-     centre dock never had to fit inside, so both this pod's stat numbers
-     and Energy's own type below are set in size explicitly rather than
-     inheriting the larger sizing built for a wide dock or a full-width
-     portrait band. */
+  /* Match numbers now have the whole right gutter to themselves — Energy's
+     departure (see `.court-toolbar` below) is what frees the room this
+     spends on bigger type. `top` still clears the pause button
+     (`.arena-venue-banner`, pinned at `top: 10px` in the phone rule that
+     predates this file) — see that rule's own comment for why it isn't
+     moved here too. */
   body.play-view .hud-group-match {
     top: calc(var(--top-bar, 34px) + 59px);
     right: max(8px, env(safe-area-inset-right));
@@ -2910,43 +3088,68 @@ body.play-view #bank-button {
     width: 100%;
     align-items: flex-end;
     padding-left: 0;
-    padding-top: 2px;
+    padding-top: 4px;
     border-left: none;
   }
   body.play-view .hud-group-match .stat:not(:first-child) {
     border-top: 1px solid #ffffff1c;
   }
+  /* Both gutters sat on a lot of unused height (a ~94px score pod and a
+     ~114px match pod inside a ~350px-tall gutter), so the numbers read as an
+     afterthought next to the pitch they're reporting on. Scaled up well past
+     the old 15px/20px pairing now that Energy's move has given both pods a
+     full column to themselves instead of splitting one. */
+  body.play-view .hud-group-match .stat-label,
+  body.play-view .hud-group-score .stat-label {
+    font-size: 10px;
+  }
   body.play-view .hud-group-match .stat strong,
   body.play-view .hud-group-score .stat strong {
-    font-size: 15px;
+    font-size: 24px;
   }
   body.play-view .hud-group-score .score-stat strong {
-    font-size: 20px;
+    font-size: 38px;
   }
-  /* Energy sits directly under the match pod in the same column: still the
-     compact label/value-then-track pill the shared coarse-pointer block
-     above already builds, just narrower (this gutter is 138px wide, not the
-     open floor space the bottom-centre dock had) and re-timed to start
-     right after the match pod's own real height instead of a guess. */
+  /* Energy moves into the left gutter, stacked under the score pod instead
+     of under the match pod on the other side: it and score are the two
+     numbers a player reads together (what's banked, what's left to spend),
+     and the left gutter had the room this needs — see the `.hud-group-score`
+     comment above. `top` is measured off the score pod's own real height
+     (103px at this width, with the enlarged type above) plus a 6px gap, not
+     guessed, matching how the old right-gutter version keyed off the match
+     pod's own height. */
   body.play-view .court-toolbar {
-    top: calc(var(--top-bar, 34px) + 59px + 122px);
-    right: max(8px, env(safe-area-inset-right));
-    left: auto;
+    top: calc(var(--top-bar, 34px) + 8px + 103px + 6px);
+    left: max(8px, env(safe-area-inset-left));
+    right: auto;
     bottom: auto;
     width: var(--gutter-pod-width);
-    padding: 4px 6px;
+    padding: 6px 8px;
     transform: none;
   }
   body.play-view .court-toolbar .energy-info {
-    gap: 2px;
-    padding: 3px 8px 8px;
+    gap: 4px;
+    padding: 4px 8px 10px;
   }
-  body.play-view .court-toolbar .energy-label,
+  /* Label above value instead of side by side — at this pod's 122px width,
+     "ENERGY" and "0 / 10" sharing one row at the enlarged size below left
+     barely 30px for the value and wrapped it mid-number. Stacking costs
+     nothing here: the pod has height to spare now that it isn't squeezed
+     under the match card any more (see the `.court-toolbar` rule above). */
+  body.play-view .court-toolbar .energy-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+  body.play-view .court-toolbar .energy-label {
+    font-size: 10px;
+  }
   body.play-view .court-toolbar .energy-value {
-    font-size: 9px;
+    font-size: 16px;
   }
   body.play-view .court-toolbar .energy-track {
-    bottom: 2px;
+    height: 6px;
+    bottom: 3px;
   }
 }
 /* Portrait's own delta: the court rotates to a 620:1000 box (long axis down
@@ -3005,6 +3208,21 @@ body.play-view #bank-button {
      continuous strip. */
   body.play-view .scoreboard {
     position: absolute;
+    /* Above `.court-toolbar`'s own z-index — 12 here, the shared
+       coarse-pointer block's value for its floating-pill treatment (see the
+       `@media (max-width: 900px), (pointer: coarse)…` rule), which this
+       breakpoint's own `.court-toolbar` rule never overrides. TIME docks
+       into row 2 as a `position: fixed` descendant of this box (see
+       `.clock-stat` below), and a fixed element still paints inside
+       whichever ancestor's stacking context it belongs to — it does not
+       escape one just by being fixed. Without this, the toolbar's near-
+       opaque row-2 background, later in the document and stacked higher,
+       painted over TIME almost entirely (a faint ghost was still visible
+       through its ~5% alpha, which is what made this so easy to miss). The
+       two rows never overlap geometrically (this box is row 1's own
+       height), so raising it only settles that one paint order, nothing
+       else. */
+    z-index: 13;
     top: 0;
     left: 0;
     width: 100%;
@@ -3065,13 +3283,26 @@ body.play-view #bank-button {
        the same defect one line up. The narrow tier below widens this. */
     padding-right: 56px;
   }
-  /* Three stats plus their dividers in the room the row and the docked pause
+  /* TIME used to be this pod's first stat, competing with MULTIPLIER and
+     POSSESSIONS for the same crowded row and pushing the score pod's own
+     "SCORE / 600" label into a wrap. It reads better next to Energy anyway —
+     both are the "how much do I have left" readouts a player checks together
+     — so it moves down to row 2 instead of DOM (see the clock-stat rule
+     under the Energy band below). Taking it out of flow here leaves
+     MULTIPLIER as the pod's first *visible* stat, but it is still the DOM's
+     second child, so the divider reset below is still needed on it
+     specifically rather than on `:first-child`. */
+  body.play-view .hud-group-match .stat:nth-child(2) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  /* Two stats plus their divider in the room the row and the docked pause
      button leave behind is tight enough at 320px that the shared card's own
-     16px divider gap, POSSESSIONS' own label tracking, and `.lives-stat`'s
-     letter-spacing (both built for a lone wide pill, not a crowded row)
-     push "3 / 3" onto two lines and crowd its label against the pause
-     button next to it. Nothing here is wider than the numbers actually need
-     once the wrap and the extra tracking are both trimmed back. */
+     16px divider gap and POSSESSIONS' own label tracking (both built for a
+     lone wide pill, not a crowded row) push "3 / 3" onto two lines and crowd
+     its label against the pause button next to it. Nothing here is wider
+     than the numbers actually need once the wrap and the extra tracking are
+     both trimmed back. */
   body.play-view .hud-group-match .stat {
     padding-left: 8px;
   }
@@ -3106,6 +3337,14 @@ body.play-view #bank-button {
     bottom: auto;
     left: 0;
     width: 100%;
+    /* The plain `.court-toolbar` rule at max-width:900px (no `body.play-view`
+       prefix, so lower specificity — but this block never set the property
+       at all, so it still won by cascade) stacks the toolbar into a column
+       for the floating pill layout every other phone width uses. This row is
+       a single strip, not a stack, and TIME's own fixed placement to its
+       right (below) assumes `.energy-info` is free to grow horizontally
+       instead of shrink-wrapping to a column's cross-axis width. */
+    flex-direction: row;
     transform: none;
     min-height: var(--mobile-energy-band, 44px);
     padding: 0 14px;
@@ -3119,14 +3358,52 @@ body.play-view #bank-button {
      whatever width is left — instead of the two-line stack the shared
      coarse-pointer block gives the floating pill (label/value row, then the
      track below it): a single row is shorter, and shorter is the entire
-     point of this band. */
+     point of this band. Width stops short of the toolbar's own full box
+     (`calc(100% - 58px)`, not 100%) to leave TIME's own reserved column at
+     the row's right edge — see the clock-stat rule below — so the meter
+     never draws under it. */
   body.play-view .court-toolbar .energy-info {
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 10px;
-    width: 100%;
+    width: auto;
+    max-width: calc(100% - 58px);
+    flex: 1 1 auto;
     padding: 0;
+  }
+  /* TIME, relocated from the crowded row above (see the `.hud-group-match`
+     rule higher up): still the same DOM node inside `.hud-group-match`, just
+     docked past this row's own right edge the way the pause button docks
+     past row 1's, so it reads as Energy's row-mate without either card
+     needing to know about the other's markup. Right-aligned to match the
+     numbers in row 1's own match pod, and centred on the same
+     `--mobile-energy-band` height the Energy row itself uses, so the two
+     rows' right edges land in one clean column. This is what gives row 2 the
+     full-width, edge-to-edge composition row 1 already had — Energy filling
+     the left, TIME anchoring the right, instead of a lone pill adrift in an
+     otherwise empty strip. */
+  body.play-view .scoreboard .hud-group-match .clock-stat {
+    position: fixed;
+    top: calc(var(--top-bar, 44px) + var(--scoreboard-height, 56px));
+    right: max(14px, env(safe-area-inset-right));
+    left: auto;
+    width: 48px;
+    height: var(--mobile-energy-band, 44px);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    z-index: 5;
+  }
+  body.play-view .scoreboard .hud-group-match .clock-stat .stat-label {
+    letter-spacing: 0.5px;
+  }
+  body.play-view .scoreboard .hud-group-match .clock-stat strong {
+    font-size: 15px;
+    white-space: nowrap;
   }
   body.play-view .court-toolbar .energy-row {
     flex: 0 0 auto;
@@ -3171,19 +3448,10 @@ body.play-view #bank-button {
   body.play-view .one-touch-readout {
     top: 8px;
   }
-  /* The toast/one-touch collision fix (see the shared block's own `.toast`
-     rule) added a flat 36px on top of `--scoreboard-height` to clear a
-     one-touch pill that, at the time, sat directly under the scoreboard.
-     It now sits under the Energy band too (`.court-wrap`'s new `top`, and
-     `.one-touch-readout`'s own 8px on top of that) — so the toast needs the
-     same `--mobile-energy-band` added to keep clearing it, on top of (not
-     instead of) that original 36px. */
-  body.play-view .toast {
-    top: calc(
-      var(--top-bar, 44px) + var(--scoreboard-height, 56px) +
-        var(--mobile-energy-band, 44px) + 8px + 36px
-    );
-  }
+  /* No portrait-specific toast offset here any more: the shared block's
+     `.toast` rule anchors it to the top bar's own fixed-height row, which
+     this Energy band and .court-wrap both start well below, so there is
+     nothing left for a taller stack of HUD rows to collide with. */
 }
 
 /* Home / Arena workspace */
@@ -4698,7 +4966,14 @@ body.play-view .arena-view .below-court {
     top: 0;
     left: auto;
     right: 6px;
-    height: var(--mobile-hud-row, 50px);
+    /* `--mobile-hud-row` is only ever a guess at the row's height; the row's
+       real height is `--scoreboard-height`, measured live off the actual
+       rendered row (see main.js) because a long venue name or a display-
+       scaled font can grow it past the guess. Sizing the pause button off
+       the guess instead of the measurement is exactly why it used to ride a
+       few px higher than the score and match pods next to it: its own box
+       stayed at 50px while theirs grew to whatever they actually needed. */
+    height: var(--scoreboard-height, 50px);
     transform: none;
     display: flex;
     align-items: center;
@@ -5573,9 +5848,14 @@ body.play-view .arena-view .below-court {
    simply unreachable. There was nothing to salvage in shrinking it further.
 
    So the phone gets the whole screen and stops trying to show the court
-   behind it. The sheet scrolls if the content is taller than the viewport,
-   which landscape needs, and carries its own close control — a full-screen
-   sheet has to offer a way out that is not "commit to Retry or Home".
+   behind it. It also carries its own close control — a full-screen sheet
+   has to offer a way out that is not "commit to Retry or Home".
+
+   It does not scroll, even though it once needed to: a card a player has
+   to scroll to finish reading is the same failure this rewrite exists to
+   fix, just moved one level down. Whatever a given size cannot hold is
+   dropped instead (the breakdown grid and the copy paragraph go first, in
+   the landscape queries below) so what remains always fits without it.
 
    Keyed on coarse pointers as well as width so a phone in landscape at 932px,
    which is wider than many small laptops, still gets the sheet. */
@@ -5602,27 +5882,108 @@ body.play-view .arena-view .below-court {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: 8px;
     width: 100%;
     max-width: none;
     height: 100%;
     max-height: none;
     margin: 0;
     /* Room for the close control, and for the phone's own rounded corners and
-       home indicator. */
-    padding: calc(52px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-left))
-      max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right));
+       home indicator. Trimmed from an earlier 52/20px: this padding plus a
+       12px inter-element gap and the result sheet's own headline, headline
+       stats and full breakdown left nothing to spare at 320×740 once a
+       court-unlock line was also in the copy — the safety net this file used
+       to lean on for that (see the block comment above) is gone now, so the
+       chrome around the content has to give up its own slack first. */
+    padding: calc(40px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-left))
+      max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right));
     border: 0;
     border-radius: 0;
     transform: none;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    /* No overflow-y: auto here any more — that was the safety net for
+       content sizing not being trustworthy, and a sheet a player has to
+       scroll to finish reading is a worse failure than the one it was
+       papering over (see the block comment above). Every size this file
+       supports now fits without it. */
     text-align: center;
   }
   /* The stats were the worst of the squeeze: three columns in a 154px-wide
      card clipped every label. Two columns at full width fit the words. */
   body.play-view .game-overlay .result-breakdown {
     grid-template-columns: 1fr 1fr;
+  }
+  /* Pre-round only: the result sheet keeps its own text headline (it is
+     also reused by the "end this round?" prompt, which has no symbol art to
+     show), and the difficulty card and stats/actions below still need the
+     room. The symbol replaces the headline visually rather than removing it
+     — #overlay-title stays in the DOM (this card's aria-labelledby points at
+     it) and only loses its box on screen. */
+  body.play-view .game-overlay:not([data-result]) .overlay-symbol {
+    display: block;
+    width: 64px;
+    height: 64px;
+    margin: 4px auto;
+  }
+  body.play-view .game-overlay:not([data-result]) #overlay-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  /* Fills the dead space this card used to leave between the difficulty
+     picker and the Play button (see the brief this rework came from) —
+     flexible, not a fixed height, so it takes whatever room `.overlay-
+     actions`'s own `margin-top: auto` leaves it in either orientation,
+     the same technique `.home-court-card` already uses for the same
+     picture on the home screen. */
+  body.play-view .game-overlay:not([data-result]) .overlay-court-card {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  body.play-view .game-overlay .overlay-court-preview {
+    width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1000 / 620;
+    object-fit: contain;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #080414;
+  }
+  /* Desktop's spacing here is tuned for a panel with room around it; on the
+     full-screen sheet it is pure margin competing with the same 320×740
+     phone the padding trim above already had to answer for. Tightened, not
+     removed — the headline score and the breakdown are still two visually
+     separate groups, just closer together. */
+  body.play-view .game-overlay .result-stats {
+    gap: 6px;
+    margin: 0 0 8px;
+  }
+  body.play-view .game-overlay .result-headline > div {
+    padding: 7px 8px 6px;
+  }
+  body.play-view .game-overlay .result-cheer {
+    margin: 0 0 8px;
+  }
+  /* #overlay-title's own ID beats the shared `.invitation h2` rule below, so
+     the full-time headline stays at its desktop size (clamp(44px, 5vw, 72px))
+     on a phone unless something at least as specific says otherwise. Still
+     the biggest single thing on the sheet at 320×740 with the breakdown and
+     an unlock line both present. */
+  body.play-view .game-overlay[data-result] #overlay-title {
+    margin: 4px 0;
+    font-size: clamp(26px, 6vh, 38px);
+  }
+  body.play-view .game-overlay[data-result] #overlay-copy {
+    margin: 4px auto 8px;
   }
   body.play-view .game-overlay .overlay-actions {
     display: flex;
@@ -5690,9 +6051,17 @@ body.play-view .arena-view .below-court {
    is no height, so the actions run as a row and the whole sheet fits. */
 @media (max-height: 500px) and (orientation: landscape),
   (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
-  body.play-view .game-overlay .invitation {
-    gap: 8px;
+  /* Both branches, matching the shared block's own selector list above
+     (not just `.game-overlay .invitation`): the result sheet's element also
+     carries `[data-result]`, which makes that branch of the shared rule
+     more specific than a plain `.game-overlay .invitation` override here —
+     without repeating it, this block would win on the pre-round card and
+     silently lose on the result sheet, the one case it exists for. */
+  body.play-view .game-overlay .invitation,
+  body.play-view .game-overlay[data-result] .invitation {
+    gap: 4px;
     padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
   }
   body.play-view .game-overlay .overlay-actions {
     flex-direction: row;
@@ -5731,6 +6100,17 @@ body.play-view .arena-view .below-court {
   }
 }
 
+/* The narrowest supported portrait phone (320×740) is tight enough that the
+   breakdown, the headline and a court-unlock line together still do not fit
+   even after every margin above gives up its slack — the same shape of
+   problem the landscape query below solves, just from width rather than
+   height. Same fix, same reasoning: the breakdown is the one thing here a
+   player can live without seeing immediately. */
+@media (max-width: 340px) {
+  body.play-view .game-overlay .result-breakdown {
+    display: none;
+  }
+}
 /* A landscape phone has roughly 300px of usable height once the bar is out.
    The nine-cell bonus breakdown does not fit alongside the headline, the score
    and three actions, and making it fit meant scrolling the sheet — which put
@@ -5744,29 +6124,30 @@ body.play-view .arena-view .below-court {
   body.play-view .game-overlay #overlay-copy {
     display: none;
   }
+  /* The pre-round court preview (see .overlay-court-card above) is a nice-
+     to-have filling otherwise-empty space, not content a player is missing
+     without it — at ~300px of usable height with the difficulty picker and
+     actions still needed, it is the first thing this size cannot afford. */
+  body.play-view .game-overlay:not([data-result]) .overlay-court-card {
+    display: none;
+  }
 }
 
 /* ── The top bar at phone widths ──────────────────────────────────────────
-   Two leftovers from adding the fullscreen toggle, both only visible at
-   320px, both only in a picture.
+   The wordmark used to give way here: six controls (three transport,
+   fullscreen, Home, Menu) plus a centred brand mark did not fit 320px, and
+   the mark was drawn straight over the skip button. Round 2 of the top bar
+   took the transport count down to two (see `.music-transport`/`.music-more`
+   above) and moved Home to the left group, so each side of the bar is down
+   to two or three controls even in the arena — measured at 320px with the
+   wordmark back in and nothing overlapping, so the rule that dropped it is
+   gone. If a later change reopens this collision, the wordmark is still the
+   one thing here with no function (`.sr-only` keeps its name for anyone
+   reading the page either way) and should be the first to give.
 
-   The wordmark goes. Six controls (three transport, fullscreen, Home, Menu)
-   and a centred brand mark do not fit 320px, and the collision that produces
-   is not a near miss — the mark is drawn straight over the skip button, so
-   the brand looks broken and the control under it looks unpressable. This
-   predates the fullscreen toggle (the transport buttons already reached the
-   mark on their own) but a sixth control removes any remaining slack. Of the
-   things competing for that row, the wordmark is the one carrying no
-   function: the game is on the screen, the player knows what they launched,
-   and `.sr-only` text keeps the name for anything reading the page. Controls
-   keep the space; decoration gives it up.
-
-   And the match pod needs more room for the pause button at this width, for
-   the reason given at its `padding-right` above. */
+   The match pod still needs more room for the pause button at this width,
+   for the reason given at its `padding-right` above. */
 @media (max-width: 360px) {
-  .top-brand {
-    display: none;
-  }
   body.play-view .hud-group-match {
     /* 58, not the 56 used above: the pause button docks 3px further into this
        pod at 320 than at 390, and at 56 the POSSESSIONS label and its value

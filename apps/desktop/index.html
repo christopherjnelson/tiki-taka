@@ -39,39 +39,90 @@
       never overlap the court, and it is walked by the d-pad alongside whatever
       menu is open. -->
       <header id="top-bar" class="top-bar">
-        <div
-          id="music-player"
-          class="music-player"
-          role="group"
-          aria-label="Soundtrack"
-        >
-          <span class="music-player-heading" aria-hidden="true">SOUNDTRACK</span>
-          <span id="music-track" class="music-track" role="status" aria-live="off"
-            >—</span
-          >
-          <button
-            id="music-prev"
-            type="button"
-            class="bar-button"
-            title="Previous track"
-          >
-            <span aria-hidden="true">◀◀</span></button
-          ><button
-            id="music-toggle"
-            type="button"
-            class="bar-button"
-            aria-pressed="true"
-            title="Play or pause the soundtrack"
-          >
-            <span aria-hidden="true">▮▮</span></button
-          ><button
-            id="music-skip"
-            type="button"
-            class="bar-button"
-            title="Skip to the next track"
-          >
-            <span aria-hidden="true">▶▶</span>
+        <div id="top-bar-left" class="top-bar-left">
+          <!-- Home reads as Back when it sits at the edge people already scan
+          first, instead of buried on the right with Menu and fullscreen — the
+          same reason a browser's back arrow lives top-left, not top-right.
+          Still shown only in the arena (see the display rule shared with
+          `.top-pause` below); there is nothing to go back from on any other
+          screen. -->
+          <button id="top-home" type="button" class="bar-button top-home" title="Return to home screen">
+            <svg class="bar-icon" viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true">
+              <path d="M8 1.5L1.5 7.5V14.5H6V10H10V14.5H14.5V7.5L8 1.5Z" />
+            </svg>
+            <span class="bar-button-label">Home</span>
           </button>
+          <div
+            id="music-player"
+            class="music-player"
+            role="group"
+            aria-label="Soundtrack"
+          >
+            <span class="music-player-heading" aria-hidden="true">SOUNDTRACK</span>
+            <span id="music-track" class="music-track" role="status" aria-live="off"
+              >—</span
+            >
+            <button
+              id="music-prev"
+              type="button"
+              class="bar-button music-transport"
+              title="Previous track"
+            >
+              <span aria-hidden="true">◀◀</span></button
+            ><button
+              id="music-toggle"
+              type="button"
+              class="bar-button"
+              aria-pressed="true"
+              title="Play or pause the soundtrack"
+            >
+              <span aria-hidden="true">▮▮</span></button
+            ><button
+              id="music-skip"
+              type="button"
+              class="bar-button music-transport"
+              title="Skip to the next track"
+            >
+              <span aria-hidden="true">▶▶</span>
+            </button>
+            <!-- Mobile-only opener (see `.music-more` / `.music-transport` in
+            style.css): the previous/skip pair above collapses on a phone so
+            the bar spends its width on the wordmark instead of three
+            transport buttons, and moves here. Play/pause stays out in the bar
+            because it is the one control people reach for mid-round; the rest
+            is one tap deeper. `#music-popup` is built to grow a track list
+            later (see the empty `#music-popup-tracks`) without a second popup
+            being invented for it — do not populate that list yet. -->
+            <button
+              id="music-more"
+              type="button"
+              class="bar-button music-more"
+              title="More soundtrack controls"
+              aria-haspopup="true"
+              aria-expanded="false"
+              aria-controls="music-popup"
+            >
+              <span aria-hidden="true">♫</span>
+            </button>
+            <div id="music-popup" class="music-popup" role="menu" aria-label="Soundtrack controls" hidden>
+              <p id="music-popup-track" class="music-popup-track" role="status" aria-live="off">—</p>
+              <div class="music-popup-transport">
+                <button id="music-popup-prev" type="button" class="bar-button" title="Previous track">
+                  <span aria-hidden="true">◀◀</span>
+                </button>
+                <button id="music-popup-toggle" type="button" class="bar-button" aria-pressed="true" title="Play or pause the soundtrack">
+                  <span aria-hidden="true">▮▮</span>
+                </button>
+                <button id="music-popup-skip" type="button" class="bar-button" title="Skip to the next track">
+                  <span aria-hidden="true">▶▶</span>
+                </button>
+              </div>
+              <!-- Reserved for a future per-track list; left empty and hidden
+              on purpose (see the brief this popup shipped for) so there is
+              somewhere for it to go without a second popup being built. -->
+              <div id="music-popup-tracks" class="music-popup-tracks" hidden></div>
+            </div>
+          </div>
         </div>
         <p class="top-brand">
           <span class="top-brand-mark">
@@ -85,7 +136,7 @@
             <span class="sr-only">tiki-taka</span>
           </span>
         </p>
-        <div class="top-bar-right">
+        <div id="top-bar-right" class="top-bar-right">
           <!-- Item 3's answer to "a mouse cannot leave a round": a labelled
           control that is always in the same off-court place, only during play,
           far from the passing buttons at the foot of the canvas. Esc and Start
@@ -113,18 +164,20 @@
               <path d="M14.5 10.5v3a1 1 0 0 1-1 1h-3" />
             </svg>
           </button>
-          <button id="settings-button" type="button" class="bar-button top-settings" title="Open settings" aria-haspopup="dialog">
+          <!-- Settings (outside a round) and the pause menu (inside one) are
+          the same idea — the one place to open a drawer of options from — so
+          they now share a shape: the same hamburger glyph and the same
+          "Menu" label, not a gear here and bars there. Only one of the two
+          is ever shown (see the display rule below), so this doesn't cost a
+          second control, just a consistent one. The click target still opens
+          the settings dialog; only the icon changed. -->
+          <button id="settings-button" type="button" class="bar-button top-settings" title="Open the menu" aria-haspopup="dialog">
             <svg class="bar-icon" viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true">
-              <path d="M8 4.75a3.25 3.25 0 1 0 0 6.5 3.25 3.25 0 0 0 0-6.5zM6.25 8a1.75 1.75 0 1 1 3.5 0 1.75 1.75 0 0 1-3.5 0z" />
-              <path fill-rule="evenodd" d="M7.05 1.05a1.25 1.25 0 0 1 1.9 0l.45.49c.28.3.69.47 1.1.44l.67-.05a1.25 1.25 0 0 1 1.34 1.34l-.05.67c-.03.41.14.82.44 1.1l.49.45a1.25 1.25 0 0 1 0 1.9l-.49.45c-.3.28-.47.69-.44 1.1l.05.67a1.25 1.25 0 0 1-1.34 1.34l-.67-.05a1.26 1.26 0 0 0-1.1.44l-.45.49a1.25 1.25 0 0 1-1.9 0l-.45-.49a1.26 1.26 0 0 0-1.1-.44l-.67.05a1.25 1.25 0 0 1-1.34-1.34l.05-.67c.03-.41-.14-.82-.44-1.1l-.49-.45a1.25 1.25 0 0 1 0-1.9l.49-.45c.3-.28.47-.69.44-1.1l-.05-.67a1.25 1.25 0 0 1 1.34-1.34l.67.05c.41.03.82-.14 1.1-.44l.45-.49zm.98 1.48l-.45-.49a.25.25 0 0 0-.36 0l-.45.49c-.44.47-1.07.72-1.7.67l-.67-.05a.25.25 0 0 0-.27.27l.05.67c.05.63-.2 1.26-.67 1.7l-.49.45a.25.25 0 0 0 0 .36l.49.45c.47.44.72 1.07.67 1.7l-.05.67a.25.25 0 0 0 .27.27l.67-.05c.63-.05 1.26.2 1.7.67l.45.49a.25.25 0 0 0 .36 0l.45-.49c.44-.47 1.07-.72 1.7-.67l.67.05a.25.25 0 0 0 .27-.27l-.05-.67c-.05-.63.2-1.26.67-1.7l.49-.45a.25.25 0 0 0 0-.36l-.49-.45c-.47-.44-.72-1.07-.67-1.7l.05-.67a.25.25 0 0 0-.27-.27l-.67.05c-.63.05-1.26-.2-1.7-.67z" clip-rule="evenodd" />
+              <rect x="1" y="2.5" width="14" height="2" rx="1" />
+              <rect x="1" y="7" width="14" height="2" rx="1" />
+              <rect x="1" y="11.5" width="14" height="2" rx="1" />
             </svg>
-            <span class="bar-button-label">Settings</span>
-          </button>
-          <button id="top-home" type="button" class="bar-button top-home" title="Return to home screen">
-            <svg class="bar-icon" viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true">
-              <path d="M8 1.5L1.5 7.5V14.5H6V10H10V14.5H14.5V7.5L8 1.5Z" />
-            </svg>
-            <span class="bar-button-label">Home</span>
+            <span class="bar-button-label">Menu</span>
           </button>
           <button id="top-pause" type="button" class="bar-button top-pause" title="Open pause menu">
             <svg class="bar-icon" viewBox="0 0 16 16" width="11" height="11" fill="currentColor" aria-hidden="true">
@@ -134,6 +187,10 @@
             </svg>
             <span class="bar-button-label">Menu</span>
           </button>
+          <!-- Always present (see the header comment), but the name/kind pair
+          only earns its width on desktop now — `.profile-chip-compact` drops
+          it to the same bare-icon size as the buttons beside it below 901px,
+          where the arena bar is already carrying fullscreen, Menu and this. -->
           <button
             id="profile-button"
             type="button"
@@ -560,6 +617,18 @@
                   <p id="overlay-kicker" class="eyebrow">
                     WELCOME TO THE COURTYARD
                   </p>
+                  <!-- Phone-only, pre-round-only (see .overlay-symbol in
+                  style.css): stands in for the headline below rather than
+                  replacing it, since #overlay-title is also the result
+                  sheet's own headline and this card's aria-labelledby still
+                  needs real text in the accessibility tree either way. -->
+                  <img
+                    id="overlay-symbol"
+                    class="overlay-symbol"
+                    src="./src/brand/tiki-taka-symbol.png"
+                    alt=""
+                    aria-hidden="true"
+                  />
                   <h2 id="overlay-title">Find your flow.</h2>
                   <p id="overlay-copy">
                     Four players. One ball. No goals.<br />Outthink the press.
@@ -598,6 +667,22 @@
                     </dl>
                   </div>
                   <p id="result-cheer" class="result-cheer" hidden></p>
+                  <!-- Phone-only, pre-round-only (see .overlay-court-card
+                  in style.css): the same court-preview mechanism the home
+                  screen uses for #home-court-preview (renderer.courtPreview,
+                  set from prepare() in main.js, and the same flexible
+                  aspect-ratio box as .home-court-card) rather than a second
+                  one, filling the space this card otherwise left empty
+                  between the difficulty picker and the Play button. -->
+                  <div class="overlay-court-card">
+                    <img
+                      id="overlay-court-preview"
+                      class="overlay-court-preview"
+                      src=""
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  </div>
                   <div id="overlay-actions" class="overlay-actions">
                     <button id="start-button" class="primary-button">
                       Play the court <span aria-hidden="true">↗</span></button
@@ -1059,8 +1144,15 @@
           and the arrow keys from the keyboard.
         </p>
       </div>
-      <div class="settings-gamepad" role="group" aria-labelledby="gamepad-heading">
-        <p id="gamepad-heading" class="settings-audio-heading">GAMEPAD CONTROLS</p>
+      <!-- <details>, not a <div>: on a phone this dialog's own AUDIO section
+      plus five gamepad rows and fifteen keyboard rows add up to more than a
+      landscape phone has height for at all, and gamepad remapping is the
+      control scheme most phone players never touch. Collapsing it behind a
+      native disclosure keeps the setting reachable without asking the dialog
+      to scroll — see openSettings() in main.js, which forces this open again
+      above the phone breakpoint so desktop is unaffected. -->
+      <details class="settings-gamepad" id="settings-gamepad-group">
+        <summary id="gamepad-heading" class="settings-audio-heading">GAMEPAD CONTROLS</summary>
         <div class="gamepad-grid">
           <div class="gamepad-field">
             <label for="gamepad-smartPass">Smart pass</label>
@@ -1128,34 +1220,42 @@
             </select>
           </div>
         </div>
-      </div>
-      <div class="settings-preset">
-        <label for="preset-select">KEYBOARD PRESET</label>
-        <select id="preset-select">
-          <option value="wasd" selected>WASD</option>
-          <option value="arrows">Arrow keys</option>
-          <option value="left-hand">Left hand</option>
-          <option value="custom" disabled>Custom</option>
-        </select>
-      </div>
-      <p class="settings-note">
-        Choose a preset or select any key below to remap it. Each action
-        supports two bindings.
-      </p>
-      <div
-        id="bindings-list"
-        class="bindings-list"
-        aria-label="Keyboard bindings"
-      ></div>
-      <p
-        id="binding-status"
-        class="binding-status"
-        role="status"
-        aria-live="polite"
-      ></p>
-      <button id="reset-bindings" class="secondary-button" type="button">
-        Reset bindings
-      </button>
+      </details>
+      <!-- Same reasoning as the gamepad <details> above: fifteen bindable
+      actions is the single biggest block in this dialog, and a touchscreen
+      has no physical keyboard to remap in the first place. -->
+      <details class="settings-bindings" id="settings-bindings-group">
+        <summary class="settings-audio-heading">KEYBOARD BINDINGS</summary>
+        <div class="details-body">
+          <div class="settings-preset">
+            <label for="preset-select">KEYBOARD PRESET</label>
+            <select id="preset-select">
+              <option value="wasd" selected>WASD</option>
+              <option value="arrows">Arrow keys</option>
+              <option value="left-hand">Left hand</option>
+              <option value="custom" disabled>Custom</option>
+            </select>
+          </div>
+          <p class="settings-note">
+            Choose a preset or select any key below to remap it. Each action
+            supports two bindings.
+          </p>
+          <div
+            id="bindings-list"
+            class="bindings-list"
+            aria-label="Keyboard bindings"
+          ></div>
+          <p
+            id="binding-status"
+            class="binding-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <button id="reset-bindings" class="secondary-button" type="button">
+            Reset bindings
+          </button>
+        </div>
+      </details>
     </dialog>
     <dialog id="help-dialog" aria-labelledby="help-title">
       <div class="dialog-top">

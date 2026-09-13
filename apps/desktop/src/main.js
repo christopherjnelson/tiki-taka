@@ -342,6 +342,32 @@ let pointerId = null,
 // the wrong axis, and a stuck capture reads as a dead stick.
 const portraitQuery = matchMedia("(orientation: portrait)");
 let viewportOrientation = portraitQuery.matches ? "portrait" : "landscape";
+// Home reads as Back beside the music player, which is where the phone bar
+// wants it — but "desktop must not move" is the one hard rule every section
+// of this rework answers to, and desktop had Home on the right, between Menu
+// and the profile chip, long before this round. Reparenting beats a CSS-only
+// reorder here: `.top-bar-left`/`.top-bar-right` are separate flex rows
+// either side of the centred wordmark (see `.top-bar`'s grid), and nothing
+// in CSS can move one child from one flex container to another. 1025px
+// matches the floor named in the brief, not the bar's own 900/1024 tiers.
+const desktopBarQuery = matchMedia("(min-width: 1025px)");
+function syncHomePlacement() {
+  const home = $("top-home");
+  if (!home) return;
+  if (desktopBarQuery.matches) {
+    $("top-bar-right").insertBefore(home, $("profile-button"));
+  } else {
+    $("top-bar-left").insertBefore(home, $("music-player"));
+  }
+}
+syncHomePlacement();
+desktopBarQuery.addEventListener("change", syncHomePlacement);
+// Same breakpoint the phone settings sheet uses in style.css (see the
+// `.settings-gamepad`/`.settings-bindings` <details> comments there) — kept
+// as one query here rather than repeated inline so the two stay in step.
+const compactSettingsQuery = matchMedia(
+  "(max-width: 900px), (pointer: coarse) and (max-width: 1024px)",
+);
 function persist() {
   if (remoteDataUnavailable && onlineAccount()) {
     void recoverRemoteDataContext();
@@ -457,6 +483,7 @@ function syncPauseMenu() {
 function openMenu() {
   if (view !== "arena" || menuOpen) return;
   clearInput();
+  closeMusicPopup();
   menuReturnFocus = document.activeElement;
   menuOpen = true;
   syncPauseMenu();
@@ -839,6 +866,7 @@ function applyView(next, { updateHash = true } = {}) {
   $("home-view").hidden = view !== "home";
   $("arena-view").hidden = view !== "arena";
   if (view !== "arena") closePauseMenu({ restoreFocus: false });
+  closeMusicPopup();
   // Exactly one game is live at a time: the demo is built on the way into home
   // and dropped on the way out, before the arena starts drawing.
   if (view === "home") {
@@ -1308,6 +1336,13 @@ function prepare() {
   $("eyebrow").textContent = game.config.place;
   $("court-title").textContent = game.config.name;
   $("court-description").textContent = game.config.description;
+  // Same mechanism the home screen uses for #home-court-preview: one
+  // renderer.courtPreview() call per court, not a second preview pipeline
+  // for the pre-round card (see .overlay-court-preview in style.css, phone
+  // widths only — it fills the space that card otherwise left empty).
+  if ($("overlay-court-preview")) {
+    $("overlay-court-preview").src = renderer.courtPreview(game.config);
+  }
   $("mode-label").textContent =
     mode === "career"
       ? `THE CIRCUIT / ${String(courtIndex + 1).padStart(2, "0")}`
@@ -1357,7 +1392,7 @@ function prepare() {
         ? "HOW LONG CAN YOU KEEP IT?"
         : mode === "practice"
           ? "A LITTLE SPACE TO LEARN"
-          : "FOUR PLAYERS. ONE BALL.",
+          : "NO GOALS. ALL FLOW.",
     mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
       ? "Connect triangles to buy time. Survive the rising press."
@@ -1440,11 +1475,10 @@ function start() {
   $("tactic-select").disabled = true;
   $("difficulty-select").disabled = true;
   $("court").focus({ preventScroll: true });
-  toast(
-    mode === "practice"
-      ? `Move with ${settings.bindings.moveUp.map(readableKey).join(" / ")} and its direction keys, or drag the court.`
-      : `Keep it moving. Click a teammate or use ${settings.bindings.smartPass.map(readableKey).join(" / ")} for a smart pass.`,
-  );
+  // No movement/pass hint toast here any more: it fired on every single
+  // round and sat on top of the pitch the whole time a player needed to see
+  // it. The pre-round card it replaces already tells the story once, before
+  // kickoff, without covering play.
 }
 // The court only takes movement and aim while a round is actually running and
 // is not waiting for the player to pick the ball back up.
@@ -2693,30 +2727,87 @@ $("music-button").addEventListener("click", toggleMusic);
 // settings dialog's Music button plus a skip, so there is one notion of
 // "music on" and the volume and on/off settings keep governing it.
 function syncMusicRail() {
+  // The popup's prev/toggle/skip are the same three controls again, just
+  // reachable when the bar-level pair (`#music-prev`/`#music-skip`) is
+  // collapsed away — see `.music-transport` in style.css — so every field
+  // below is written twice rather than the popup drifting out of sync with
+  // whichever pair is actually visible.
   const toggle = $("music-toggle"),
     prev = $("music-prev"),
-    skip = $("music-skip");
+    skip = $("music-skip"),
+    popupToggle = $("music-popup-toggle"),
+    popupPrev = $("music-popup-prev"),
+    popupSkip = $("music-popup-skip");
   if (!toggle) return;
-  toggle.setAttribute("aria-pressed", String(settings.musicOn));
-  toggle.firstElementChild.textContent = settings.musicOn ? "▮▮" : "▶";
-  toggle.setAttribute(
-    "aria-label",
-    settings.musicOn ? "Pause the soundtrack" : "Play the soundtrack",
-  );
-  if (prev) {
-    prev.setAttribute("aria-label", "Skip to the previous track");
-    prev.disabled = music.trackCount < 2;
+  for (const t of [toggle, popupToggle]) {
+    if (!t) continue;
+    t.setAttribute("aria-pressed", String(settings.musicOn));
+    t.firstElementChild.textContent = settings.musicOn ? "▮▮" : "▶";
+    t.setAttribute(
+      "aria-label",
+      settings.musicOn ? "Pause the soundtrack" : "Play the soundtrack",
+    );
   }
-  if (skip) {
-    skip.setAttribute("aria-label", "Skip to the next track");
-    skip.disabled = music.trackCount < 2;
+  for (const p of [prev, popupPrev]) {
+    if (!p) continue;
+    p.setAttribute("aria-label", "Skip to the previous track");
+    p.disabled = music.trackCount < 2;
+  }
+  for (const s of [skip, popupSkip]) {
+    if (!s) continue;
+    s.setAttribute("aria-label", "Skip to the next track");
+    s.disabled = music.trackCount < 2;
   }
   const title = music.trackTitle;
-  $("music-track").textContent = title || "—";
-  $("music-track").title = title
+  const titleAttr = title
     ? `${title} · track ${music.trackIndex + 1} of ${music.trackCount}`
     : "";
+  $("music-track").textContent = title || "—";
+  $("music-track").title = titleAttr;
+  const popupTrack = $("music-popup-track");
+  if (popupTrack) {
+    popupTrack.textContent = title || "—";
+    popupTrack.title = titleAttr;
+  }
 }
+// A plain popover, not a <dialog> — see the CSS comment on `.music-popup` for
+// why: it must never pause the round or count toward menuBlocking(). Closing
+// it lives in one place so every path that should dismiss it (a real close,
+// an outside click, Escape, the window widening past the tier that shows the
+// opener at all, or another menu opening over it) goes through the same code.
+function closeMusicPopup() {
+  const popup = $("music-popup");
+  if (!popup || popup.hidden) return;
+  popup.hidden = true;
+  $("music-more")?.setAttribute("aria-expanded", "false");
+}
+function toggleMusicPopup() {
+  const popup = $("music-popup");
+  if (!popup) return;
+  if (popup.hidden) {
+    popup.hidden = false;
+    $("music-more").setAttribute("aria-expanded", "true");
+  } else {
+    closeMusicPopup();
+  }
+}
+$("music-more")?.addEventListener("click", () => {
+  toggleMusicPopup();
+  unlockAudio();
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!$("music-popup") || $("music-popup").hidden) return;
+  if (!$("music-player").contains(event.target)) closeMusicPopup();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !$("music-popup")?.hidden) closeMusicPopup();
+});
+// The opener only exists below 901px (see `.music-more` in style.css) — a
+// window widened past that tier while the popup was open would otherwise
+// leave it floating with no way to reach the button that opened it.
+matchMedia("(min-width: 901px)").addEventListener("change", (event) => {
+  if (event.matches) closeMusicPopup();
+});
 // A bar button is a real button, so activating it takes DOM focus off the
 // court — and then Space would press the button again instead of making a
 // pass. Handing focus straight back is what keeps the player out of the way
@@ -2725,23 +2816,33 @@ function returnFocusToCourt() {
   if (phase === "playing" && !menuBlocking())
     $("court").focus({ preventScroll: true });
 }
-$("music-prev")?.addEventListener("click", () => {
-  unlockAudio();
-  music.skip(-1);
-  syncMusicRail();
-  returnFocusToCourt();
-});
-$("music-toggle").addEventListener("click", () => {
-  toggleMusic();
-  syncMusicRail();
-  returnFocusToCourt();
-});
-$("music-skip").addEventListener("click", () => {
-  unlockAudio();
-  music.skip(1);
-  syncMusicRail();
-  returnFocusToCourt();
-});
+// The popup's transport repeats these three ids' wiring rather than sharing a
+// listener, so a tap inside it behaves exactly like the bar-level buttons it
+// stands in for once they're collapsed away — including handing focus back to
+// the court, which is what lets a skip mid-round not cost you a keypress.
+for (const id of ["music-prev", "music-popup-prev"]) {
+  $(id)?.addEventListener("click", () => {
+    unlockAudio();
+    music.skip(-1);
+    syncMusicRail();
+    returnFocusToCourt();
+  });
+}
+for (const id of ["music-toggle", "music-popup-toggle"]) {
+  $(id)?.addEventListener("click", () => {
+    toggleMusic();
+    syncMusicRail();
+    returnFocusToCourt();
+  });
+}
+for (const id of ["music-skip", "music-popup-skip"]) {
+  $(id)?.addEventListener("click", () => {
+    unlockAudio();
+    music.skip(1);
+    syncMusicRail();
+    returnFocusToCourt();
+  });
+}
 // "input" fires for a mouse drag, an arrow key and the gamepad steps below
 // alike, so the level follows the control live and is written once it settles.
 for (const [id, key] of [
@@ -2889,11 +2990,23 @@ function renderBindings() {
 }
 function openSettings() {
   if (phase === "playing") pause();
+  closeMusicPopup();
   clearInput();
   capture = null;
   setBindingStatus("");
   $("preset-select").value = settings.preset;
   renderBindings();
+  // Gamepad and keyboard remapping start collapsed on a phone (there is no
+  // room to show all three sections open at once — see the <details> markup
+  // in index.html) and open on every other size, freshly re-evaluated on
+  // each open rather than left to whatever a player last toggled: a settings
+  // dialog that stays wide-open on a phone one visit and collapsed on a
+  // desktop the next, because of a state that outlived the window it was set
+  // in, would be a stranger bug than always resetting to the size-correct
+  // default.
+  const compact = compactSettingsQuery.matches;
+  $("settings-gamepad-group").open = !compact;
+  $("settings-bindings-group").open = !compact;
   $("settings-dialog").showModal();
 }
 // True only for the Supabase adapter: the sole account system left. With no
@@ -2982,6 +3095,7 @@ async function recoverRemoteDataContext() {
 }
 function openAccount() {
   if (phase === "playing") pause();
+  closeMusicPopup();
   clearInput();
   $("account-status").textContent = "";
   syncAccountDialog();
