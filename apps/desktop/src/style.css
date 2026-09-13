@@ -634,6 +634,14 @@ dialog h2 {
   text-transform: uppercase;
   font: italic 800 clamp(36px, 5vw, 55px) / 0.95 var(--display);
 }
+/* Both hidden on desktop by default: the symbol stands in for #overlay-title
+   on the phone pre-round card only (that headline stays as text everywhere
+   else — see the phone query below), and the court preview only exists to
+   fill space the phone sheet has spare, which desktop's panel does not. */
+.overlay-symbol,
+.overlay-court-card {
+  display: none;
+}
 .invitation #overlay-copy {
   margin: 14px 0 19px;
   color: #d0c4dd;
@@ -1310,10 +1318,73 @@ dialog::backdrop {
 .audio-hint {
   color: var(--cyan);
 }
-.settings-gamepad {
+.settings-gamepad,
+.settings-bindings {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
+}
+/* Both sections are <details> now (see the markup comments in index.html)
+   so a phone can collapse them; the marker says so on every size rather
+   than only once space actually forces it, so opening one never looks like
+   a layout glitch. */
+summary.settings-audio-heading {
+  cursor: pointer;
+  margin: 0;
+}
+.settings-gamepad[open] summary.settings-audio-heading,
+.settings-bindings[open] summary.settings-audio-heading {
+  margin: 0 0 10px;
+}
+/* Driven off the `[open]` attribute explicitly rather than left to the
+   details/summary default: the collapse only has to work, not to be the
+   platform's own mechanism for it, and doing it this way also gives the
+   gamepad grid and the bindings body their own real `display` (grid, in both
+   cases) when open instead of whatever the browser's built-in disclosure
+   would fall back to. */
+.settings-gamepad > .gamepad-grid,
+.settings-bindings > .details-body {
+  display: none;
+}
+.settings-gamepad[open] > .gamepad-grid {
+  display: grid;
+}
+.settings-bindings[open] > .details-body {
+  display: block;
+}
+/* A landscape phone has ~300px of usable height once the top bar and the
+   dialog's own outer margin are out, and this dialog's headline is sized
+   for a screen with room to spare (see `dialog h2`'s clamp). Collapsing the
+   two <details> above already gets the common case (audio) to fit; this
+   trims the decorative rest — the oversized headline, the loose paragraph
+   spacing between sections — the same way the pre-round card and the result
+   sheet already give up size before content. */
+@media (max-height: 500px) and (orientation: landscape),
+  (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
+  #settings-dialog {
+    padding: 12px 20px;
+  }
+  #settings-dialog h2 {
+    margin: 4px 0;
+    font-size: 22px;
+  }
+  #settings-dialog .utility-buttons {
+    margin: 8px 0 10px;
+  }
+  #settings-dialog .settings-audio {
+    padding: 6px 0;
+  }
+  #settings-dialog .audio-row {
+    margin-bottom: 6px;
+  }
+  #settings-dialog .settings-note {
+    margin: 4px 0 0;
+  }
+  #settings-dialog .settings-gamepad,
+  #settings-dialog .settings-bindings {
+    margin-top: 6px;
+    padding-top: 6px;
+  }
 }
 .gamepad-grid {
   display: grid;
@@ -2658,33 +2729,25 @@ body.play-view #bank-button {
 /* The hint toast defaults to hugging the bottom edge (see #toast above),
    which is exactly where the touch controls live on a phone — in portrait it
    lands squarely on the Pass button, and in landscape it sits inside the
-   floating control band. Moving it to a flat offset from the top fixed that,
-   but landed it on the scoreboard instead (the SCORE card in portrait, SCORE
-   and POSSESSIONS in landscape) — trading one occluded readout for another.
-   --scoreboard-height is the scoreboard's own live-measured height (see
-   publishScoreboardHeight() in main.js and .one-touch-readout's identical
-   use of it below the court), so anchoring off --top-bar + that height
-   always clears the HUD band itself, in both orientations, however tall it
-   is at a given width. Narrowing it too means less of it sits over the
-   court/pitch below that band, though landscape in particular has no truly
-   dead space there — the scoreboard already floats on top of the court by
-   design (see body.play-view .scoreboard) — so "below the HUD" is the best
-   available spot rather than a fully empty one.
-
-   `.one-touch-readout` sits right below the court's top edge on the exact
-   same formula (`--top-bar` + `--scoreboard-height` + 8px — see its own
-   comment in index.html/style.css), which was fine while only one of the
-   two was ever on screen at once in practice, but they are independent
-   (a streak can be live when a hint fires) and land on the same rectangle
-   when they are. The toast is the transient one, so it gives way: the
-   extra 36px is the one-touch pill's own height plus a matching 8px gap,
-   pushing the toast below it rather than through it, whether or not the
-   pill actually happens to be visible at the time. */
+   floating control band. A flat offset from the top used to chase the
+   scoreboard's own live-measured height instead, which only ever bought a
+   near miss: the scoreboard floats on top of the court by design (see
+   body.play-view .scoreboard), so anything anchored "just below" it is still
+   floating over the pitch, and landscape in particular has no band there
+   that is genuinely clear of play. The one rectangle on this screen that is
+   never the court, the HUD or the thumb controls — in either orientation, at
+   any width this file supports — is the top bar's own row: everything else
+   lives inside .main, which only starts under it. Anchoring the toast there
+   instead, sized to the bar's own height, is what actually keeps the "never
+   over the court" promise rather than approximating it. */
 @media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
   body.play-view .toast {
-    top: calc(var(--top-bar, 44px) + var(--scoreboard-height, 56px) + 8px + 36px);
+    top: 0;
     bottom: auto;
-    max-width: min(84vw, 340px);
+    height: var(--top-bar);
+    max-width: min(84vw, 300px);
+    padding: 0 14px;
+    font-size: 11px;
     text-align: center;
   }
 }
@@ -3385,19 +3448,10 @@ body.play-view #bank-button {
   body.play-view .one-touch-readout {
     top: 8px;
   }
-  /* The toast/one-touch collision fix (see the shared block's own `.toast`
-     rule) added a flat 36px on top of `--scoreboard-height` to clear a
-     one-touch pill that, at the time, sat directly under the scoreboard.
-     It now sits under the Energy band too (`.court-wrap`'s new `top`, and
-     `.one-touch-readout`'s own 8px on top of that) — so the toast needs the
-     same `--mobile-energy-band` added to keep clearing it, on top of (not
-     instead of) that original 36px. */
-  body.play-view .toast {
-    top: calc(
-      var(--top-bar, 44px) + var(--scoreboard-height, 56px) +
-        var(--mobile-energy-band, 44px) + 8px + 36px
-    );
-  }
+  /* No portrait-specific toast offset here any more: the shared block's
+     `.toast` rule anchors it to the top bar's own fixed-height row, which
+     this Energy band and .court-wrap both start well below, so there is
+     nothing left for a taller stack of HUD rows to collide with. */
 }
 
 /* Home / Arena workspace */
@@ -5794,9 +5848,14 @@ body.play-view .arena-view .below-court {
    simply unreachable. There was nothing to salvage in shrinking it further.
 
    So the phone gets the whole screen and stops trying to show the court
-   behind it. The sheet scrolls if the content is taller than the viewport,
-   which landscape needs, and carries its own close control — a full-screen
-   sheet has to offer a way out that is not "commit to Retry or Home".
+   behind it. It also carries its own close control — a full-screen sheet
+   has to offer a way out that is not "commit to Retry or Home".
+
+   It does not scroll, even though it once needed to: a card a player has
+   to scroll to finish reading is the same failure this rewrite exists to
+   fix, just moved one level down. Whatever a given size cannot hold is
+   dropped instead (the breakdown grid and the copy paragraph go first, in
+   the landscape queries below) so what remains always fits without it.
 
    Keyed on coarse pointers as well as width so a phone in landscape at 932px,
    which is wider than many small laptops, still gets the sheet. */
@@ -5823,27 +5882,108 @@ body.play-view .arena-view .below-court {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: 8px;
     width: 100%;
     max-width: none;
     height: 100%;
     max-height: none;
     margin: 0;
     /* Room for the close control, and for the phone's own rounded corners and
-       home indicator. */
-    padding: calc(52px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-left))
-      max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right));
+       home indicator. Trimmed from an earlier 52/20px: this padding plus a
+       12px inter-element gap and the result sheet's own headline, headline
+       stats and full breakdown left nothing to spare at 320×740 once a
+       court-unlock line was also in the copy — the safety net this file used
+       to lean on for that (see the block comment above) is gone now, so the
+       chrome around the content has to give up its own slack first. */
+    padding: calc(40px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-left))
+      max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-right));
     border: 0;
     border-radius: 0;
     transform: none;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    /* No overflow-y: auto here any more — that was the safety net for
+       content sizing not being trustworthy, and a sheet a player has to
+       scroll to finish reading is a worse failure than the one it was
+       papering over (see the block comment above). Every size this file
+       supports now fits without it. */
     text-align: center;
   }
   /* The stats were the worst of the squeeze: three columns in a 154px-wide
      card clipped every label. Two columns at full width fit the words. */
   body.play-view .game-overlay .result-breakdown {
     grid-template-columns: 1fr 1fr;
+  }
+  /* Pre-round only: the result sheet keeps its own text headline (it is
+     also reused by the "end this round?" prompt, which has no symbol art to
+     show), and the difficulty card and stats/actions below still need the
+     room. The symbol replaces the headline visually rather than removing it
+     — #overlay-title stays in the DOM (this card's aria-labelledby points at
+     it) and only loses its box on screen. */
+  body.play-view .game-overlay:not([data-result]) .overlay-symbol {
+    display: block;
+    width: 64px;
+    height: 64px;
+    margin: 4px auto;
+  }
+  body.play-view .game-overlay:not([data-result]) #overlay-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  /* Fills the dead space this card used to leave between the difficulty
+     picker and the Play button (see the brief this rework came from) —
+     flexible, not a fixed height, so it takes whatever room `.overlay-
+     actions`'s own `margin-top: auto` leaves it in either orientation,
+     the same technique `.home-court-card` already uses for the same
+     picture on the home screen. */
+  body.play-view .game-overlay:not([data-result]) .overlay-court-card {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  body.play-view .game-overlay .overlay-court-preview {
+    width: 100%;
+    max-height: 100%;
+    aspect-ratio: 1000 / 620;
+    object-fit: contain;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: #080414;
+  }
+  /* Desktop's spacing here is tuned for a panel with room around it; on the
+     full-screen sheet it is pure margin competing with the same 320×740
+     phone the padding trim above already had to answer for. Tightened, not
+     removed — the headline score and the breakdown are still two visually
+     separate groups, just closer together. */
+  body.play-view .game-overlay .result-stats {
+    gap: 6px;
+    margin: 0 0 8px;
+  }
+  body.play-view .game-overlay .result-headline > div {
+    padding: 7px 8px 6px;
+  }
+  body.play-view .game-overlay .result-cheer {
+    margin: 0 0 8px;
+  }
+  /* #overlay-title's own ID beats the shared `.invitation h2` rule below, so
+     the full-time headline stays at its desktop size (clamp(44px, 5vw, 72px))
+     on a phone unless something at least as specific says otherwise. Still
+     the biggest single thing on the sheet at 320×740 with the breakdown and
+     an unlock line both present. */
+  body.play-view .game-overlay[data-result] #overlay-title {
+    margin: 4px 0;
+    font-size: clamp(26px, 6vh, 38px);
+  }
+  body.play-view .game-overlay[data-result] #overlay-copy {
+    margin: 4px auto 8px;
   }
   body.play-view .game-overlay .overlay-actions {
     display: flex;
@@ -5911,9 +6051,17 @@ body.play-view .arena-view .below-court {
    is no height, so the actions run as a row and the whole sheet fits. */
 @media (max-height: 500px) and (orientation: landscape),
   (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
-  body.play-view .game-overlay .invitation {
-    gap: 8px;
+  /* Both branches, matching the shared block's own selector list above
+     (not just `.game-overlay .invitation`): the result sheet's element also
+     carries `[data-result]`, which makes that branch of the shared rule
+     more specific than a plain `.game-overlay .invitation` override here —
+     without repeating it, this block would win on the pre-round card and
+     silently lose on the result sheet, the one case it exists for. */
+  body.play-view .game-overlay .invitation,
+  body.play-view .game-overlay[data-result] .invitation {
+    gap: 4px;
     padding-top: max(12px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
   }
   body.play-view .game-overlay .overlay-actions {
     flex-direction: row;
@@ -5952,6 +6100,17 @@ body.play-view .arena-view .below-court {
   }
 }
 
+/* The narrowest supported portrait phone (320×740) is tight enough that the
+   breakdown, the headline and a court-unlock line together still do not fit
+   even after every margin above gives up its slack — the same shape of
+   problem the landscape query below solves, just from width rather than
+   height. Same fix, same reasoning: the breakdown is the one thing here a
+   player can live without seeing immediately. */
+@media (max-width: 340px) {
+  body.play-view .game-overlay .result-breakdown {
+    display: none;
+  }
+}
 /* A landscape phone has roughly 300px of usable height once the bar is out.
    The nine-cell bonus breakdown does not fit alongside the headline, the score
    and three actions, and making it fit meant scrolling the sheet — which put
@@ -5963,6 +6122,13 @@ body.play-view .arena-view .below-court {
   (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
   body.play-view .game-overlay .result-breakdown,
   body.play-view .game-overlay #overlay-copy {
+    display: none;
+  }
+  /* The pre-round court preview (see .overlay-court-card above) is a nice-
+     to-have filling otherwise-empty space, not content a player is missing
+     without it — at ~300px of usable height with the difficulty picker and
+     actions still needed, it is the first thing this size cannot afford. */
+  body.play-view .game-overlay:not([data-result]) .overlay-court-card {
     display: none;
   }
 }

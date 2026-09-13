@@ -362,6 +362,12 @@ function syncHomePlacement() {
 }
 syncHomePlacement();
 desktopBarQuery.addEventListener("change", syncHomePlacement);
+// Same breakpoint the phone settings sheet uses in style.css (see the
+// `.settings-gamepad`/`.settings-bindings` <details> comments there) — kept
+// as one query here rather than repeated inline so the two stay in step.
+const compactSettingsQuery = matchMedia(
+  "(max-width: 900px), (pointer: coarse) and (max-width: 1024px)",
+);
 function persist() {
   if (remoteDataUnavailable && onlineAccount()) {
     void recoverRemoteDataContext();
@@ -1330,6 +1336,13 @@ function prepare() {
   $("eyebrow").textContent = game.config.place;
   $("court-title").textContent = game.config.name;
   $("court-description").textContent = game.config.description;
+  // Same mechanism the home screen uses for #home-court-preview: one
+  // renderer.courtPreview() call per court, not a second preview pipeline
+  // for the pre-round card (see .overlay-court-preview in style.css, phone
+  // widths only — it fills the space that card otherwise left empty).
+  if ($("overlay-court-preview")) {
+    $("overlay-court-preview").src = renderer.courtPreview(game.config);
+  }
   $("mode-label").textContent =
     mode === "career"
       ? `THE CIRCUIT / ${String(courtIndex + 1).padStart(2, "0")}`
@@ -1379,7 +1392,7 @@ function prepare() {
         ? "HOW LONG CAN YOU KEEP IT?"
         : mode === "practice"
           ? "A LITTLE SPACE TO LEARN"
-          : "FOUR PLAYERS. ONE BALL.",
+          : "NO GOALS. ALL FLOW.",
     mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
       ? "Connect triangles to buy time. Survive the rising press."
@@ -1462,11 +1475,10 @@ function start() {
   $("tactic-select").disabled = true;
   $("difficulty-select").disabled = true;
   $("court").focus({ preventScroll: true });
-  toast(
-    mode === "practice"
-      ? `Move with ${settings.bindings.moveUp.map(readableKey).join(" / ")} and its direction keys, or drag the court.`
-      : `Keep it moving. Click a teammate or use ${settings.bindings.smartPass.map(readableKey).join(" / ")} for a smart pass.`,
-  );
+  // No movement/pass hint toast here any more: it fired on every single
+  // round and sat on top of the pitch the whole time a player needed to see
+  // it. The pre-round card it replaces already tells the story once, before
+  // kickoff, without covering play.
 }
 // The court only takes movement and aim while a round is actually running and
 // is not waiting for the player to pick the ball back up.
@@ -2984,6 +2996,17 @@ function openSettings() {
   setBindingStatus("");
   $("preset-select").value = settings.preset;
   renderBindings();
+  // Gamepad and keyboard remapping start collapsed on a phone (there is no
+  // room to show all three sections open at once — see the <details> markup
+  // in index.html) and open on every other size, freshly re-evaluated on
+  // each open rather than left to whatever a player last toggled: a settings
+  // dialog that stays wide-open on a phone one visit and collapsed on a
+  // desktop the next, because of a state that outlived the window it was set
+  // in, would be a stranger bug than always resetting to the size-correct
+  // default.
+  const compact = compactSettingsQuery.matches;
+  $("settings-gamepad-group").open = !compact;
+  $("settings-bindings-group").open = !compact;
   $("settings-dialog").showModal();
 }
 // True only for the Supabase adapter: the sole account system left. With no

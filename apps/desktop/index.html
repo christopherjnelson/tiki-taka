@@ -617,6 +617,18 @@
                   <p id="overlay-kicker" class="eyebrow">
                     WELCOME TO THE COURTYARD
                   </p>
+                  <!-- Phone-only, pre-round-only (see .overlay-symbol in
+                  style.css): stands in for the headline below rather than
+                  replacing it, since #overlay-title is also the result
+                  sheet's own headline and this card's aria-labelledby still
+                  needs real text in the accessibility tree either way. -->
+                  <img
+                    id="overlay-symbol"
+                    class="overlay-symbol"
+                    src="./src/brand/tiki-taka-symbol.png"
+                    alt=""
+                    aria-hidden="true"
+                  />
                   <h2 id="overlay-title">Find your flow.</h2>
                   <p id="overlay-copy">
                     Four players. One ball. No goals.<br />Outthink the press.
@@ -655,6 +667,22 @@
                     </dl>
                   </div>
                   <p id="result-cheer" class="result-cheer" hidden></p>
+                  <!-- Phone-only, pre-round-only (see .overlay-court-card
+                  in style.css): the same court-preview mechanism the home
+                  screen uses for #home-court-preview (renderer.courtPreview,
+                  set from prepare() in main.js, and the same flexible
+                  aspect-ratio box as .home-court-card) rather than a second
+                  one, filling the space this card otherwise left empty
+                  between the difficulty picker and the Play button. -->
+                  <div class="overlay-court-card">
+                    <img
+                      id="overlay-court-preview"
+                      class="overlay-court-preview"
+                      src=""
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  </div>
                   <div id="overlay-actions" class="overlay-actions">
                     <button id="start-button" class="primary-button">
                       Play the court <span aria-hidden="true">↗</span></button
@@ -1116,8 +1144,15 @@
           and the arrow keys from the keyboard.
         </p>
       </div>
-      <div class="settings-gamepad" role="group" aria-labelledby="gamepad-heading">
-        <p id="gamepad-heading" class="settings-audio-heading">GAMEPAD CONTROLS</p>
+      <!-- <details>, not a <div>: on a phone this dialog's own AUDIO section
+      plus five gamepad rows and fifteen keyboard rows add up to more than a
+      landscape phone has height for at all, and gamepad remapping is the
+      control scheme most phone players never touch. Collapsing it behind a
+      native disclosure keeps the setting reachable without asking the dialog
+      to scroll — see openSettings() in main.js, which forces this open again
+      above the phone breakpoint so desktop is unaffected. -->
+      <details class="settings-gamepad" id="settings-gamepad-group">
+        <summary id="gamepad-heading" class="settings-audio-heading">GAMEPAD CONTROLS</summary>
         <div class="gamepad-grid">
           <div class="gamepad-field">
             <label for="gamepad-smartPass">Smart pass</label>
@@ -1185,34 +1220,42 @@
             </select>
           </div>
         </div>
-      </div>
-      <div class="settings-preset">
-        <label for="preset-select">KEYBOARD PRESET</label>
-        <select id="preset-select">
-          <option value="wasd" selected>WASD</option>
-          <option value="arrows">Arrow keys</option>
-          <option value="left-hand">Left hand</option>
-          <option value="custom" disabled>Custom</option>
-        </select>
-      </div>
-      <p class="settings-note">
-        Choose a preset or select any key below to remap it. Each action
-        supports two bindings.
-      </p>
-      <div
-        id="bindings-list"
-        class="bindings-list"
-        aria-label="Keyboard bindings"
-      ></div>
-      <p
-        id="binding-status"
-        class="binding-status"
-        role="status"
-        aria-live="polite"
-      ></p>
-      <button id="reset-bindings" class="secondary-button" type="button">
-        Reset bindings
-      </button>
+      </details>
+      <!-- Same reasoning as the gamepad <details> above: fifteen bindable
+      actions is the single biggest block in this dialog, and a touchscreen
+      has no physical keyboard to remap in the first place. -->
+      <details class="settings-bindings" id="settings-bindings-group">
+        <summary class="settings-audio-heading">KEYBOARD BINDINGS</summary>
+        <div class="details-body">
+          <div class="settings-preset">
+            <label for="preset-select">KEYBOARD PRESET</label>
+            <select id="preset-select">
+              <option value="wasd" selected>WASD</option>
+              <option value="arrows">Arrow keys</option>
+              <option value="left-hand">Left hand</option>
+              <option value="custom" disabled>Custom</option>
+            </select>
+          </div>
+          <p class="settings-note">
+            Choose a preset or select any key below to remap it. Each action
+            supports two bindings.
+          </p>
+          <div
+            id="bindings-list"
+            class="bindings-list"
+            aria-label="Keyboard bindings"
+          ></div>
+          <p
+            id="binding-status"
+            class="binding-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <button id="reset-bindings" class="secondary-button" type="button">
+            Reset bindings
+          </button>
+        </div>
+      </details>
     </dialog>
     <dialog id="help-dialog" aria-labelledby="help-title">
       <div class="dialog-top">
