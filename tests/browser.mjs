@@ -194,7 +194,7 @@ async function observeGame(page) {
 await check('desktop gameplay, controls, progression, help, and full run', async () => {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce', serviceWorkers: 'block' });
   await context.addInitScript(() => localStorage.setItem('tiki-taka.progress.v1', JSON.stringify({
-    version: 1, xp: 650, unlocked: 3, lastCourt: 2, tactic: 'maestro', sound: false,
+    version: 2, xp: 650, unlocked: 3, lastCourt: 2, tactic: 'maestro', sound: false,
     courts: { 0: { stars: 3, best: 520 }, 1: { stars: 2, best: 480 }, 2: { stars: 1, best: 460 } },
     records: { 'court-0': 520, 'court-1': 480, 'court-2': 460 },
   })));
@@ -202,7 +202,7 @@ await check('desktop gameplay, controls, progression, help, and full run', async
   const errors = watchErrors(page);
   await gotoArena(page, baseURL, { waitUntil: 'networkidle' });
 
-  assert.match(await page.locator('#level-label').textContent(), /LEVEL 3/);
+  assert.match(await page.locator('#level-label').textContent(), /LEVEL 7/);
   assert.equal(await page.locator('#court-title').textContent(), 'El Patio');
   assert.equal(await page.locator('#tactic-select').inputValue(), 'maestro');
   assert.equal(await page.locator('.court-item').nth(3).isDisabled(), false);

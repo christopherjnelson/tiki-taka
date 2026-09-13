@@ -125,26 +125,6 @@ test('practice remains clearable after unlimited recoveries, but earns no XP', (
   assert.equal(progress.xp, 0);
 });
 
-test('daily records retain only the newest thirty keys without deleting permanent records', () => {
-  const progress = freshProgress();
-  progress.records.endless = 123;
-  for (let day = 1; day <= 35; day++) progress.records[`daily-2026-08-${String(day).padStart(2, '0')}`] = day;
-  awardMatch(progress, finishedGame({ key: '2026-09-01' }), 'daily', 0);
-  const daily = Object.keys(progress.records).filter(key => key.startsWith('daily-'));
-  assert.equal(daily.length, 30);
-  assert.equal(progress.records.endless, 123);
-  assert.equal(progress.records['daily-2026-09-01'], 200);
-  assert.equal('daily-2026-08-01' in progress.records, false);
-});
-
-test('daily earns no XP - it is a shared-leaderboard mode, not a progression one', () => {
-  const progress = freshProgress();
-  const result = awardMatch(progress, finishedGame({ score: 400, key: '2026-09-01' }), 'daily', 0);
-  assert.equal(result.cleared, true);
-  assert.equal(result.xp, 0);
-  assert.equal(progress.xp, 0);
-});
-
 test('stars and personal bests are tracked separately per tier on the same court', () => {
   const progress = freshProgress();
   awardMatch(progress, finishedGame({ score: 400, difficulty: 'relaxed' }), 'career', 0);
@@ -212,7 +192,7 @@ test('a version-1 stored progress resets xp to 0 but keeps everything else', () 
     difficulty: 'ruthless',
     sound: false,
     courts: { 0: { standard: { stars: 3, best: 500 } } },
-    records: { 'court-0-standard': 500 },
+    records: { 'court-0-standard': 500, 'daily-2026-09-01': 200 },
   }) };
   const progress = readProgress(storage);
   assert.equal(progress.version, 2);
@@ -223,6 +203,8 @@ test('a version-1 stored progress resets xp to 0 but keeps everything else', () 
   assert.equal(progress.difficulty, 'ruthless');
   assert.equal(progress.sound, false);
   assert.deepEqual(progress.courts, { 0: { standard: { stars: 3, best: 500 } } });
+  // The Daily mode no longer exists, so legacy daily-* keys are dropped
+  // rather than carried forward as dead weight.
   assert.deepEqual(progress.records, { 'court-0-standard': 500 });
 });
 

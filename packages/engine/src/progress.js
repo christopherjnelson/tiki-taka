@@ -2,12 +2,10 @@ import { COURTS, DIFFICULTIES } from "./game.js";
 const DIFFICULTY_IDS = DIFFICULTIES.map((tier) => tier.id);
 // XP rewards clearing NEW ground, not grinding a round that's already been
 // won. Score alone pays a small, capped amount ("performance"); the big
-// payouts are one-time - the first clear of a court at a given tier, or the
-// first daily run of the day - and replaying that same clear again pays a
-// small flat trickle instead. This is why a career clear checks whether the
-// court/tier has ever had stars before writing this round's stars, and why a
-// daily run checks whether today's key already has a record before writing
-// this round's record.
+// payout is one-time - the first clear of a court at a given tier - and
+// replaying that same clear again pays a small flat trickle instead. This is
+// why a career clear checks whether the court/tier has ever had stars before
+// writing this round's stars.
 const STAR_XP = 6;
 const FIRST_CLEAR_TIER = { relaxed: 0.6, standard: 1, ruthless: 1.5 };
 const REPEAT_CLEAR = { relaxed: 8, standard: 12, ruthless: 18 };
@@ -15,10 +13,12 @@ const REPEAT_CLEAR = { relaxed: 8, standard: 12, ruthless: 18 };
 // performance XP still has a reference point to scale against.
 const ENDLESS_REFERENCE = 600;
 // XP is a progression reward, so it is only paid in progression modes: World
-// tour (career) and Endless today. A future King of the Court mode ("kotc")
-// is an obvious one-line addition here. Practice and Daily are excluded on
-// purpose - see the notes at their branches below.
-const XP_MODES = new Set(["career", "endless"]);
+// tour (career), Endless, and King of the Court ("kotc" - a disabled
+// placeholder today, with no gameplay of its own yet, so it is folded into
+// the plain performance-only rule below until it ships its own). Practice is
+// excluded on purpose: a no-stakes sandbox for finding your feet, not a way
+// to grind levels.
+const XP_MODES = new Set(["career", "endless", "kotc"]);
 export function freshProgress() {
   return {
     version: 2,
@@ -46,6 +46,9 @@ export function normalizeProgress(value) {
     // total onto the new progressive curve. So a version-1 save resets xp to
     // 0 and comes back stamped version 2 - everything else it recorded
     // (unlocked courts, stars, records, tactic, difficulty) is preserved.
+    // Legacy `daily-*` record keys are dropped below regardless of version:
+    // the Daily mode they named no longer exists, so keeping them around
+    // would just be dead weight.
     progress.xp =
       value.version === 2 && Number.isFinite(value.xp) ? Math.max(0, value.xp) : 0;
     progress.unlocked = Math.min(
@@ -84,7 +87,8 @@ export function normalizeProgress(value) {
       !Array.isArray(value.records)
     ) {
       for (const [key, score] of Object.entries(value.records))
-        if (Number.isFinite(score) && score >= 0) progress.records[key] = score;
+        if (Number.isFinite(score) && score >= 0 && !key.startsWith("daily-"))
+          progress.records[key] = score;
     }
     progress.sound = typeof value.sound === "boolean" ? value.sound : true;
     progress.tactic = ["balanced", "runner", "maestro"].includes(value.tactic)
@@ -132,25 +136,12 @@ export function awardMatch(progress, game, mode, courtIndex) {
     : 0;
   const reference = game.config.target > 0 ? game.config.target : ENDLESS_REFERENCE;
   const performance = Math.min(20, Math.max(0, Math.floor((10 * game.score) / reference)));
-  const key =
-    mode === "career"
-      ? `court-${courtIndex}-${tier}`
-      : mode === "daily"
-        ? `daily-${game.config.key}`
-        : mode;
+  const key = mode === "career" ? `court-${courtIndex}-${tier}` : mode;
   // Read "is this new ground" BEFORE the writes further down overwrite it.
   const isFirstClearOfCourtTier =
     (progress.courts[courtIndex]?.[tier]?.stars || 0) === 0;
   let xp;
   if (!XP_MODES.has(mode)) {
-    // Practice is a no-stakes sandbox for finding your feet, not a way to
-    // grind levels. Daily is a shared-leaderboard mode rather than a
-    // progression one, so it deliberately pays no XP - revisit this if/when
-    // Daily ships as a real mode. Note: the "daily" mode id is currently
-    // occupied by the disabled King of the Court placeholder button in the
-    // UI. When King of the Court ships it must get its own mode id (e.g.
-    // "kotc") added to XP_MODES with its own rule - it must NOT inherit this
-    // branch by reusing "daily", which would silently pay it no XP too.
     xp = 0;
   } else if (mode === "career") {
     let clearBonus = 0;
@@ -162,7 +153,8 @@ export function awardMatch(progress, game, mode, courtIndex) {
     xp = Math.max(3, performance + stars * STAR_XP + clearBonus);
   } else {
     // Endless (target 0, cleared/stars trivially true) pays performance only
-    // - no star or clear pay.
+    // - no star or clear pay. King of the Court has no gameplay yet and
+    // falls through to this same rule until it ships its own.
     xp = Math.max(3, performance);
   }
   progress.xp += xp;
@@ -191,12 +183,6 @@ export function awardMatch(progress, game, mode, courtIndex) {
         Math.min(COURTS.length - 1, courtIndex + 1),
       );
   }
-  // Bound retained daily records while keeping all permanent court and mode records.
-  const daily = Object.keys(progress.records)
-    .filter((k) => k.startsWith("daily-"))
-    .sort()
-    .reverse();
-  for (const key of daily.slice(30)) delete progress.records[key];
   return { cleared, stars, xp, newBest: game.score > prev };
 }
 const MAX_LEVEL = 50;

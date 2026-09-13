@@ -1340,7 +1340,7 @@ await check(
       await page.locator("#home-view").waitFor({ state: "visible" });
     }
     // King of the Court is coming soon and clicking it does nothing
-    const kingBtn = page.locator('[data-home-mode="daily"]');
+    const kingBtn = page.locator('[data-home-mode="kotc"]');
     assert.match(await kingBtn.locator("strong").textContent(), /King of the Court/i);
     assert.match(await kingBtn.locator("span").textContent(), /Coming soon/i);
     assert.equal(await kingBtn.getAttribute("disabled"), "");
