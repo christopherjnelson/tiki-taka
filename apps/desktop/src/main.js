@@ -26,6 +26,7 @@ import { getVenue } from "../../../packages/engine/src/venues.js";
 import {
   ACTIONS,
   PRESETS,
+  defaultSettings,
   loadSettings,
   saveSettings,
   presetBindings,
@@ -38,7 +39,7 @@ import {
   DEFAULT_GAMEPAD_BINDINGS,
   GAMEPAD_SHORT_LABELS,
 } from "../../../packages/engine/src/settings.js";
-import { createLocalDataAdapter, selectDataAdapter } from "../../../packages/data/src/index.js";
+import { createLocalDataAdapter, selectDataAdapter, LocalDataError } from "../../../packages/data/src/index.js";
 import { createMusic } from "./music.js";
 import { TRACKS } from "./playlist.js";
 import { SAMPLES } from "./samples.js";
@@ -97,29 +98,64 @@ let dataAdapter = testDataAdapterFactory
 let initialData;
 let storageFallback = false;
 let remoteDataUnavailable = false;
+// Set when the stored save (remote row or local guest key) is real but was
+// written by a version of Tiki Taka newer than this one, so its `progress`
+// carries a version this build does not understand. The old failure mode
+// here was normalizeProgress() silently folding that into freshProgress()
+// and the next autosave writing that empty progress straight over the real
+// save. Instead: play with a synthetic, unsaved snapshot, tell the player
+// the truth, and keep dataAdapter exactly as it was so the real save stays
+// untouched. persist(), persistSettings() and saveScorePreference() all
+// check this flag before calling saveUserData().
+let progressTooNew = false;
+// A synthetic, deliberately unsaved snapshot used whenever the real save is
+// present but unreadable (see progressTooNew above) - never written back
+// anywhere, just enough to let the player look around.
+function progressTooNewSnapshot() {
+  return {
+    progress: freshProgress(),
+    settings: defaultSettings(),
+    stats: {
+      games: 0,
+      bestScore: 0,
+      totalPasses: 0,
+      bestOneTouch: 0,
+      totalTriangles: 0,
+      totalOles: 0,
+      totalSplits: 0,
+      totalZones: 0,
+    },
+    preferences: { scoreSaveChoice: "ask" },
+  };
+}
 try {
   initialData = await dataAdapter.loadUserData();
-} catch {
-  // A configured remote adapter must retain its identity and session if a
-  // transient profile/save read fails. Use local data only as a temporary
-  // playable snapshot; never silently replace the remote adapter with it.
-  const fallback = createLocalDataAdapter({
-    storage:
-      dataStorage === storage
-        ? {
-            getItem: (key) => memory.get(key) ?? null,
-            setItem: (key, value) => memory.set(key, value),
-            removeItem: (key) => memory.delete(key),
-          }
-        : dataStorage,
-  });
-  if (dataAdapter.kind === "supabase") {
-    remoteDataUnavailable = true;
-    initialData = await fallback.loadUserData();
+} catch (error) {
+  if (error instanceof LocalDataError && error.code === "PROGRESS_TOO_NEW") {
+    progressTooNew = true;
+    initialData = progressTooNewSnapshot();
   } else {
-    storageFallback = true;
-    dataAdapter = fallback;
-    initialData = await dataAdapter.loadUserData();
+    // A configured remote adapter must retain its identity and session if a
+    // transient profile/save read fails. Use local data only as a temporary
+    // playable snapshot; never silently replace the remote adapter with it.
+    const fallback = createLocalDataAdapter({
+      storage:
+        dataStorage === storage
+          ? {
+              getItem: (key) => memory.get(key) ?? null,
+              setItem: (key, value) => memory.set(key, value),
+              removeItem: (key) => memory.delete(key),
+            }
+          : dataStorage,
+    });
+    if (dataAdapter.kind === "supabase") {
+      remoteDataUnavailable = true;
+      initialData = await fallback.loadUserData();
+    } else {
+      storageFallback = true;
+      dataAdapter = fallback;
+      initialData = await dataAdapter.loadUserData();
+    }
   }
 }
 let progress = initialData.progress;
@@ -380,7 +416,16 @@ desktopBarQuery.addEventListener("change", syncHomePlacement);
 const compactSettingsQuery = matchMedia(
   "(max-width: 900px), (pointer: coarse) and (max-width: 1024px)",
 );
+// Shown whenever a save is refused because the stored save (remote or local
+// guest) is unreadable by this build - see `progressTooNew` above. Kept as
+// one string so the boot toast and every blocked autosave agree.
+const PROGRESS_TOO_NEW_MESSAGE =
+  "Your save is from a newer version of Tiki Taka. Reload the page to update - this session's progress will not be saved until you do.";
 function persist() {
+  if (progressTooNew) {
+    toast(PROGRESS_TOO_NEW_MESSAGE);
+    return;
+  }
   if (remoteDataUnavailable && onlineAccount()) {
     void recoverRemoteDataContext();
     return;
@@ -395,6 +440,10 @@ function persist() {
   }
 }
 function persistSettings() {
+  if (progressTooNew) {
+    toast(PROGRESS_TOO_NEW_MESSAGE);
+    return;
+  }
   if (remoteDataUnavailable && onlineAccount()) {
     void recoverRemoteDataContext();
     return;
@@ -419,7 +468,8 @@ function toast(text, icon = "") {
   clearTimeout(toastTimeout);
   toastTimeout = setTimeout(() => $("toast").classList.remove("visible"), 4000);
 }
-if (remoteDataUnavailable)
+if (progressTooNew) setTimeout(() => toast(PROGRESS_TOO_NEW_MESSAGE), 0);
+else if (remoteDataUnavailable)
   setTimeout(() => toast("Account data is temporarily unavailable. Your game is still playable."), 0);
 async function recordRound(round) {
   if (remoteDataUnavailable && onlineAccount()) {
@@ -446,6 +496,7 @@ function showScoreSaveDialog(status = "") {
   if (!$("score-save-dialog").open) $("score-save-dialog").showModal();
 }
 async function saveScorePreference(choice) {
+  if (progressTooNew) throw new Error(PROGRESS_TOO_NEW_MESSAGE);
   if (remoteDataUnavailable && onlineAccount())
     throw new Error("Account data is temporarily unavailable. Reconnect before saving this choice.");
   const nextPreferences = { ...preferences, scoreSaveChoice: choice };
@@ -3477,14 +3528,24 @@ async function switchDataContext(nextProfile) {
   const generation = ++dataContextGeneration;
   if (phase === "playing") pause();
   clearInput();
-  const data = await dataAdapter.loadUserData();
+  let data;
+  let unreadable = false;
+  try {
+    data = await dataAdapter.loadUserData();
+  } catch (error) {
+    if (!(error instanceof LocalDataError) || error.code !== "PROGRESS_TOO_NEW") throw error;
+    unreadable = true;
+    data = progressTooNewSnapshot();
+  }
   if (generation !== dataContextGeneration) return false;
-  applyDataContext(data, nextProfile);
+  applyDataContext(data, nextProfile, unreadable);
+  if (unreadable) toast(PROGRESS_TOO_NEW_MESSAGE);
   return true;
 }
-function applyDataContext(data, nextProfile) {
+function applyDataContext(data, nextProfile, unreadable = false) {
   profile = nextProfile;
   remoteDataUnavailable = false;
+  progressTooNew = unreadable;
   progress = data.progress;
   settings = data.settings;
   accountStats = data.stats;

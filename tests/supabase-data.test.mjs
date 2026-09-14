@@ -268,3 +268,69 @@ test("a brand-new account never stores an empty save, and an empty row still loa
   assert.equal(data.progress.version, 2);
   assert.ok(Number.isFinite(data.progress.unlocked));
 });
+
+test("an old client refuses to save over a row it cannot read, and does not present it as fresh", async () => {
+  // Regression for a real incident: 0.4.1 moved progress from version 1 to
+  // version 2. A pre-0.4.1 client loaded a version-2 row it did not
+  // recognise, normalizeProgress() folded it down to freshProgress(), and
+  // saveUserData() wrote that empty progress straight over the real row -
+  // erasing every unlocked court and star. This test drives the exact same
+  // shape of client against the fix: the row claims a version this build has
+  // never heard of (simulating an even-newer future format the same way the
+  // real incident simulated version 2 against a pre-0.4.1 build).
+  const user = { id: "user-1", email: "player@example.com", user_metadata: { username: "player" } };
+  const futureProgress = { version: 99, xp: 50000, unlocked: 7, courts: { 6: { standard: { stars: 3, best: 900 } } }, records: {}, sound: true, tactic: "maestro", difficulty: "ruthless", lastCourt: 6 };
+  const clientFor = (existingSave) => ({
+    auth: { getSession: async () => ({ data: { session: { user } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from(table) {
+      if (table === "user_saves") return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: existingSave, error: null }) }) }),
+        upsert: () => { throw new Error("must never upsert a row this build cannot read"); },
+      };
+      if (table === "profiles") return profileQuery();
+      if (table === "user_preferences") return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
+      return { select: () => ({ eq: () => thenable({ data: [], error: null }) }) };
+    },
+  });
+
+  // loadUserData must not present the unreadable row as an empty fresh
+  // profile - that is indistinguishable from having actually lost it, and
+  // it is exactly the state that would then get autosaved back over the
+  // real row.
+  const loader = createSupabaseDataAdapter({ client: clientFor({ progress: futureProgress, settings: {} }), storage: memoryStorage() });
+  await assert.rejects(loader.loadUserData(), (error) => error.code === "PROGRESS_TOO_NEW");
+
+  // saveUserData must refuse outright - the row survives untouched. The
+  // stubbed upsert throws if it is ever called, so a passing test proves no
+  // write was attempted at all, not just that the written value was
+  // acceptable.
+  const saver = createSupabaseDataAdapter({ client: clientFor({ progress: futureProgress, settings: {} }), storage: memoryStorage() });
+  await assert.rejects(saver.saveUserData({}), (error) => error.code === "PROGRESS_TOO_NEW");
+
+  // Even an unrelated update (settings only, no progress touched by the
+  // caller) must be refused too: saveUserData would otherwise normalize the
+  // untouched existing progress down to fresh as a side effect of writing
+  // the settings change.
+  const settingsSaver = createSupabaseDataAdapter({ client: clientFor({ progress: futureProgress, settings: {} }), storage: memoryStorage() });
+  await assert.rejects(settingsSaver.saveUserData({ settings: { theme: "light" } }), (error) => error.code === "PROGRESS_TOO_NEW");
+});
+
+test("a save with no existing row, or an existing row this build understands, still writes normally", async () => {
+  const user = { id: "user-1", email: "player@example.com", user_metadata: { username: "player" } };
+  const writes = [];
+  const clientFor = (existingSave) => ({
+    auth: { getSession: async () => ({ data: { session: { user } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from(table) {
+      if (table === "user_saves") return {
+        select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: existingSave, error: null }) }) }),
+        upsert: (row) => { writes.push(row); return { select: () => ({ single: async () => ({ data: row, error: null }) }) }; },
+      };
+      if (table === "profiles") return profileQuery();
+      if (table === "user_preferences") return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) };
+      return { select: () => ({ eq: () => thenable({ data: [], error: null }) }) };
+    },
+  });
+  const readable = createSupabaseDataAdapter({ client: clientFor({ progress: { version: 2, xp: 12, unlocked: 1, courts: {}, records: {}, sound: true, tactic: "balanced", difficulty: "standard", lastCourt: 0 }, settings: {} }), storage: memoryStorage() });
+  await readable.saveUserData({ settings: { theme: "light" } });
+  assert.equal(writes[0].progress.xp, 12, "a version this build understands must be preserved, not reset");
+});

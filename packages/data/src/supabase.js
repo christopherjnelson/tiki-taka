@@ -1,4 +1,4 @@
-import { defaultSettings, normalizeProgress, normalizeSettings, DIFFICULTIES } from "../../engine/src/index.js";
+import { defaultSettings, isReadableProgress, normalizeProgress, normalizeSettings, DIFFICULTIES } from "../../engine/src/index.js";
 
 import {
   LocalDataError,
@@ -67,6 +67,18 @@ function errorFrom(error, fallback = "Supabase could not complete that request."
 
 function throwIfError(error, fallback) {
   if (error) throw errorFrom(error, fallback);
+}
+
+// Thrown instead of silently normalising a stored progress row to a fresh
+// one, whenever that row's version is newer than this build understands.
+// Loaders surface it so the app can tell the player the truth; saveUserData
+// uses it to refuse a write that would otherwise erase that row (see
+// isReadableProgress in packages/engine/src/progress.js for why).
+function progressTooNewError() {
+  return new LocalDataError(
+    "PROGRESS_TOO_NEW",
+    "Your save was written by a newer version of Tiki Taka. Reload the page to update before playing further, or this device's progress will not be saved.",
+  );
 }
 
 function newRoundId(crypto) {
@@ -237,12 +249,24 @@ export function createSupabaseDataAdapter({
           maybeSingle(supabase.from("user_preferences").select("score_save_choice").eq("user_id", user.id), null),
           statsFor(user),
         ]);
+        // A row from a newer build must never be presented as an empty fresh
+        // profile - that is indistinguishable from having lost everything,
+        // and it is exactly the state a caller would otherwise autosave right
+        // back over the real row (see progressTooNewError above).
+        if (save?.progress != null && !isReadableProgress(save.progress)) throw progressTooNewError();
         return normalizeData({ save, preferences: preference, stats });
       }, () => guest.loadUserData());
     },
     async saveUserData(update = {}) {
       return signedInOrGuest(async (user) => {
         const existing = await maybeSingle(supabase.from("user_saves").select("progress, settings").eq("user_id", user.id), null);
+        // An existing row this build cannot read must never be upserted:
+        // normalizeProgress below would silently fold it down to
+        // freshProgress(), and the upsert would write that empty progress
+        // straight over the real save. Refuse the whole write instead - this
+        // is what actually happened to a live player's save when 0.4.1 moved
+        // progress to version 2 and an old client wrote over it.
+        if (existing?.progress != null && !isReadableProgress(existing.progress)) throw progressTooNewError();
         // Normalize on the way in too: a new account has no existing row, and
         // writing `{}` for it is what put a broken save in the database in the
         // first place.
