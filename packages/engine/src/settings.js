@@ -11,7 +11,24 @@ export const DEFAULT_AUDIO = {
   effectsVolume: 0.3,
   musicOn: true,
   musicVolume: 1,
+  // The tape-slowdown/lowpass the soundtrack gets while Focus is held (see
+  // apps/desktop/src/music.js). On by default: it is the behaviour that just
+  // shipped, and most players like it.
+  focusSlowdownOn: true,
 };
+
+// How the on-screen Focus/Boost buttons behave. "hold" is the ability active
+// only while the button is held (today's behaviour, and what the keyboard and
+// gamepad bindings already do). "toggle" is a tap that latches the ability on
+// until tapped again — see ACTION_BUTTON_MAP and toggleFocus/toggleBoost in
+// apps/desktop/src/main.js.
+// Touch taps on the ability buttons have always latched: #touch-focus and
+// #touch-boost bind on pointerdown with no release handling, so a tap turns
+// Focus or Boost on and a second tap turns it off. "toggle" is therefore what
+// players already have, and an absent or unrecognised setting has to mean
+// exactly that - "hold" is the new opt-in for anyone who would rather press
+// and hold.
+export const DEFAULT_ABILITY_MODE = "toggle";
 
 export const ACTIONS = {
   moveUp: "Move up",
@@ -117,6 +134,7 @@ export function defaultSettings() {
     playView: false,
     sidebarCollapsed: false,
     mobileWallMode: "armed",
+    abilityMode: DEFAULT_ABILITY_MODE,
     ...DEFAULT_AUDIO,
     // Cleared once the shell has folded a pre-split `progress.sound` into the
     // four fields above; see apps/desktop/src/main.js.
@@ -164,10 +182,12 @@ export function normalizeSettings(value) {
     playView: value.playView === true,
     sidebarCollapsed: value.sidebarCollapsed === true,
     mobileWallMode: value.mobileWallMode === "instant" ? "instant" : "armed",
+    abilityMode: value.abilityMode === "hold" ? "hold" : "toggle",
     effectsOn: value.effectsOn !== false,
     effectsVolume: normalizeVolume(value.effectsVolume, DEFAULT_AUDIO.effectsVolume),
     musicOn: value.musicOn !== false,
     musicVolume: normalizeVolume(value.musicVolume, DEFAULT_AUDIO.musicVolume),
+    focusSlowdownOn: value.focusSlowdownOn !== false,
     audioMigrated: value.audioMigrated === true,
     preset: Object.hasOwn(PRESETS, value.preset) ? value.preset : "custom",
     bindings,

@@ -1172,10 +1172,43 @@
             <output id="music-volume-value" for="music-volume">100%</output>
           </label>
         </div>
+        <div class="audio-row audio-row-compact">
+          <button
+            id="focus-slowdown-button"
+            type="button"
+            aria-pressed="true"
+            title="Slows and dulls the soundtrack while Focus is held."
+          >
+            Focus slowdown on
+          </button>
+        </div>
         <p class="settings-note">
           Sliders take the d-pad or left stick left and right on a controller,
           and the arrow keys from the keyboard.
         </p>
+      </div>
+      <!-- Only meaningful with the touch action buttons on screen - hidden
+      under the same `(max-width: 900px), (pointer: coarse) and
+      (max-width: 1024px)` condition that shows #touch-controls itself (see
+      the query CSS applies to #settings-touch-group and compactSettingsQuery
+      in main.js), so a mouse-and-keyboard desktop never sees a control for
+      buttons it does not have. -->
+      <div
+        class="settings-audio settings-touch"
+        id="settings-touch-group"
+        role="group"
+        aria-labelledby="touch-heading"
+      >
+        <p id="touch-heading" class="settings-audio-heading">TOUCH CONTROLS</p>
+        <div class="audio-row">
+          <label class="gamepad-field" for="ability-mode-select">
+            <span>Focus &amp; Boost buttons</span>
+            <select id="ability-mode-select">
+              <option value="toggle">Tap to toggle</option>
+              <option value="hold">Hold to use</option>
+            </select>
+          </label>
+        </div>
       </div>
       <!-- <details>, not a <div>: on a phone this dialog's own AUDIO section
       plus five gamepad rows and fifteen keyboard rows add up to more than a

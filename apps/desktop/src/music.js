@@ -73,6 +73,19 @@ export function createMusic({
     // boundary without restarting; only `source` is per-track.
     filter = null,
     focusOn = false,
+    // Player setting (packages/engine/src/settings.js `focusSlowdownOn`,
+    // default true). When false, Focus must leave the soundtrack completely
+    // untouched: applyFocus below only ever schedules automation while this
+    // is true, or once more to undo automation a previous "true" left
+    // in flight - never merely "ramped to 1.0", never scheduled while there
+    // is nothing to undo.
+    focusEffectOn = true,
+    // True once playbackRate/filter automation has actually been scheduled
+    // away from neutral (rate 1, filter open). Lets applyFocus tell "nothing
+    // to do, effect is off and always has been" apart from "effect just
+    // turned off mid-hold, one corrective ramp is owed" without scheduling
+    // anything in the first case.
+    focusApplied = false,
     buffer = null,
     loading = null,
     // Which track `buffer` and `loading` belong to, so a skip that lands
@@ -121,13 +134,20 @@ export function createMusic({
   // starts at the right speed instead of audibly ramping down again.
   function applyFocus(instant) {
     if (!context) return;
+    // The effective target folds the setting in: Focus held but the effect
+    // switched off is the same target as Focus not held at all.
+    const active = focusOn && focusEffectOn;
+    // Nothing engaged and nothing was ever scheduled: leave the soundtrack
+    // completely untouched rather than scheduling a ramp to the value it is
+    // already sitting at.
+    if (!active && !focusApplied) return;
     // Bank the position played at the OLD rate before the new one applies.
     // `instant` is a brand-new source that has played nothing yet, so there
     // is nothing to bank and startedAt is already correct.
     if (!instant) flushOffset();
     const now = context.currentTime;
-    const rate = focusOn ? FOCUS_RATE : 1;
-    const hz = focusOn ? focusHz() : openHz();
+    const rate = active ? FOCUS_RATE : 1;
+    const hz = active ? focusHz() : openHz();
     if (source) {
       source.playbackRate.cancelScheduledValues(now);
       if (instant) {
@@ -146,6 +166,7 @@ export function createMusic({
         filter.frequency.linearRampToValueAtTime(hz, now + FOCUS_RAMP);
       }
     }
+    focusApplied = active;
   }
 
   function makeContext() {
@@ -340,6 +361,20 @@ export function createMusic({
     },
     get focusActive() {
       return focusOn;
+    },
+    // The Focus slowdown/dulling setting (default on). Toggling it mid-hold
+    // ramps in or out of the effect rather than clicking; toggling it while
+    // Focus is not held, or while it already agrees with the current state,
+    // schedules nothing at all - see applyFocus's `active`/`focusApplied`
+    // guard.
+    setFocusEffectEnabled(active) {
+      const next = Boolean(active);
+      if (next === focusEffectOn) return;
+      focusEffectOn = next;
+      applyFocus(false);
+    },
+    get focusEffectEnabled() {
+      return focusEffectOn;
     },
     // Called from any real user gesture; browsers block audio before one.
     unlock() {

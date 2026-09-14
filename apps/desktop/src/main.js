@@ -2240,6 +2240,48 @@ function toggleBoost() {
   syncBoostButtons();
   syncFocusButtons();
 }
+// Press-and-hold pair for settings.abilityMode "hold" on the touch action
+// buttons (#touch-focus/#touch-boost - see the pointerdown/pointerup wiring
+// below). These reuse focusToggle/boostToggle rather than inventing separate
+// state: every existing reset point (prepare, pause, beginHold, finish) and
+// the per-frame syncHud reconciliation - clearing a toggle once its Energy
+// is gone (line ~2890) and clearing Focus the instant the engine actually
+// hands the shared meter to Boost (line ~2895, the same precedence a
+// simultaneous keyboard/gamepad hold already gets) - therefore covers a
+// touch hold for free. No mutual-exclusion is forced here the way toggleFocus/
+// toggleBoost force it on a tap: holding both buttons with two thumbs is
+// physically ordinary, self-corrects the instant the engine picks a winner,
+// and matches how a simultaneous keyboard hold already behaves.
+function focusHoldPress() {
+  if (phase !== "playing") return;
+  triggerActionHighlight("focusHold");
+  if (game.focus <= 0) {
+    toast("Earn Energy with triangles, bonus zones, split passes, or Olé streaks.");
+    return;
+  }
+  focusToggle = true;
+  syncFocusButtons();
+}
+function focusHoldRelease() {
+  if (!focusToggle) return;
+  focusToggle = false;
+  syncFocusButtons();
+}
+function boostHoldPress() {
+  if (phase !== "playing") return;
+  triggerActionHighlight("boostHold");
+  if (game.focus <= 0) {
+    toast("Earn Energy with triangles, bonus zones, split passes, or Olé streaks.");
+    return;
+  }
+  boostToggle = true;
+  syncBoostButtons();
+}
+function boostHoldRelease() {
+  if (!boostToggle) return;
+  boostToggle = false;
+  syncBoostButtons();
+}
 let perfOverlay = null,
   perfEnabled = false,
   perfLastSample = 0,
@@ -3185,8 +3227,6 @@ $("shout-button").addEventListener("click", shoutTarget);
 for (const [id, run] of [
   ["touch-pass", () => doPass()],
   ["touch-bank", toggleBank],
-  ["touch-focus", toggleFocus],
-  ["touch-boost", toggleBoost],
   ["touch-shout", shoutTarget],
 ]) {
   const button = $(id);
@@ -3203,6 +3243,46 @@ for (const [id, run] of [
   button.addEventListener("click", (event) => {
     if (event.pointerType === "touch") return;
     run();
+  });
+}
+// Focus and Boost are the only touch actions with a mode: settings.abilityMode
+// "toggle" keeps the tap-to-latch behaviour every other touch action above
+// still uses (toggleFocus/toggleBoost); "hold" (default) makes the ability
+// active only while the finger is down, the same as the keyboard and gamepad
+// bindings for these two actions already are. Pointer capture is taken only
+// for the hold path so a finger that drifts off the button while held still
+// delivers the pointerup/pointercancel that ends it — a tap-to-toggle press
+// is already over by pointerdown and needs no such thing.
+for (const [id, pressFn, releaseFn, toggleFn] of [
+  ["touch-focus", focusHoldPress, focusHoldRelease, toggleFocus],
+  ["touch-boost", boostHoldPress, boostHoldRelease, toggleBoost],
+]) {
+  const button = $(id);
+  const release = (event) => {
+    if (event.pointerType !== "touch") return;
+    if (settings.abilityMode === "hold") releaseFn();
+  };
+  button.addEventListener("pointerdown", (event) => {
+    if (event.pointerType !== "touch") return;
+    if (button.disabled) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (settings.abilityMode === "hold") {
+      try {
+        button.setPointerCapture(event.pointerId);
+      } catch {}
+      pressFn();
+    } else {
+      toggleFn();
+    }
+  });
+  button.addEventListener("pointerup", release);
+  button.addEventListener("pointercancel", release);
+  button.addEventListener("click", (event) => {
+    if (event.pointerType === "touch") return;
+    // Keyboard activation (Enter/Space) is a press-and-release, not a hold,
+    // regardless of the setting — toggling is the only sensible outcome.
+    toggleFn();
   });
 }
 $("tactic-select").addEventListener("change", (e) => {
@@ -3227,6 +3307,7 @@ function applyAudioSettings() {
   sound.setVolume(settings.effectsVolume);
   music.setEnabled(settings.musicOn);
   music.setVolume(settings.musicVolume);
+  music.setFocusEffectEnabled(settings.focusSlowdownOn);
   // progress.sound is the legacy single switch. Keep it in step so a profile
   // written before the audio split never disagrees with the current settings.
   progress.sound = settings.effectsOn || settings.musicOn;
@@ -3243,6 +3324,13 @@ function syncAudioChrome() {
     : "Effects off";
   $("music-button").setAttribute("aria-pressed", String(settings.musicOn));
   $("music-button").textContent = settings.musicOn ? "Music on" : "Music off";
+  $("focus-slowdown-button").setAttribute(
+    "aria-pressed",
+    String(settings.focusSlowdownOn),
+  );
+  $("focus-slowdown-button").textContent = settings.focusSlowdownOn
+    ? "Focus slowdown on"
+    : "Focus slowdown off";
   $("effects-volume").value = String(Math.round(settings.effectsVolume * 100));
   $("music-volume").value = String(Math.round(settings.musicVolume * 100));
   $("effects-volume-value").textContent = percent(settings.effectsVolume);
@@ -3272,6 +3360,12 @@ $("sound-button").addEventListener("click", () => {
 $("effects-button").addEventListener("click", () => {
   settings.effectsOn = !settings.effectsOn;
   mutedState = null;
+  applyAudioSettings();
+  persist();
+  persistSettings();
+});
+$("focus-slowdown-button").addEventListener("click", () => {
+  settings.focusSlowdownOn = !settings.focusSlowdownOn;
   applyAudioSettings();
   persist();
   persistSettings();
@@ -3556,6 +3650,7 @@ function openSettings() {
   capture = null;
   setBindingStatus("");
   $("preset-select").value = settings.preset;
+  $("ability-mode-select").value = settings.abilityMode;
   renderBindings();
   // Gamepad and keyboard remapping start collapsed on a phone (there is no
   // room to show all three sections open at once — see the <details> markup
@@ -3844,6 +3939,25 @@ $("preset-select").addEventListener("change", (event) => {
   setBindingStatus("Control preset applied.");
   renderBindings();
   syncSettingChrome();
+});
+$("ability-mode-select").addEventListener("change", (event) => {
+  const next = event.target.value === "toggle" ? "toggle" : "hold";
+  if (next === settings.abilityMode) {
+    $("ability-mode-select").value = next;
+    return;
+  }
+  settings.abilityMode = next;
+  // A latch (toggle mode) or a still-held press (hold mode) means nothing
+  // under the mode it is switching to and has no input path left that would
+  // ever clear it on its own — a finger already down cannot deliver a second
+  // pointerdown to toggle it off, and a latch has no "hold" to release.
+  // Drop both so aria-pressed and the engine agree with the new mode
+  // immediately rather than showing a stuck ability nobody can reach.
+  focusToggle = false;
+  boostToggle = false;
+  syncFocusButtons();
+  syncBoostButtons();
+  persistSettings();
 });
 $("reset-bindings").addEventListener("click", () => {
   capture = null;

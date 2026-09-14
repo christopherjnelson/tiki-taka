@@ -693,6 +693,183 @@ await check('holding Focus slows the source and dulls the filter, releasing rest
   await context.close();
 });
 
+await check('with the Focus slowdown setting off, holding Focus leaves playbackRate and the filter untouched and schedules no automation at all', async () => {
+  const context = await relaxedBrowser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const errors = errorsFor(page);
+  await page.goto(`${baseURL}/`);
+  const result = await page.evaluate(async () => {
+    const { createMusic } = await import('/apps/desktop/src/music.js');
+    const { TRACKS } = await import('/apps/desktop/src/playlist.js');
+
+    window.__musicGraph2 = { filters: [], sources: [] };
+    const makeFilter = AudioContext.prototype.createBiquadFilter;
+    AudioContext.prototype.createBiquadFilter = function patchedFilter(...args) {
+      const node = makeFilter.apply(this, args);
+      window.__musicGraph2.filters.push(node);
+      return node;
+    };
+    const makeSource = AudioContext.prototype.createBufferSource;
+    AudioContext.prototype.createBufferSource = function patchedSource(...args) {
+      const node = makeSource.apply(this, args);
+      window.__musicGraph2.sources.push(node);
+      return node;
+    };
+
+    // Count every scheduling call on the two params Focus would otherwise
+    // automate, on every node ever created, so "never scheduling" is checked
+    // directly rather than inferred from where .value happens to land.
+    let scheduled = 0;
+    const countOn = (proto) => {
+      for (const method of ['setValueAtTime', 'linearRampToValueAtTime', 'setTargetAtTime']) {
+        const original = proto[method];
+        proto[method] = function patched(...args) {
+          scheduled++;
+          return original.apply(this, args);
+        };
+      }
+    };
+    countOn(AudioParam.prototype);
+
+    const music = createMusic({
+      tracks: TRACKS.slice(0, 1),
+      resolve: track => new URL(`/public/audio/${track.file}`, location.origin).href,
+    });
+    music.setFocusEffectEnabled(false);
+    music.setEnabled(true);
+    music.unlock();
+
+    const until = async (predicate, timeoutMs) => {
+      const start = performance.now();
+      while (performance.now() - start < timeoutMs) {
+        if (predicate()) return true;
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      return predicate();
+    };
+    const lastFilter = () => window.__musicGraph2.filters.at(-1);
+    const lastSource = () => window.__musicGraph2.sources.at(-1);
+
+    await until(() => music.state === 'playing', 20_000);
+    // The gain ramp-in on play, and any volume scheduling, use AudioParam too
+    // (gain.gain), so isolate the count to just after the track settles.
+    scheduled = 0;
+    const openRate = lastSource().playbackRate.value;
+    const openFreq = lastFilter().frequency.value;
+
+    music.setFocus(true);
+    // Give the ramp window (120ms) time to have run if it were going to.
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const heldRate = lastSource().playbackRate.value;
+    const heldFreq = lastFilter().frequency.value;
+    const scheduledWhileHeld = scheduled;
+
+    music.setFocus(false);
+    await new Promise(resolve => setTimeout(resolve, 400));
+    const releasedRate = lastSource().playbackRate.value;
+    const releasedFreq = lastFilter().frequency.value;
+    const scheduledAfterRelease = scheduled;
+
+    const state = music.state;
+    music.setEnabled(false);
+    return {
+      state, openRate, openFreq, heldRate, heldFreq, releasedRate, releasedFreq,
+      scheduledWhileHeld, scheduledAfterRelease,
+    };
+  });
+  assert.equal(result.state, 'playing', `the track should be running, got ${result.state}`);
+  assert.equal(result.openRate, 1, 'not focused: playback rate should be unmodified');
+  assert.equal(result.heldRate, 1, 'the effect is off: holding Focus must not change playback rate');
+  assert.equal(result.heldFreq, result.openFreq,
+    'the effect is off: holding Focus must not move the filter');
+  assert.equal(result.releasedRate, 1, 'releasing Focus with the effect off should still read unmodified');
+  assert.equal(result.releasedFreq, result.openFreq,
+    'releasing Focus with the effect off should still read the open filter value');
+  assert.equal(result.scheduledWhileHeld, 0,
+    `holding Focus with the effect off must schedule no automation at all, got ${result.scheduledWhileHeld} calls`);
+  assert.equal(result.scheduledAfterRelease, 0,
+    `releasing Focus with the effect off must schedule no automation at all, got ${result.scheduledAfterRelease} calls`);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+await check('toggling the Focus slowdown setting off mid-hold ramps the soundtrack back to normal, and toggling it back on mid-hold ramps the effect back in', async () => {
+  const context = await relaxedBrowser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const errors = errorsFor(page);
+  await page.goto(`${baseURL}/`);
+  const result = await page.evaluate(async () => {
+    const { createMusic } = await import('/apps/desktop/src/music.js');
+    const { TRACKS } = await import('/apps/desktop/src/playlist.js');
+
+    window.__musicGraph3 = { filters: [], sources: [] };
+    const makeFilter = AudioContext.prototype.createBiquadFilter;
+    AudioContext.prototype.createBiquadFilter = function patchedFilter(...args) {
+      const node = makeFilter.apply(this, args);
+      window.__musicGraph3.filters.push(node);
+      return node;
+    };
+    const makeSource = AudioContext.prototype.createBufferSource;
+    AudioContext.prototype.createBufferSource = function patchedSource(...args) {
+      const node = makeSource.apply(this, args);
+      window.__musicGraph3.sources.push(node);
+      return node;
+    };
+
+    const music = createMusic({
+      tracks: TRACKS.slice(0, 1),
+      resolve: track => new URL(`/public/audio/${track.file}`, location.origin).href,
+    });
+    music.setEnabled(true);
+    music.unlock();
+
+    const until = async (predicate, timeoutMs) => {
+      const start = performance.now();
+      while (performance.now() - start < timeoutMs) {
+        if (predicate()) return true;
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      return predicate();
+    };
+    const lastFilter = () => window.__musicGraph3.filters.at(-1);
+    const lastSource = () => window.__musicGraph3.sources.at(-1);
+
+    await until(() => music.state === 'playing', 20_000);
+    const openFreq = lastFilter().frequency.value;
+
+    music.setFocus(true);
+    await until(() => lastSource().playbackRate.value < 0.85, 2000);
+
+    // Turning the effect off mid-hold must ramp cleanly back to neutral, not
+    // snap - a step here is the "click" the setting must never produce.
+    music.setFocusEffectEnabled(false);
+    await until(() => lastSource().playbackRate.value > 0.95, 2000);
+    await until(() => lastFilter().frequency.value >= openFreq * 0.99, 2000);
+    const offRate = lastSource().playbackRate.value;
+    const offFreq = lastFilter().frequency.value;
+
+    // Turning it back on while Focus is still held must ramp the effect back
+    // in without the player having to release and re-hold.
+    music.setFocusEffectEnabled(true);
+    await until(() => lastSource().playbackRate.value < 0.85, 2000);
+    await until(() => lastFilter().frequency.value < 1500, 2000);
+    const backOnRate = lastSource().playbackRate.value;
+    const backOnFreq = lastFilter().frequency.value;
+
+    music.setFocus(false);
+    music.setEnabled(false);
+    return { offRate, offFreq, backOnRate, backOnFreq, openFreq };
+  });
+  assert.ok(result.offRate > 0.95, `disabling mid-hold should restore playback rate, got ${result.offRate}`);
+  assert.ok(result.offFreq >= result.openFreq * 0.99,
+    `disabling mid-hold should reopen the filter, got ${result.offFreq}Hz vs ${result.openFreq}Hz`);
+  assert.ok(result.backOnRate <= 0.85 && result.backOnRate >= 0.75,
+    `re-enabling mid-hold should slow the source again, got ${result.backOnRate}`);
+  assert.ok(result.backOnFreq < 1500, `re-enabling mid-hold should dull the filter again, got ${result.backOnFreq}Hz`);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 await browser.close();
 await relaxedBrowser.close();
 if (server) server.kill();
