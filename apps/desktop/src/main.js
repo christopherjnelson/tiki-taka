@@ -66,6 +66,17 @@ if (buildIdentityElement) {
   buildIdentityElement.textContent = buildIdentityText;
   buildIdentityElement.setAttribute("aria-label", `Build identity: ${buildIdentityText}`);
 }
+// Discord (or another OAuth provider) redirects back with `error` /
+// `error_description` in the query or hash when the player cancels or the
+// provider fails - e.g. closing the Discord consent window partway through.
+// Read it before anything else touches the URL: supabase-js's
+// detectSessionInUrl (see packages/data/src/supabase.js) clears it once the
+// client below has parsed it, whether or not this build even shows an
+// account dialog.
+const oauthReturnError = (() => {
+  const params = new URLSearchParams(`${location.search.slice(1)}&${location.hash.slice(1)}`);
+  return params.get("error_description") || params.get("error") || null;
+})();
 let storage;
 try {
   storage = window.localStorage;
@@ -163,11 +174,19 @@ let settings = initialData.settings;
 let accountStats = initialData.stats;
 let preferences = initialData.preferences || { scoreSaveChoice: "ask" };
 let profile = null;
+// Set at boot when a session exists but has no profiles row yet - a
+// first-time Discord sign-in, or a player who abandoned the username prompt
+// last time (see completeProfile in packages/data/src/supabase.js). Held
+// here rather than acted on immediately: the account/username dialogs are
+// wired up later, once the shell has finished booting.
+let pendingUsernamePrompt = null;
 // Only the Supabase adapter has a session to ask about; the guest adapter
 // has no accounts at all.
 if (dataAdapter.kind === "supabase") {
   try {
-    profile = (await dataAdapter.getSession())?.profile || null;
+    const session = await dataAdapter.getSession();
+    if (session?.needsUsername) pendingUsernamePrompt = session.user;
+    else profile = session?.profile || null;
   } catch {
     remoteDataUnavailable = true;
   }
@@ -180,6 +199,7 @@ const accountsAvailable = dataAdapter.kind === "supabase";
 if (!accountsAvailable) {
   $("profile-button").hidden = true;
   $("account-button").hidden = true;
+  $("discord-signin").hidden = true;
 }
 // One switch used to cover everything, and it lived on `progress.sound`.
 // Effects and music now have a switch and a level each, in settings. A player
@@ -471,6 +491,11 @@ function toast(text, icon = "") {
 if (progressTooNew) setTimeout(() => toast(PROGRESS_TOO_NEW_MESSAGE), 0);
 else if (remoteDataUnavailable)
   setTimeout(() => toast("Account data is temporarily unavailable. Your game is still playable."), 0);
+if (oauthReturnError) setTimeout(() => toast(`Discord sign-in didn't complete: ${oauthReturnError}`), 0);
+// openUsernamePrompt is a function declaration further down, alongside the
+// rest of the account dialog wiring - hoisted, so this boot-time call to it
+// is fine even though it appears first in the file.
+if (pendingUsernamePrompt) setTimeout(() => openUsernamePrompt(pendingUsernamePrompt), 0);
 async function recordRound(round) {
   if (remoteDataUnavailable && onlineAccount()) {
     if (!(await recoverRemoteDataContext())) return false;
@@ -3610,7 +3635,12 @@ async function recoverRemoteDataContext() {
       const session = await dataAdapter.getSession();
       const data = await dataAdapter.loadUserData();
       if (generation !== dataContextGeneration) return false;
-      applyDataContext(data, session?.profile || profile);
+      if (session?.needsUsername) {
+        applyDataContext(data, null);
+        openUsernamePrompt(session.user);
+      } else {
+        applyDataContext(data, session?.profile || profile);
+      }
       if (preferences.scoreSaveChoice === "always" && pendingScoreRounds.length)
         void savePendingScores().then((saved) => {
           if (!saved) toast("Queued scores are still waiting for a connection.");
@@ -3641,6 +3671,23 @@ $("profile-button").addEventListener("click", openAccount);
 $("top-home").addEventListener("click", () => applyView("home"));
 $("top-pause").addEventListener("click", togglePause);
 $("close-account").addEventListener("click", () => $("account-dialog").close());
+// The one path every sign-in method finishes through - register(), login()
+// and completeProfile() (the username prompt after a first-time Discord
+// sign-in) all resolve to a profile the same shape, and from there a
+// guest-progress handoff, a pending score save and a data-context switch all
+// need to happen identically regardless of which one got the player there.
+async function afterAuthenticated(next, successMessage) {
+  await switchDataContext(next);
+  $("account-dialog").close();
+  $("username-dialog").close();
+  if (saveScoreAfterAuthentication) {
+    saveScoreAfterAuthentication = false;
+    showScoreSaveDialog();
+    await chooseAlwaysSave();
+  } else {
+    toast(successMessage);
+  }
+}
 $("register-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
@@ -3649,15 +3696,7 @@ $("register-form").addEventListener("submit", async (event) => {
       username: $("register-username").value,
       password: $("register-password").value,
     });
-    await switchDataContext(next);
-    $("account-dialog").close();
-    if (saveScoreAfterAuthentication) {
-      saveScoreAfterAuthentication = false;
-      showScoreSaveDialog();
-      await chooseAlwaysSave();
-    } else {
-      toast(`Account ${next.username} created.`);
-    }
+    await afterAuthenticated(next, `Account ${next.username} created.`);
   } catch (error) {
     $("account-status").textContent = error.message;
   }
@@ -3669,15 +3708,7 @@ $("login-form").addEventListener("submit", async (event) => {
       identifier: $("login-identifier").value,
       password: $("login-password").value,
     });
-    await switchDataContext(next);
-    $("account-dialog").close();
-    if (saveScoreAfterAuthentication) {
-      saveScoreAfterAuthentication = false;
-      showScoreSaveDialog();
-      await chooseAlwaysSave();
-    } else {
-      toast(`Signed in as ${next.username}.`);
-    }
+    await afterAuthenticated(next, `Signed in as ${next.username}.`);
   } catch (error) {
     $("account-status").textContent = error.message;
   }
@@ -3687,6 +3718,43 @@ $("logout-button").addEventListener("click", async () => {
   await switchDataContext(null);
   $("account-dialog").close();
   toast("Returned to guest progress.");
+});
+// The redirect to Discord replaces the whole page, so there is nothing to
+// await here in the success case - the player is gone before this promise
+// would resolve. Only a failure to even start the redirect (network error,
+// misconfigured provider) surfaces here.
+$("discord-signin").addEventListener("click", async () => {
+  $("account-status").textContent = "";
+  try {
+    await dataAdapter.signInWithDiscord({
+      redirectTo: `${location.origin}${location.pathname}`,
+    });
+  } catch (error) {
+    $("account-status").textContent = error.message;
+  }
+});
+function openUsernamePrompt(user) {
+  if (phase === "playing") pause();
+  closeMusicPopup();
+  clearInput();
+  $("account-dialog").close();
+  pendingUsernamePrompt = user;
+  $("username-status").textContent = "";
+  $("username-input").value = user?.suggestedUsername || "";
+  $("username-dialog").showModal();
+}
+$("close-username").addEventListener("click", () => $("username-dialog").close());
+$("username-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const next = await dataAdapter.completeProfile({
+      username: $("username-input").value,
+    });
+    pendingUsernamePrompt = null;
+    await afterAuthenticated(next, `Welcome, ${next.username}.`);
+  } catch (error) {
+    $("username-status").textContent = error.message;
+  }
 });
 $("close-score-save").addEventListener("click", () => $("score-save-dialog").close());
 $("score-save-later").addEventListener("click", () => $("score-save-dialog").close());
@@ -3727,6 +3795,16 @@ $("score-save-always").addEventListener("click", chooseAlwaysSave);
 // Sessions can change in another tab or when Supabase restores one after the
 // shell has booted. Keep the visible account and scoped local state honest.
 const unsubscribeAuthState = dataAdapter.onAuthStateChange?.((session) => {
+  if (session?.needsUsername) {
+    // Covers the Discord redirect returning to an already-booted tab (a
+    // second tab, or a slow initial session check) as well as this same
+    // boot's own initial-session event - both can fire after the top-level
+    // pendingUsernamePrompt handoff already opened this dialog for the same
+    // user, so skip re-opening it.
+    if ((session.user?.id || null) === (pendingUsernamePrompt?.id || null)) return;
+    openUsernamePrompt(session.user);
+    return;
+  }
   const nextProfile = session?.profile || null;
   if ((nextProfile?.id || null) === (profile?.id || null)) return;
   void switchDataContext(nextProfile).catch(() =>

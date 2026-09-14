@@ -3766,6 +3766,26 @@ body.play-view #bank-button {
   color: var(--muted);
   line-height: 1.55;
 }
+.discord-button {
+  background: #5865f2;
+}
+.account-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: var(--muted);
+  text-transform: uppercase;
+  font: 700 9px var(--sign);
+  letter-spacing: 1px;
+}
+.account-divider::before,
+.account-divider::after {
+  content: "";
+  flex: 1 1 0;
+  height: 1px;
+  background: var(--line);
+}
 .account-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
