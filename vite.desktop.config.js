@@ -2,8 +2,17 @@ import { defineConfig } from "vite";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { parseChangelog } from "./scripts/changelog.mjs";
 
 const packageInfo = JSON.parse(readFileSync(path.resolve("package.json"), "utf8"));
+// Baked at build/dev time from the committed CHANGELOG.md, never fetched at
+// runtime (the app must work offline behind the service worker) - see the
+// header comment on scripts/changelog.mjs and CHANGELOG.md itself for the
+// "updates on releases, not PRs" contract this depends on. A dev build that
+// is not itself a release still gets a real changelog: whatever is
+// currently committed to CHANGELOG.md, which is exactly the released
+// history to date - there is no separate "unreleased" entry to fake.
+const changelog = parseChangelog(readFileSync(path.resolve("CHANGELOG.md"), "utf8"));
 
 function git(...args) {
   try {
@@ -48,6 +57,7 @@ export default defineConfig({
   publicDir: false,
   define: {
     __TIKI_TAKA_BUILD__: JSON.stringify(buildIdentity),
+    __TIKI_TAKA_CHANGELOG__: JSON.stringify(changelog),
   },
   build: {
     target: "es2022",

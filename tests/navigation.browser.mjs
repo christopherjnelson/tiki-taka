@@ -1271,7 +1271,7 @@ await check(
         smartPass: ["Space"], direct1: ["Digit1"], direct2: ["Digit2"],
         direct3: ["Digit3"], direct4: ["Digit4"], wallToggle: ["KeyB"],
         wallHold: ["ShiftLeft"], focusHold: ["KeyE"], boostHold: ["KeyR"],
-        shout: ["KeyF"], pause: ["Escape"],
+        shout: ["KeyF"], pause: ["Escape"], skipTrack: ["KeyN"],
       };
       window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
         kind: "local",
@@ -1412,7 +1412,7 @@ await check(
         smartPass: ["Space"], direct1: ["Digit1"], direct2: ["Digit2"],
         direct3: ["Digit3"], direct4: ["Digit4"], wallToggle: ["KeyB"],
         wallHold: ["ShiftLeft"], focusHold: ["KeyE"], boostHold: ["KeyR"],
-        shout: ["KeyF"], pause: ["Escape"],
+        shout: ["KeyF"], pause: ["Escape"], skipTrack: ["KeyN"],
       };
       window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
         kind: "local",

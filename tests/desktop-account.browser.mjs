@@ -75,6 +75,19 @@ try {
   assert.equal(await page.locator("#xp-label").textContent(), "30 / 80 XP");
   assert.equal(await page.locator("#profile-button").isVisible(), false);
   assert.equal(await page.locator("#discord-signin").isVisible(), false);
+  // The community invite is not account functionality, unlike #discord-signin
+  // right above - it must stay visible with no Supabase configuration at all.
+  assert.equal(
+    await page.locator("#discord-invite").isVisible(),
+    true,
+    "the Discord invite must appear with no Supabase configuration",
+  );
+  assert.equal(
+    await page.locator("#discord-invite").getAttribute("href"),
+    "https://discord.gg/QgVR4YwnC",
+  );
+  assert.equal(await page.locator("#discord-invite").getAttribute("target"), "_blank");
+  assert.equal(await page.locator("#discord-invite").getAttribute("rel"), "noopener");
   await page.locator("#settings-button").click();
   await page.locator("#settings-dialog").waitFor({ state: "visible" });
   assert.equal(await page.locator("#sound-button").textContent(), "Sound off");
@@ -101,7 +114,7 @@ try {
       smartPass: ["Space"], direct1: ["Digit1"], direct2: ["Digit2"],
       direct3: ["Digit3"], direct4: ["Digit4"], wallToggle: ["KeyB"],
       wallHold: ["ShiftLeft"], focusHold: ["KeyE"], boostHold: ["KeyR"],
-      shout: ["KeyF"], pause: ["Escape"],
+      shout: ["KeyF"], pause: ["Escape"], skipTrack: ["KeyN"],
     };
     const data = () => ({
       progress: { version: 2, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: "balanced", lastCourt: 0 },
@@ -200,7 +213,7 @@ try {
   await accountPage.waitForFunction(() => document.querySelector("#profile-chip-name").textContent === "Newer");
   const offlinePage = await browser.newPage({ serviceWorkers: "block" });
   await offlinePage.addInitScript(() => {
-    const bindings = Object.fromEntries(["moveUp", "moveDown", "moveLeft", "moveRight", "smartPass", "direct1", "direct2", "direct3", "direct4", "wallToggle", "wallHold", "focusHold", "boostHold", "shout", "pause"].map((key) => [key, []]));
+    const bindings = Object.fromEntries(["moveUp", "moveDown", "moveLeft", "moveRight", "smartPass", "direct1", "direct2", "direct3", "direct4", "wallToggle", "wallHold", "focusHold", "boostHold", "shout", "pause", "skipTrack"].map((key) => [key, []]));
     const fallback = { progress: { version: 2, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: "balanced", lastCourt: 0 }, settings: { theme: "dark", effectsOn: true, effectsVolume: 0.3, musicOn: true, musicVolume: 1, audioMigrated: true, preset: "wasd", bindings }, stats: { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 }, preferences: { scoreSaveChoice: "ask" } };
     window.__offlineAdapter = { online: false, rounds: [] };
     window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
@@ -236,7 +249,7 @@ try {
   // behave, not repeat the save/settings/stats shape every time.
   const discordFakeDataSource = `(() => ({
     progress: { version: 2, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: "balanced", lastCourt: 0 },
-    settings: { theme: "dark", effectsOn: true, effectsVolume: 0.3, musicOn: true, musicVolume: 1, audioMigrated: true, preset: "wasd", bindings: Object.fromEntries(["moveUp","moveDown","moveLeft","moveRight","smartPass","direct1","direct2","direct3","direct4","wallToggle","wallHold","focusHold","boostHold","shout","pause"].map((k) => [k, []])) },
+    settings: { theme: "dark", effectsOn: true, effectsVolume: 0.3, musicOn: true, musicVolume: 1, audioMigrated: true, preset: "wasd", bindings: Object.fromEntries(["moveUp","moveDown","moveLeft","moveRight","smartPass","direct1","direct2","direct3","direct4","wallToggle","wallHold","focusHold","boostHold","shout","pause","skipTrack"].map((k) => [k, []])) },
     stats: { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 },
     preferences: { scoreSaveChoice: "ask" },
   }))`;

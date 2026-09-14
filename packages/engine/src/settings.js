@@ -46,6 +46,7 @@ export const ACTIONS = {
   boostHold: "Hold Boost",
   shout: "Shout target to bonus zone",
   pause: "Pause",
+  skipTrack: "Skip track",
 };
 
 const passKeys = {
@@ -60,6 +61,7 @@ const passKeys = {
   boostHold: ["KeyR"],
   shout: ["KeyF"],
   pause: ["Escape"],
+  skipTrack: ["KeyN"],
 };
 
 export const PRESETS = {
@@ -104,6 +106,10 @@ export const DEFAULT_GAMEPAD_BINDINGS = {
   shout: 5,
   focusHold: 6,
   boostHold: 7,
+  // Button 8 (Select/Back/View, depending on the pad) is otherwise unused by
+  // pollGamepad() - button 9 (Start) is hard-wired to pause - so it is free
+  // to claim as the skip-track default.
+  skipTrack: 8,
 };
 
 export const GAMEPAD_BUTTON_LABELS = {
@@ -115,6 +121,7 @@ export const GAMEPAD_BUTTON_LABELS = {
   5: "RB / R1 (Right Bumper)",
   6: "LT / L2 (Left Trigger)",
   7: "RT / R2 (Right Trigger)",
+  8: "Select / View (Back)",
 };
 
 export const GAMEPAD_SHORT_LABELS = {
@@ -126,6 +133,7 @@ export const GAMEPAD_SHORT_LABELS = {
   5: "RB",
   6: "LT",
   7: "RT",
+  8: "Select",
 };
 
 export function defaultSettings() {
@@ -154,9 +162,9 @@ function normalizeVolume(value, fallback) {
   return Math.min(1, Math.max(0, volume));
 }
 
-function normalizeGamepadButton(value, fallback) {
+function normalizeGamepadButton(value, fallback, max = 7) {
   const num = Number(value);
-  if (Number.isInteger(num) && num >= 0 && num <= 7) return num;
+  if (Number.isInteger(num) && num >= 0 && num <= max) return num;
   return fallback;
 }
 
@@ -211,6 +219,11 @@ export function normalizeSettings(value) {
       boostHold: normalizeGamepadButton(
         value.gamepadBindings?.boostHold,
         DEFAULT_GAMEPAD_BINDINGS.boostHold,
+      ),
+      skipTrack: normalizeGamepadButton(
+        value.gamepadBindings?.skipTrack,
+        DEFAULT_GAMEPAD_BINDINGS.skipTrack,
+        8,
       ),
     },
   };

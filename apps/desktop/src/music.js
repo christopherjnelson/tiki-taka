@@ -331,7 +331,14 @@ export function createMusic({
         goto(index + 1);
         continue;
       }
+      const wanted = index;
       const decoded = await decode();
+      // A skip can change the selected track while decode() is awaiting the
+      // previous file. decode() deliberately discards that stale result; it
+      // is not a load failure and must not advance the newly selected track
+      // again. A concurrent apply() call owns the new selection, so retrying
+      // here is harmless and keeps one skip equal to one playlist step.
+      if (wanted !== index) continue;
       if (decoded) break;
       if (failed) return;
       goto(index + 1);
