@@ -1,6 +1,7 @@
 import {
   defaultSettings,
   freshProgress,
+  isReadableProgress,
   normalizeSettings,
   readProgress,
 } from "../../engine/src/index.js";
@@ -104,7 +105,21 @@ export function createLocalDataAdapter({ storage } = {}) {
 
   const loadGuest = () => {
     const stored = read(GUEST_KEY, null);
-    if (stored) return normalizeData(stored);
+    if (stored) {
+      // The same hazard the Supabase adapter guards against exists here too:
+      // a stale cached tab, or a rolled-back deploy, can find a progress
+      // object stamped with a version this build has never heard of. Folding
+      // it down to freshProgress() and calling that "loaded" is exactly what
+      // then lets the very next autosave (see saveUserData below, which
+      // starts from this same loadGuest()) write the empty fresh progress
+      // straight over the real save under this one fixed key.
+      if (stored.progress != null && !isReadableProgress(stored.progress))
+        throw new LocalDataError(
+          "PROGRESS_TOO_NEW",
+          "This save was written by a newer version of Tiki Taka. Reload the page to update before playing further, or this device's progress will not be saved.",
+        );
+      return normalizeData(stored);
+    }
     // One-time migration from the pre-adapter storage keys.
     const migrated = normalizeData({
       progress: read("tiki-taka.progress.v1", freshProgress()),

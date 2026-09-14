@@ -170,3 +170,38 @@ test("storage failures are surfaced with stable errors", async () => {
   });
   await expectCode(unwritable.saveUserData({ progress: { version: 1, xp: 1 } }), "STORAGE_ERROR");
 });
+
+test("a guest save from a newer build is never read as fresh, or overwritten", async () => {
+  // Same hazard as the Supabase adapter's row, one level down: a stale
+  // cached tab, or a rolled-back deploy, can find the one fixed guest key
+  // holding a progress object whose version this build has never heard of.
+  const futureProgress = {
+    version: 99,
+    xp: 50000,
+    unlocked: 7,
+    courts: { 6: { standard: { stars: 3, best: 900 } } },
+    records: {},
+    sound: true,
+    tactic: "maestro",
+    difficulty: "ruthless",
+    lastCourt: 6,
+  };
+  const storage = memoryStorage({
+    [LOCAL_DATA_KEYS.guest]: JSON.stringify({
+      progress: futureProgress,
+      settings: {},
+      stats: { games: 3 },
+      preferences: {},
+    }),
+  });
+  const adapter = createLocalDataAdapter({ storage });
+
+  // Loading must not present the unreadable row as an empty fresh profile.
+  await expectCode(adapter.loadUserData(), "PROGRESS_TOO_NEW");
+
+  // Saving - even an update that never touches progress - must refuse
+  // outright rather than fold the untouched existing progress down to
+  // fresh as a side effect. The row on disk must survive untouched.
+  await expectCode(adapter.saveUserData({ settings: { theme: "light" } }), "PROGRESS_TOO_NEW");
+  assert.deepEqual(JSON.parse(storage.getItem(LOCAL_DATA_KEYS.guest)).progress, futureProgress);
+});

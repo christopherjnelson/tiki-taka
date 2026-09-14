@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { freshProgress, readProgress, saveProgress, awardMatch, rank } from '../src/progress.js';
+import { freshProgress, readProgress, saveProgress, awardMatch, rank, isReadableProgress } from '../src/progress.js';
 
 function finishedGame({ score = 200, target = 180, time = 0, turnovers = 0, key, difficulty, possessions, endless } = {}) {
   return { score, turnovers, time, config: { target, key, difficulty, possessions, endless } };
@@ -234,6 +234,25 @@ test('a version-1 stored progress resets xp to 0 but keeps everything else', () 
   // The Daily mode no longer exists, so legacy daily-* keys are dropped
   // rather than carried forward as dead weight.
   assert.deepEqual(progress.records, { 'court-0-standard': 500 });
+});
+
+test('isReadableProgress accepts known versions and junk, but not a future version', () => {
+  // Known versions this build understands.
+  assert.equal(isReadableProgress({ version: 1 }), true);
+  assert.equal(isReadableProgress({ version: 2 }), true);
+  // No version at all is a half-written or synthetic row, not a future save
+  // - normalizeProgress already repairs this for free, so it stays readable.
+  assert.equal(isReadableProgress({}), true);
+  assert.equal(isReadableProgress(null), true);
+  assert.equal(isReadableProgress(undefined), true);
+  // An explicit version this build has never heard of is the one case that
+  // actually means "a newer build wrote this and I would destroy data by
+  // treating it as fresh."
+  assert.equal(isReadableProgress({ version: 3 }), false);
+  assert.equal(isReadableProgress({ version: 99, xp: 1, courts: { 0: { standard: { stars: 3 } } } }), false);
+  // Malformed shapes are not a version claim either.
+  assert.equal(isReadableProgress([1, 2, 3]), true);
+  assert.equal(isReadableProgress('not an object'), true);
 });
 
 test('rank boundaries advance levels, names, and fractions predictably', () => {

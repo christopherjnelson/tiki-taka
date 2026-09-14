@@ -32,11 +32,37 @@ export function freshProgress() {
     lastCourt: 0,
   };
 }
+// A stored progress object's `version` says which shape it is. This build
+// only understands 1 and 2 (see normalizeProgress below). A version this
+// build has never heard of can only mean one thing: a NEWER build wrote it,
+// using fields this code does not know how to read. That is a fundamentally
+// different situation from junk or partial data - there is nothing to
+// "repair" here, because the data this build is missing is real and simply
+// not expressible in a build this old. Callers that overwrite storage (see
+// saveUserData in packages/data/src/supabase.js) must check this BEFORE
+// writing: normalizing an unreadable value to freshProgress() and writing
+// that back is exactly how a real player's unlocked courts and stars were
+// erased by an old client saving over a newer save it could not parse.
+//
+// A value with NO version at all (`{}`, or a half-written row) is not a
+// future save - it is exactly the junk/partial case normalizeProgress
+// already repairs for free, and always has, so it is "readable" here too.
+// Only an EXPLICIT version this build does not recognise (anything but 1,
+// 2, or absent) counts as unreadable.
+export function isReadableProgress(value) {
+  if (value == null || typeof value !== "object" || Array.isArray(value)) return true;
+  if (value.version === undefined) return true;
+  return value.version === 1 || value.version === 2;
+}
 // Progress arrives from storage, from a save row written by an older build,
 // and from a remote account whose row may be empty or half-written. Every one
 // of those paths has to end at a complete object: a missing `tactic` alone is
 // enough to break the first render, and a bad row persists, so the same round
 // trip fails on every reload until the value is repaired.
+//
+// This stays forgiving for junk/partial data - it is not the guard against
+// clobbering a future version. That is isReadableProgress above; callers who
+// are about to WRITE storage must consult it first.
 export function normalizeProgress(value) {
   try {
     if (!value || (value.version !== 1 && value.version !== 2)) return freshProgress();

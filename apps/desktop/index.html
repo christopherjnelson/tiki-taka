@@ -778,6 +778,13 @@
                   ><span id="energy-fill"></span
                 ></span>
               </div>
+              <!-- Deliberately screen-reader-only, not a leftover: a sighted
+              player reads pass state off the ball and the highlighted
+              teammate, so this live region is how a blind player gets the
+              same information (including "QUEUED -> N", the engine's
+              queuePass mechanic - press pass during flight and Game#receive
+              releases it on arrival, which is what makes one-touch chains
+              possible). Do not delete it because nothing appears on screen. -->
               <span id="target-label" class="sr-only" aria-live="polite"
                 >Find the open player</span
               >
