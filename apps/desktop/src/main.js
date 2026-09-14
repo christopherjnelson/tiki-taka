@@ -1159,6 +1159,21 @@ function chooseOneTouchTarget(demo) {
 // does and what it should look like: the ball never settles.
 function queueNextOneTouch(demo) {
   if (currentSetPiece() !== "onetouch") return;
+  // Stop at one ole and hand the cycle on. This check HAS to live here rather
+  // than in chooseChoreographedTarget(), which only runs while the ball is on
+  // the floor (`!demo.ball`) - with every pass queued the ball is almost
+  // never on the floor, so that path stops running and the step would never
+  // end. Leaving the chain going is what turned the demo into a non-stop ole
+  // reel that never showed a triangle or a split.
+  if (demo.oneTouchStreak >= ONE_TOUCH.milestoneEvery) {
+    // Deliberately queue nothing from here: the next reception has no pass
+    // waiting, so the carrier holds it, the engine breaks the streak on its
+    // own, and the demo moves on to the next set piece.
+    choreoOneTouch = 0;
+    choreoStep++;
+    choreoAttempts = 0;
+    return;
+  }
   if (!demo.ball || demo.queuedPass) return;
   // The ball's destination is the next carrier, so the pass after this one
   // goes to whoever follows THEM in the round robin.
