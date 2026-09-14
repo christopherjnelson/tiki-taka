@@ -266,6 +266,78 @@ await check(
 );
 
 await check(
+  "tapping a court on a phone actually changes which court Play starts, in both orientations",
+  async () => {
+    // Regression for a real report: on mobile portrait, tapping a court did
+    // not change which court Play started. `.court-list` used to carry a
+    // stale `display: flex; overflow: auto` (plus a 188px button min-width)
+    // from before the home redesign, still live under `@media (max-width:
+    // 700px)`, which forced the grid of court buttons into one clipped,
+    // horizontally-scrolling strip only about one row tall. A portrait phone
+    // (narrower than 700px) hit it; a landscape phone at the same physical
+    // size (usually wider than 700px) did not - which is exactly why the
+    // report said it "worked" in landscape.
+    //
+    // A plain `locator.tap()` does not catch this: Playwright's own
+    // actionability check scrolls a target into view before tapping it,
+    // including sideways inside a clipped flex strip, which silently does
+    // for the test what a real finger never does by accident while
+    // scrolling the page. So this taps at the item's OWN on-screen
+    // coordinates after only bringing the *list* (not the item) into view -
+    // a real vertical page scroll, same as a player scrolling to see the
+    // court list, without also sliding the list's own horizontal offset.
+    for (const [width, height, name] of [
+      [390, 844, "portrait"],
+      [844, 390, "landscape"],
+    ]) {
+      const context = await browser.newContext({
+        viewport: { width, height },
+        isMobile: true,
+        hasTouch: true,
+        serviceWorkers: "block",
+      });
+      // Unlock through court 2 (El Patio, Barcelona) so tapping it is a real
+      // selection rather than the disabled-court no-op selectCourt() also
+      // has to guard against.
+      await context.addInitScript(() =>
+        localStorage.setItem(
+          "tiki-taka.progress.v1",
+          JSON.stringify({ version: 2, xp: 0, unlocked: 5, courts: {}, records: {} }),
+        ),
+      );
+      const page = await context.newPage(),
+        errors = errorsFor(page);
+      await page.goto(baseURL, { waitUntil: "networkidle" });
+      await page.locator("#home-view").waitFor({ state: "visible" });
+      const point = await page.evaluate(() => {
+        const list = document.querySelector("#court-list");
+        const el = list.querySelectorAll(".court-item")[2];
+        list.scrollIntoView({ block: "center", inline: "nearest" });
+        const r = el.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      });
+      await page.touchscreen.tap(point.x, point.y);
+      await page.waitForFunction(
+        () =>
+          document.querySelectorAll("#court-list .court-item")[2]
+            ?.getAttribute("aria-current") === "true",
+        null,
+        { timeout: 2000 },
+      ).catch(() => {});
+      await page.locator("#title-play").click();
+      await page.locator("#arena-view").waitFor({ state: "visible" });
+      assert.equal(
+        await page.locator("#court-title").textContent(),
+        "El Patio",
+        `${name} (${width}x${height}): tapping court 3 (El Patio) should start El Patio, not whatever was already selected`,
+      );
+      assert.deepEqual(errors, []);
+      await context.close();
+    }
+  },
+);
+
+await check(
   "the attract demo's choreographed rally shows every showcase mechanic on its own within a bounded window",
   async () => {
     const context = await browser.newContext({

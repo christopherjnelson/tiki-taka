@@ -2364,13 +2364,22 @@ body.play-view #bank-button {
   }
 }
 @media (max-width: 700px) {
-  .court-list {
-    display: flex;
-    overflow: auto;
-  }
-  .court-list button {
-    min-width: 188px;
-  }
+  /* .court-list used to carry its own `display: flex; overflow: auto;` and a
+     188px button min-width here - a leftover from before the home redesign,
+     when the court picker was a horizontally-scrolling carousel rather than
+     the grid `.home-courts .court-list` sets up now (see the 900px/560px
+     grid-template-columns rules and the "Home" comment above
+     .home-court-card). Left in place, it silently won every cascade fight on
+     any viewport narrower than 700px - true of a phone in portrait, but
+     false for a phone in landscape, which is why the two orientations
+     behaved differently - forcing the grid back into a single flex row wider
+     than its container. Courts past the first one or two were pushed off to
+     the right of a clipped, near-invisible horizontal-scroll strip, so a tap
+     on them landed on nothing and Play kept starting whatever court was
+     already selected. Removed rather than fixed in place: nothing here still
+     wants the carousel treatment, and the grid rules below already cover
+     this width.
+  */
   .main {
     padding: 0 13px 18px;
   }
