@@ -51,15 +51,32 @@ function profileFromUser(user, profile) {
   };
 }
 
+// Discord never gives a leaderboard-suitable name directly - the closest
+// fields are these, roughly best-to-worst for what a person actually
+// recognises as "their name". Sanitized down to the same charset the
+// profiles table enforces so the prompt can prefill with something that
+// will actually validate; a player is always free to change it.
+function suggestedUsername(user) {
+  const meta = user?.user_metadata || {};
+  const raw = meta.global_name || meta.full_name || meta.user_name || meta.preferred_username || meta.name || "";
+  const cleaned = String(raw).trim().replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 24);
+  return cleaned.length >= 2 ? cleaned : "";
+}
+
 function errorFrom(error, fallback = "Supabase could not complete that request.") {
   if (error instanceof LocalDataError) return error;
   const message = error?.message || fallback;
   if (error?.code === "USERNAME_TAKEN" || /username.*(taken|exists|duplicate)|duplicate.*username/i.test(message))
     return new LocalDataError("USERNAME_TAKEN", "That username is already in use.");
+  // Supabase never tells the client which sign-in method an existing account
+  // uses (it would leak account existence to an attacker), so this message
+  // cannot say "that email is a Discord account" for certain - only point at
+  // the possibility, since a password account with that email is just as
+  // likely.
   if (error?.code === "23505" || /already registered|already exists|duplicate/i.test(message))
-    return new LocalDataError("ACCOUNT_EXISTS", "That email or username is already in use.");
+    return new LocalDataError("ACCOUNT_EXISTS", "An account already exists for that email. If you signed up with Discord, use Continue with Discord above - otherwise sign in below.");
   if (/invalid login credentials|invalid.*credentials/i.test(message))
-    return new LocalDataError("LOGIN_FAILED", "That email or password is incorrect.");
+    return new LocalDataError("LOGIN_FAILED", "That email or password is incorrect. If you originally signed in with Discord, use Continue with Discord above instead.");
   if (/not authenticated|jwt|session.*missing|unauthorized/i.test(message))
     return new LocalDataError("UNAUTHORIZED", "Sign in to access your saved game.");
   return new LocalDataError("STORAGE_ERROR", message);
@@ -136,21 +153,39 @@ export function createSupabaseDataAdapter({
     return currentUser;
   }
 
-  async function readProfile(user) {
+  // Shared by getSession(), getProfile() and the auth-state listener: a
+  // signed-in user with no profiles row is a first-time OAuth sign-in (see
+  // the migration note on private.create_signup_records - an email/password
+  // signup always gets a row atomically, so this state is otherwise
+  // unreachable) or a player who abandoned the username prompt last time.
+  // Either way the caller needs to know to ask for a name, which a bare
+  // `profile: null` can't distinguish from "signed out".
+  async function sessionResult(user) {
     if (!user) return null;
+    let result;
     try {
-      const result = await supabase.from("profiles").select("id, username").eq("id", user.id).maybeSingle();
+      result = await supabase.from("profiles").select("id, username").eq("id", user.id).maybeSingle();
       if (result.error && result.error.code !== "PGRST116") throw result.error;
-      currentProfile = profileFromUser(user, result.data);
-      return currentProfile;
     } catch (error) {
       throw errorFrom(error, "Supabase could not load your profile.");
     }
+    if (!result.data) {
+      currentProfile = null;
+      return {
+        profile: null,
+        needsUsername: true,
+        user: { id: user.id, email: user.email ?? "", suggestedUsername: suggestedUsername(user) },
+      };
+    }
+    currentProfile = profileFromUser(user, result.data);
+    return { profile: currentProfile };
   }
 
   async function signedInProfile() {
     const user = await sessionUser();
-    return user ? readProfile(user) : null;
+    if (!user) return null;
+    const result = await sessionResult(user);
+    return result?.profile ?? null;
   }
 
   async function signedInOrGuest(remote, local) {
@@ -228,17 +263,61 @@ export function createSupabaseDataAdapter({
       }
     },
     async getSession() {
-      const profile = await signedInProfile();
-      return profile ? { profile } : null;
+      const user = await sessionUser();
+      return sessionResult(user);
     },
     async getProfile() {
       return signedInProfile();
+    },
+    // signInWithOAuth navigates the whole page away, so nothing here runs
+    // again until the redirect back - the returning session is picked up by
+    // this same listener (detectSessionInUrl: true, below) exactly as a
+    // cross-tab session change already was, which is what carries it into
+    // the ordinary post-sign-in flow in main.js.
+    async signInWithDiscord({ redirectTo } = {}) {
+      let result;
+      try {
+        result = await supabase.auth.signInWithOAuth({ provider: "discord", options: { redirectTo } });
+      } catch (error) {
+        throw errorFrom(error, "Supabase could not start Discord sign-in.");
+      }
+      throwIfError(result.error, "Supabase could not start Discord sign-in.");
+      return result.data;
+    },
+    // Called once, after a first-time OAuth sign-in, once the player has
+    // confirmed or changed the name suggested from their Discord identity.
+    // profiles has no update policy and no server-side default, so this is
+    // the only way that row is ever created for an OAuth account (see the
+    // migration note on private.create_signup_records).
+    async completeProfile({ username } = {}) {
+      const user = await sessionUser();
+      if (!user) throw new LocalDataError("UNAUTHORIZED", "Sign in to choose a username.");
+      const cleanUsername = String(username || "").trim();
+      if (!USERNAME_RE.test(cleanUsername))
+        throw new LocalDataError("VALIDATION_ERROR", "Use a username of 2-24 letters, digits, underscores, hyphens, or periods.");
+      let result;
+      try {
+        result = await supabase.from("profiles").insert({ id: user.id, username: cleanUsername }).select("id, username").single();
+      } catch (error) {
+        throw errorFrom(error, "Supabase could not save your username.");
+      }
+      throwIfError(result.error, "Supabase could not save your username.");
+      currentProfile = profileFromUser(user, result.data);
+      return currentProfile;
     },
     onAuthStateChange(listener) {
       const { data } = supabase.auth.onAuthStateChange((_event, session) => {
         currentUser = session?.user ?? null;
         currentProfile = null;
-        Promise.resolve(listener(session ? { profile: profileFromUser(session.user, null) } : null));
+        const user = session?.user ?? null;
+        // sessionResult reads the profiles table, so a transient failure here
+        // must not be swallowed as "signed out" - fall back to the same
+        // metadata-only shape this listener used before it looked the row
+        // up, and let the caller's own error handling (main.js already
+        // wraps this in a toast on rejection) take it from there.
+        Promise.resolve(user ? sessionResult(user) : null)
+          .catch(() => (user ? { profile: profileFromUser(user, null) } : null))
+          .then(listener);
       });
       return () => data.subscription.unsubscribe();
     },
@@ -328,7 +407,11 @@ export async function createConfiguredSupabaseDataAdapter({ url, publishableKey,
       throw errorFrom(error, "Supabase could not load in this browser.");
     }
     client = createClient(url, publishableKey, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+      // true is required for the Discord OAuth redirect to be picked up: the
+      // session comes back in the return URL, and the client library only
+      // parses and clears it from there when this is on. Email/password
+      // sign-in never puts anything in the URL, so this is a no-op for it.
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     });
   }
   return createSupabaseDataAdapter({ ...options, url, publishableKey, client });

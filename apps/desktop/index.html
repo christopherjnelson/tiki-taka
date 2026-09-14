@@ -991,6 +991,10 @@
         name. Your email stays private; your username is public.
       </p>
       <div id="account-guest">
+        <button id="discord-signin" class="primary-button discord-button" type="button">
+          Continue with Discord
+        </button>
+        <p class="account-divider"><span>or use email</span></p>
         <div class="account-grid">
           <form id="register-form">
             <h3>Create an account</h3>
@@ -1053,6 +1057,40 @@
       </div>
       <p
         id="account-status"
+        class="binding-status"
+        role="status"
+        aria-live="polite"
+      ></p>
+    </dialog>
+    <dialog id="username-dialog" aria-labelledby="username-title">
+      <div class="dialog-top">
+        <p class="eyebrow">ONE LAST THING</p>
+        <button
+          id="close-username"
+          type="button"
+          aria-label="Choose a name later"
+        >
+          ×
+        </button>
+      </div>
+      <h2 id="username-title">Choose your leaderboard name.</h2>
+      <p class="account-note">
+        Discord doesn't give us a leaderboard name, so pick one. It's public;
+        your Discord account stays private.
+      </p>
+      <form id="username-form">
+        <label
+          >Leaderboard name<input
+            id="username-input"
+            name="username"
+            required
+            minlength="2"
+            maxlength="24"
+            autocomplete="username" /></label
+        ><button class="primary-button" type="submit">Confirm name</button>
+      </form>
+      <p
+        id="username-status"
         class="binding-status"
         role="status"
         aria-live="polite"

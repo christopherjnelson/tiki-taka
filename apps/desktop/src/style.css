@@ -3766,6 +3766,26 @@ body.play-view #bank-button {
   color: var(--muted);
   line-height: 1.55;
 }
+.discord-button {
+  background: #5865f2;
+}
+.account-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: var(--muted);
+  text-transform: uppercase;
+  font: 700 9px var(--sign);
+  letter-spacing: 1px;
+}
+.account-divider::before,
+.account-divider::after {
+  content: "";
+  flex: 1 1 0;
+  height: 1px;
+  background: var(--line);
+}
 .account-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -3784,7 +3804,19 @@ body.play-view #bank-button {
   text-transform: uppercase;
   font: 700 20px var(--sign);
 }
-.account-grid label {
+/* The first-time username prompt is the same kind of form as the two in
+   .account-grid, but it stands alone in its own dialog rather than inside
+   that two-column grid - so it shares their panel and field treatment
+   without inheriting the grid itself. Scoped only to .account-grid, these
+   rules left it rendering as browser-default controls in the middle of an
+   otherwise styled dialog. */
+#username-form {
+  padding: 18px;
+  background: var(--panel);
+  border-top: 4px solid var(--cyan);
+}
+.account-grid label,
+#username-form label {
   display: grid;
   gap: 6px;
   margin: 11px 0;
@@ -3793,7 +3825,8 @@ body.play-view #bank-button {
   font: 700 9px var(--sign);
   letter-spacing: 1px;
 }
-.account-grid input {
+.account-grid input,
+#username-form input {
   width: 100%;
   min-height: 42px;
   padding: 9px 11px;

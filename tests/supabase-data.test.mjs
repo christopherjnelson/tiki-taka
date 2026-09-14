@@ -334,3 +334,134 @@ test("a save with no existing row, or an existing row this build understands, st
   await readable.saveUserData({ settings: { theme: "light" } });
   assert.equal(writes[0].progress.xp, 12, "a version this build understands must be preserved, not reset");
 });
+
+test("register() reports an existing account with a message pointing at Discord, not a generic 'already registered'", async () => {
+  const client = {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      signUp: async () => ({ data: null, error: { message: "User already registered" } }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    },
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  await assert.rejects(
+    adapter.register({ email: "existing@example.com", username: "player", password: "password-1" }),
+    (error) => error.code === "ACCOUNT_EXISTS" && /Discord/.test(error.message),
+  );
+});
+
+test("login() reports invalid credentials with a message pointing at Discord for a password-less OAuth-only account", async () => {
+  const client = {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      signInWithPassword: async () => ({ data: null, error: { message: "Invalid login credentials" } }),
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    },
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  await assert.rejects(
+    adapter.login({ identifier: "existing@example.com", password: "wrong" }),
+    (error) => error.code === "LOGIN_FAILED" && /Discord/.test(error.message),
+  );
+});
+
+test("signInWithDiscord calls signInWithOAuth with the discord provider and forwards options", async () => {
+  let call;
+  const client = {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      signInWithOAuth: async (input) => { call = input; return { data: { provider: "discord", url: "https://discord.example/authorize" }, error: null }; },
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    },
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  const result = await adapter.signInWithDiscord({ redirectTo: "https://game.example/" });
+  assert.deepEqual(call, { provider: "discord", options: { redirectTo: "https://game.example/" } });
+  assert.equal(result.url, "https://discord.example/authorize");
+  await assert.rejects(
+    createSupabaseDataAdapter({
+      client: { auth: { ...client.auth, signInWithOAuth: async () => ({ data: null, error: { message: "provider disabled" } }) } },
+      storage: memoryStorage(),
+    }).signInWithDiscord({}),
+    (error) => error.code === "STORAGE_ERROR",
+  );
+});
+
+test("a signed-in user with no profiles row is reported as needing a username, with a sanitized Discord-derived suggestion", async () => {
+  const user = {
+    id: "user-1",
+    email: "player@example.com",
+    user_metadata: { global_name: "Söme Discord Name!! 123" },
+  };
+  const client = {
+    auth: { getSession: async () => ({ data: { session: { user } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from: () => profileQuery({ data: null, error: null }),
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  const session = await adapter.getSession();
+  assert.equal(session.profile, null);
+  assert.equal(session.needsUsername, true);
+  assert.equal(session.user.id, "user-1");
+  assert.match(session.user.suggestedUsername, /^[A-Za-z0-9_.-]{2,24}$/);
+});
+
+test("a signed-in user with an existing profiles row is not asked for a username", async () => {
+  const user = { id: "user-1", email: "player@example.com", user_metadata: {} };
+  const client = {
+    auth: { getSession: async () => ({ data: { session: { user } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from: () => profileQuery({ data: { id: "user-1", username: "ReturningPlayer" }, error: null }),
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  const session = await adapter.getSession();
+  assert.equal(session.needsUsername, undefined);
+  assert.equal(session.profile.username, "ReturningPlayer");
+});
+
+test("completeProfile inserts the chosen username and rejects an invalid or already-taken one", async () => {
+  const user = { id: "user-1", email: "player@example.com", user_metadata: {} };
+  let inserted;
+  const client = {
+    auth: { getSession: async () => ({ data: { session: { user } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from: (table) => {
+      if (table !== "profiles") throw new Error(`unexpected table ${table}`);
+      return {
+        insert: (row) => {
+          inserted = row;
+          return {
+            select: () => ({
+              single: async () =>
+                row.username === "Taken"
+                  ? { data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "profiles_username_case_insensitive_key"' } }
+                  : { data: row, error: null },
+            }),
+          };
+        },
+      };
+    },
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  const profile = await adapter.completeProfile({ username: "NewPlayer" });
+  assert.deepEqual(inserted, { id: "user-1", username: "NewPlayer" });
+  assert.equal(profile.username, "NewPlayer");
+  await assert.rejects(adapter.completeProfile({ username: "a" }), (error) => error.code === "VALIDATION_ERROR");
+  await assert.rejects(adapter.completeProfile({ username: "Taken" }), (error) => error.code === "USERNAME_TAKEN");
+});
+
+test("onAuthStateChange reports needsUsername for a session with no profile row", async () => {
+  const user = { id: "user-2", email: "new@example.com", user_metadata: {} };
+  let handler;
+  const client = {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      onAuthStateChange: (fn) => { handler = fn; return { data: { subscription: { unsubscribe() {} } } }; },
+    },
+    from: () => profileQuery({ data: null, error: null }),
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  const seen = [];
+  adapter.onAuthStateChange((session) => seen.push(session));
+  handler("SIGNED_IN", { user });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(seen[0].needsUsername, true);
+  assert.equal(seen[0].user.id, "user-2");
+});

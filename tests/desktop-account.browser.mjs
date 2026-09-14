@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { accessSync, constants, statSync } from "node:fs";
 import { freePort } from "./free-port.mjs";
+import { waitForGame } from "./wait.mjs";
 
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -73,6 +74,7 @@ try {
   await page.goto(baseURL);
   assert.equal(await page.locator("#xp-label").textContent(), "30 / 80 XP");
   assert.equal(await page.locator("#profile-button").isVisible(), false);
+  assert.equal(await page.locator("#discord-signin").isVisible(), false);
   await page.locator("#settings-button").click();
   await page.locator("#settings-dialog").waitFor({ state: "visible" });
   assert.equal(await page.locator("#sound-button").textContent(), "Sound off");
@@ -228,6 +230,128 @@ try {
   assert.equal(await offlinePage.locator("#xp-label").textContent(), "7 / 80 XP");
   console.log("✓ remote bootstrap failure preserves the configured account adapter and offline identity");
   console.log("✓ Supabase account handoff saves one stable pending score and always-save persists");
+
+  // Discord sign-in. discordFakeData() is shared by every page below so each
+  // only has to describe how its own adapter's getSession/register/login
+  // behave, not repeat the save/settings/stats shape every time.
+  const discordFakeDataSource = `(() => ({
+    progress: { version: 2, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: "balanced", lastCourt: 0 },
+    settings: { theme: "dark", effectsOn: true, effectsVolume: 0.3, musicOn: true, musicVolume: 1, audioMigrated: true, preset: "wasd", bindings: Object.fromEntries(["moveUp","moveDown","moveLeft","moveRight","smartPass","direct1","direct2","direct3","direct4","wallToggle","wallHold","focusHold","boostHold","shout","pause"].map((k) => [k, []])) },
+    stats: { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 },
+    preferences: { scoreSaveChoice: "ask" },
+  }))`;
+
+  // A) First-time Discord sign-in: authenticated, no profiles row yet. The
+  // username dialog must open on its own, prefilled from the fake Discord
+  // identity, and completeProfile() must carry the chosen name into the same
+  // post-sign-in flow register()/login() use.
+  const firstTimePage = await browser.newPage({ serviceWorkers: "block" });
+  await firstTimePage.addInitScript(`{
+    const data = ${discordFakeDataSource};
+    window.__discordAdapter = { completeProfileCalls: [] };
+    window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
+      kind: "supabase",
+      async getSession() {
+        return { profile: null, needsUsername: true, user: { id: "d-1", email: "d1@example.com", suggestedUsername: "DiscordName" } };
+      },
+      async loadUserData() { return data(); },
+      async saveUserData(update) { return { ...data(), ...update }; },
+      async register() { throw new Error("not used"); },
+      async login() { throw new Error("not used"); },
+      async logout() {},
+      async signInWithDiscord(options) { window.__discordAdapter.signInCalled = options; return { url: "https://discord.example" }; },
+      async completeProfile({ username }) {
+        window.__discordAdapter.completeProfileCalls.push(username);
+        if (username === "Taken") throw new Error("That username is already in use.");
+        return { id: "d-1", email: "d1@example.com", username, authMode: "supabase" };
+      },
+      async recordRound() { return data().stats; },
+      async getLeaderboard() { return { entries: [] }; },
+      onAuthStateChange() { return () => {}; },
+    });
+  }`);
+  await firstTimePage.goto(baseURL);
+  await waitForGame(firstTimePage, () => document.querySelector("#username-dialog")?.open, null, {
+    message: "the username prompt should open on its own for a first-time Discord sign-in",
+  });
+  assert.equal(await firstTimePage.locator("#username-input").inputValue(), "DiscordName");
+  await firstTimePage.locator("#username-input").fill("Taken");
+  await firstTimePage.locator("#username-form button[type=submit]").click();
+  await waitForGame(firstTimePage, () => document.querySelector("#username-status").textContent.includes("already in use"));
+  await firstTimePage.locator("#username-input").fill("ChosenName");
+  await firstTimePage.locator("#username-form button[type=submit]").click();
+  await waitForGame(firstTimePage, () => document.querySelector("#profile-chip-name").textContent === "ChosenName");
+  assert.equal(await firstTimePage.locator("#username-dialog").evaluate((el) => el.open), false);
+  assert.deepEqual(await firstTimePage.evaluate(() => window.__discordAdapter.completeProfileCalls), ["Taken", "ChosenName"]);
+  console.log("✓ a first-time Discord sign-in is prompted once for a leaderboard name, prefilled from their Discord identity");
+
+  // B) Returning Discord player: a profile row already exists, so no prompt.
+  const returningPage = await browser.newPage({ serviceWorkers: "block" });
+  await returningPage.addInitScript(`{
+    const data = ${discordFakeDataSource};
+    window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
+      kind: "supabase",
+      async getSession() { return { profile: { id: "d-2", email: "d2@example.com", username: "ReturningPlayer", authMode: "supabase" } }; },
+      async loadUserData() { return data(); },
+      async saveUserData(update) { return { ...data(), ...update }; },
+      async register() { throw new Error("not used"); },
+      async login() { throw new Error("not used"); },
+      async logout() {},
+      async signInWithDiscord() { return { url: "https://discord.example" }; },
+      async recordRound() { return data().stats; },
+      async getLeaderboard() { return { entries: [] }; },
+      onAuthStateChange() { return () => {}; },
+    });
+  }`);
+  await returningPage.goto(baseURL);
+  await waitForGame(returningPage, () => document.querySelector("#profile-chip-name")?.textContent === "ReturningPlayer");
+  assert.equal(await returningPage.locator("#username-dialog").evaluate((el) => el.open), false);
+  console.log("✓ a returning Discord player with a profile is not prompted for a username");
+
+  // C) The button calls the adapter's OAuth entry point, and the two
+  // duplicate-email messages point at Discord instead of reading as a
+  // generic, unexplained failure.
+  const guestAccountPage = await browser.newPage({ serviceWorkers: "block" });
+  await guestAccountPage.addInitScript(`{
+    const data = ${discordFakeDataSource};
+    window.__discordAdapter = {};
+    window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
+      kind: "supabase",
+      async getSession() { return null; },
+      async loadUserData() { return data(); },
+      async saveUserData(update) { return { ...data(), ...update }; },
+      async register() { throw new Error("An account already exists for that email. If you signed up with Discord, use Continue with Discord above - otherwise sign in below."); },
+      async login() { throw new Error("That email or password is incorrect. If you originally signed in with Discord, use Continue with Discord above instead."); },
+      async logout() {},
+      async signInWithDiscord(options) { window.__discordAdapter.signInCalled = options; return { url: "https://discord.example" }; },
+      async recordRound() { return data().stats; },
+      async getLeaderboard() { return { entries: [] }; },
+      onAuthStateChange() { return () => {}; },
+    });
+  }`);
+  await guestAccountPage.goto(baseURL);
+  await waitForGame(guestAccountPage, () => window.__TIKI_TAKA_TEST_HOOKS__);
+  await guestAccountPage.locator("#settings-button").click();
+  await guestAccountPage.locator("#account-button").click();
+  await guestAccountPage.waitForFunction(() => document.querySelector("#account-dialog").open);
+  assert.equal(await guestAccountPage.locator("#discord-signin").isVisible(), true);
+  await guestAccountPage.locator("#discord-signin").click();
+  await waitForGame(guestAccountPage, () => window.__discordAdapter.signInCalled);
+  assert.match(await guestAccountPage.evaluate(() => window.__discordAdapter.signInCalled.redirectTo), /^https?:\/\//);
+  console.log("✓ the Discord button calls the adapter's signInWithDiscord entry point with a redirect URL");
+
+  await guestAccountPage.locator("#register-email").fill("existing@example.com");
+  await guestAccountPage.locator("#register-username").fill("Someone");
+  await guestAccountPage.locator("#register-password").fill("correct-password-1");
+  await guestAccountPage.locator("#register-form button[type=submit]").click();
+  await waitForGame(guestAccountPage, () => document.querySelector("#account-status").textContent.includes("Discord"));
+  console.log("✓ registering with an email already in use points at the Discord button, not a generic message");
+
+  await guestAccountPage.locator("#login-identifier").fill("existing@example.com");
+  await guestAccountPage.locator("#login-password").fill("wrong-password");
+  await guestAccountPage.locator("#login-form button[type=submit]").click();
+  await waitForGame(guestAccountPage, () => document.querySelector("#account-status").textContent.includes("Discord"));
+  console.log("✓ a failed sign-in on an email already in use points at the Discord button, not a generic message");
 } finally {
   await browser.close();
   if (server) server.kill();
