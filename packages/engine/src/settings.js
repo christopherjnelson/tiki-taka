@@ -11,7 +11,18 @@ export const DEFAULT_AUDIO = {
   effectsVolume: 0.3,
   musicOn: true,
   musicVolume: 1,
+  // The tape-slowdown/lowpass the soundtrack gets while Focus is held (see
+  // apps/desktop/src/music.js). On by default: it is the behaviour that just
+  // shipped, and most players like it.
+  focusSlowdownOn: true,
 };
+
+// How the on-screen Focus/Boost buttons behave. "hold" is the ability active
+// only while the button is held (today's behaviour, and what the keyboard and
+// gamepad bindings already do). "toggle" is a tap that latches the ability on
+// until tapped again — see ACTION_BUTTON_MAP and toggleFocus/toggleBoost in
+// apps/desktop/src/main.js.
+export const DEFAULT_ABILITY_MODE = "hold";
 
 export const ACTIONS = {
   moveUp: "Move up",
@@ -117,6 +128,7 @@ export function defaultSettings() {
     playView: false,
     sidebarCollapsed: false,
     mobileWallMode: "armed",
+    abilityMode: DEFAULT_ABILITY_MODE,
     ...DEFAULT_AUDIO,
     // Cleared once the shell has folded a pre-split `progress.sound` into the
     // four fields above; see apps/desktop/src/main.js.
@@ -164,10 +176,12 @@ export function normalizeSettings(value) {
     playView: value.playView === true,
     sidebarCollapsed: value.sidebarCollapsed === true,
     mobileWallMode: value.mobileWallMode === "instant" ? "instant" : "armed",
+    abilityMode: value.abilityMode === "toggle" ? "toggle" : "hold",
     effectsOn: value.effectsOn !== false,
     effectsVolume: normalizeVolume(value.effectsVolume, DEFAULT_AUDIO.effectsVolume),
     musicOn: value.musicOn !== false,
     musicVolume: normalizeVolume(value.musicVolume, DEFAULT_AUDIO.musicVolume),
+    focusSlowdownOn: value.focusSlowdownOn !== false,
     audioMigrated: value.audioMigrated === true,
     preset: Object.hasOwn(PRESETS, value.preset) ? value.preset : "custom",
     bindings,

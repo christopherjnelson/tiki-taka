@@ -1334,11 +1334,40 @@ dialog::backdrop {
 .audio-hint {
   color: var(--cyan);
 }
+/* A third, lighter row for the Focus slowdown toggle: a single on/off
+   button with no paired slider, so it does not need the full-size hit
+   target the volume rows earn by sharing space with a <input type=range>.
+   Kept small deliberately — this dialog is already tight against 1024px
+   tall windows (see the "nothing scrolls" browser check), and the touch
+   mode row below only widens the budget further on the sizes where both
+   show at once. */
+.audio-row-compact {
+  margin-bottom: 2px;
+}
+.audio-row-compact button {
+  min-width: 0;
+  min-height: 24px;
+  padding: 3px 10px;
+  font-size: 9px;
+}
 .settings-gamepad,
 .settings-bindings {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
+}
+/* Only meaningful where the touch action buttons themselves show up - the
+   same `(max-width: 900px), (pointer: coarse) and (max-width: 1024px)`
+   condition #touch-controls uses (see the comment on `.touch-actions`'s own
+   media query and compactSettingsQuery in main.js), so a mouse-and-keyboard
+   desktop never sees a setting for buttons it will never have on screen. */
+#settings-touch-group {
+  display: none;
+}
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+  #settings-touch-group {
+    display: block;
+  }
 }
 /* Both sections are <details> now (see the markup comments in index.html)
    so a phone can collapse them; the marker says so on every size rather

@@ -95,6 +95,25 @@ test("audio settings default to on, clamp levels, and never read old data as sil
   assert.equal(junk.audioMigrated, true);
 });
 
+test("Focus slowdown and ability mode default to today's behaviour and survive junk", () => {
+  const defaults = defaultSettings();
+  assert.equal(defaults.focusSlowdownOn, true);
+  assert.equal(defaults.abilityMode, "hold");
+  // Absent is what every settings blob written before this pair existed
+  // looks like: it must mean today's behaviour, not the new alternative.
+  const old = normalizeSettings({ theme: "light", preset: "arrows" });
+  assert.equal(old.focusSlowdownOn, true);
+  assert.equal(old.abilityMode, "hold");
+  // Explicit opt-outs stick.
+  const off = normalizeSettings({ focusSlowdownOn: false, abilityMode: "toggle" });
+  assert.equal(off.focusSlowdownOn, false);
+  assert.equal(off.abilityMode, "toggle");
+  // Junk falls back to today's behaviour, never the new alternative.
+  const junk = normalizeSettings({ focusSlowdownOn: "nah", abilityMode: "latched" });
+  assert.equal(junk.focusSlowdownOn, true);
+  assert.equal(junk.abilityMode, "hold");
+});
+
 test("presets return independent bindings and resolve held actions", () => {
   const left = presetBindings("left-hand");
   assert.deepEqual(left.moveUp, ["KeyI"]);

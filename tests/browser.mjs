@@ -437,7 +437,21 @@ await check('Boost and Shout work through remappable keyboard controls and analo
   await page.locator('#boost-button').click();
   assert.equal(await page.locator('#focus-button').getAttribute('aria-pressed'), 'false', 'click controls are mutually exclusive');
   assert.equal(await page.locator('#boost-button').getAttribute('aria-pressed'), 'true');
-  await page.locator('#boost-button').click();
+  // The swap has to hold in both directions - a version that only clears
+  // Focus when Boost is tapped, but not the reverse, would still let both
+  // read pressed at once. Boost has been draining the shared meter since it
+  // latched above, so top it back up first - otherwise the very drain this
+  // suite exists to test could empty it before this click lands, and the
+  // Focus tap would (correctly) refuse to latch on empty Energy.
+  await page.evaluate(() => { window.__observedGame.game.focus = 2; });
+  await page.locator('#focus-button').click();
+  assert.equal(await page.locator('#boost-button').getAttribute('aria-pressed'), 'false',
+    'tapping Focus while Boost is latched must clear Boost');
+  assert.equal(await page.locator('#focus-button').getAttribute('aria-pressed'), 'true');
+  await page.locator('#focus-button').click();
+  assert.equal(await page.locator('#focus-button').getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.locator('#boost-button').getAttribute('aria-pressed'), 'false',
+    'both controls should be off before the keyboard/gamepad Boost checks below');
   const focusBeforeKeyboardBoost = await focusSeconds(page);
   await page.keyboard.down('KeyR');
   await page.waitForFunction(() => window.__observedGame.input?.boost === true);
@@ -490,6 +504,61 @@ await check('Boost and Shout work through remappable keyboard controls and analo
   await page.evaluate(() => window.__setAbilityPad({ axes: [0, 0, 0, 0] }));
   assert.deepEqual(errors, []);
   await context.close();
+});
+
+await check('the touch ability mode setting switches #touch-focus between press-and-hold and tap-to-toggle', async () => {
+  // Default (no stored setting): "hold" - the ability is active only while
+  // the finger is down, matching the keyboard/gamepad bindings for Focus and
+  // Boost. A single tap (down immediately followed by up) never latches it.
+  const holdContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+  const holdPage = await holdContext.newPage();
+  const holdErrors = watchErrors(holdPage);
+  await gotoArena(holdPage, baseURL);
+  await holdPage.locator('#start-button').tap();
+  await observeGame(holdPage);
+  await holdPage.waitForFunction(() => document.querySelector('#game-overlay')?.hidden === true);
+  await holdPage.evaluate(() => { window.__observedGame.game.focus = 2; });
+  await holdPage.waitForFunction(() => !document.querySelector('#touch-focus')?.disabled);
+
+  await holdPage.locator('#touch-focus').dispatchEvent('pointerdown', { pointerId: 21, pointerType: 'touch' });
+  assert.equal(await holdPage.locator('#touch-focus').getAttribute('aria-pressed'), 'true',
+    'pressing #touch-focus should engage Focus in the default hold mode');
+  // input.focus is only rebuilt on the next simulated frame, not the instant
+  // the pointer event lands - wait on it rather than a synchronous read.
+  await holdPage.waitForFunction(() => window.__observedGame.input?.focus === true);
+  await holdPage.locator('#touch-focus').dispatchEvent('pointerup', { pointerId: 21, pointerType: 'touch' });
+  assert.equal(await holdPage.locator('#touch-focus').getAttribute('aria-pressed'), 'false',
+    'releasing #touch-focus should end Focus in hold mode');
+  await holdPage.waitForFunction(() => window.__observedGame.input?.focus === false);
+  assert.deepEqual(holdErrors, []);
+  await holdContext.close();
+
+  // Explicit "toggle": a tap latches the ability on and a second tap
+  // releases it - the settings dialog's #ability-mode-select is what a
+  // player actually sets this through (see the change handler in main.js),
+  // and normalizeSettings round-trips the stored value the same way.
+  const toggleContext = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+  await toggleContext.addInitScript(() =>
+    localStorage.setItem('tiki-taka.settings.v1', JSON.stringify({ abilityMode: 'toggle' })),
+  );
+  const togglePage = await toggleContext.newPage();
+  const toggleErrors = watchErrors(togglePage);
+  await gotoArena(togglePage, baseURL);
+
+  await togglePage.locator('#start-button').tap();
+  await observeGame(togglePage);
+  await togglePage.waitForFunction(() => document.querySelector('#game-overlay')?.hidden === true);
+  await togglePage.evaluate(() => { window.__observedGame.game.focus = 2; });
+  await togglePage.waitForFunction(() => !document.querySelector('#touch-focus')?.disabled);
+
+  await togglePage.locator('#touch-focus').tap();
+  assert.equal(await togglePage.locator('#touch-focus').getAttribute('aria-pressed'), 'true',
+    'a tap in toggle mode should latch Focus on');
+  await togglePage.locator('#touch-focus').tap();
+  assert.equal(await togglePage.locator('#touch-focus').getAttribute('aria-pressed'), 'false',
+    'a second tap in toggle mode should release Focus');
+  assert.deepEqual(toggleErrors, []);
+  await toggleContext.close();
 });
 
 await check('actual gamepad polling supports menus, play, focus, pause, and disconnect', async () => {
