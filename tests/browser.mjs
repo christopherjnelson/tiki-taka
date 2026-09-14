@@ -5,6 +5,7 @@ import { mkdir } from 'node:fs/promises';
 import { TRACK_FILES } from '../apps/desktop/src/playlist.js';
 import { freePort } from './free-port.mjs';
 import { gotoArena } from "./open-arena.mjs";
+import { afterFrames, waitForGame, pulsePad, padUntil } from './wait.mjs';
 
 const moduleName = process.env.PLAYWRIGHT_MODULE || '@playwright/test';
 const playwright = await import(moduleName);
@@ -94,20 +95,6 @@ async function focusSeconds(page) {
   return page.evaluate(() => window.__observedGame.game.focus);
 }
 
-// The pad is sampled once per animation frame, and the HUD it feeds is written
-// in that same frame. So "wait for the poll to see this" means waiting for
-// FRAMES, not for milliseconds - on a loaded runner a fixed timeout can expire
-// before the loop has ticked even once, and the test then reads state from
-// before its own input. Waiting on frames scales with whatever the machine is
-// actually managing.
-async function afterFrames(page, count = 3) {
-  await page.evaluate(async (n) => {
-    for (let i = 0; i < n; i++) {
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-    }
-  }, count);
-}
-
 async function waitForPassToSettle(page, previousPasses = 0, timeout = 30000) {
   await page.waitForFunction(count => {
     const game = window.__observedGame?.game;
@@ -115,15 +102,6 @@ async function waitForPassToSettle(page, previousPasses = 0, timeout = 30000) {
   }, previousPasses, { timeout });
 }
 
-// Button activation is edge-triggered (`tap()` compares against the previous
-// poll) and polling happens once per animation frame. An 80ms press could begin
-// and end between two frames on a slow runner and never be observed, which made
-// this the only test failing in CI while passing locally. Hold long enough that
-// several frames must see the press, then several more must see the release.
-// Menu navigation is level-triggered and was never affected - and it must keep
-// the short press, because holding a direction past the 0.2s repeat gate moves
-// focus twice.
-const isDpad = button => button >= 12 && button <= 15;
 // The court repaints on a rAF loop whose rate collapses on a loaded runner, so
 // waiting a fixed number of milliseconds can capture a stale frame - which is
 // how two captures that must differ came back identical in CI. window.__targets
@@ -135,26 +113,6 @@ async function framesRendered(page, count, timeout = 20000) {
     [from, count],
     { timeout },
   );
-}
-
-async function pulsePad(page, button, hold = isDpad(button) ? 80 : 250) {
-  await page.evaluate(index => window.__setTestPad({ button: index, pressed: true }), button);
-  await page.waitForTimeout(hold);
-  await page.evaluate(index => window.__setTestPad({ button: index, pressed: false }), button);
-  await page.waitForTimeout(hold);
-}
-
-// A single pulsePad() can be the one that lands entirely between two polls
-// (see above) and never register at all. `ready` is a bounded wait for the
-// effect the press should cause; presses repeat, the way a real player would
-// press again, until that effect is observed or attempts run out. Mirrors
-// padUntil() in tests/audio.browser.mjs.
-async function padUntil(page, button, ready, attempts = 6) {
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    if (await ready()) return true;
-    await pulsePad(page, button);
-  }
-  return await ready();
 }
 
 // A pass in flight is not safe to retry into: doPass() queues a second pass
@@ -256,13 +214,23 @@ await check('desktop gameplay, controls, progression, help, and full run', async
 
   const playerBefore = await page.evaluate(() => ({ ...window.__observedGame.game.players[window.__observedGame.game.carrier] }));
   await page.keyboard.down('ArrowRight');
-  await page.waitForTimeout(350);
+  // Movement accrues per animation frame from dt, so wait for the carrier to
+  // actually have moved rather than a fixed slice of wall time - on a loaded
+  // runner fewer frames tick per millisecond and a fixed wait can expire
+  // before the carrier has covered the threshold this asserts on.
+  await waitForGame(page, before => {
+    const game = window.__observedGame.game;
+    return game.players[game.carrier].x > before + 10;
+  }, playerBefore.x, { timeout: 10000, message: 'keyboard movement should move the carrier' });
   await page.keyboard.up('ArrowRight');
   const playerAfter = await page.evaluate(() => ({ ...window.__observedGame.game.players[window.__observedGame.game.carrier] }));
   assert.ok(playerAfter.x > playerBefore.x + 10, `keyboard movement should move the carrier (${playerBefore.x} → ${playerAfter.x})`);
 
   assert.equal(await focusSeconds(page), 0, 'focus should start empty');
   const emptyWidth = parseFloat(await page.locator('#energy-fill').evaluate(el => el.style.width));
+  // wall-clock: proving Focus does NOT refill while idle holds regardless of
+  // how many frames actually ran in this window - fewer frames still means
+  // zero refill, so real elapsed time is genuinely what this is testing.
   await page.waitForTimeout(650);
   assert.equal(await focusSeconds(page), 0, 'focus should not refill while idle');
   assert.equal(parseFloat(await page.locator('#energy-fill').evaluate(el => el.style.width)), emptyWidth);
@@ -281,7 +249,11 @@ await check('desktop gameplay, controls, progression, help, and full run', async
 
   const focusBefore = await focusSeconds(page);
   await page.keyboard.down('KeyE');
-  await page.waitForTimeout(400);
+  // Wait for Focus to actually start draining rather than a fixed slice of
+  // wall time - Focus drains per animation frame, so a fixed wait can expire
+  // before the loop has ticked even once on a loaded runner.
+  await waitForGame(page, before => window.__observedGame.game.focus < before, focusBefore,
+    { timeout: 10000, message: 'focus meter should drain while E is held' });
   await page.keyboard.up('KeyE');
   const focusAfter = await focusSeconds(page);
   assert.ok(focusAfter < focusBefore, `focus meter should drain (${focusBefore} → ${focusAfter})`);
@@ -537,7 +509,10 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   const page = await context.newPage();
   const errors = watchErrors(page);
   await page.goto(`${baseURL}/`);
-  await page.waitForTimeout(150);
+  // Wait for the home view itself rather than a fixed boot delay: reading
+  // activeElement before the app has finished setting up initial pad focus
+  // would capture a baseline from before the app was ready, not from it.
+  await page.locator('#home-view').waitFor({ state: 'visible' });
   const firstFocus = await page.evaluate(() => document.activeElement?.textContent?.trim());
   await pulsePad(page, 13);
   const nextFocus = await page.evaluate(() => document.activeElement?.textContent?.trim());
@@ -595,10 +570,14 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   assert.equal(await page.locator('#bank-button').getAttribute('aria-pressed'), 'false', 'playing the armed wall pass should disarm it');
   assert.equal(await focusSeconds(page), 0, 'gamepad wall pass should not earn focus');
   await page.evaluate(() => { window.__observedGame.game.focus = 1.5; });
+  // wall-clock: proving the held charge does NOT drain holds regardless of how
+  // many frames actually ran in this window.
   await page.waitForTimeout(150);
   assert.equal(await focusSeconds(page), 1.5, 'focus held while empty should require release before using later earnings');
   await page.evaluate(() => window.__setTestPad({ button: 6, pressed: false }));
-  await page.waitForTimeout(80);
+  // The release is only visible to the app on its next poll; give it a few
+  // frames to be sampled before treating focusBefore as a stable baseline.
+  await afterFrames(page);
   const focusBefore = await focusSeconds(page);
   await page.evaluate(() => window.__setTestPad({ button: 6, pressed: true, axes: [1, 0, 0, 0] }));
   await page.waitForFunction(
@@ -619,7 +598,11 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
     };
   });
   await page.evaluate(() => window.__setTestPad({ axes: [1, -1, 0, 0] }));
-  await page.waitForTimeout(250);
+  // Aiming is a per-frame render effect with no single "aim landed" DOM
+  // condition, so wait for a painted frame to actually carry an aim rather
+  // than a fixed slice of wall time.
+  await waitForGame(page, () => window.__renderAims.some(aim => aim && (aim.x || aim.y)), null,
+    { timeout: 10000, message: 'the stick should aim the court while playing' });
   const playingAims = await page.evaluate(() => window.__renderAims);
   await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 0, 0] }));
   assert.ok(playingAims.some(aim => aim && (aim.x || aim.y)),
@@ -632,7 +615,10 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   // court cannot keep repainting target lanes behind the pause menu.
   await page.evaluate(() => { window.__renderAims.length = 0; });
   await page.evaluate(() => window.__setTestPad({ axes: [1, -1, 1, -1] }));
-  await page.waitForTimeout(300);
+  // "the paused court should still be rendering" needs actual frames to have
+  // been painted, so wait for enough of them rather than guessing a duration.
+  await waitForGame(page, () => window.__renderAims.length > 3, null,
+    { timeout: 10000, message: 'the paused court should still be rendering' });
   const pausedAims = await page.evaluate(() => window.__renderAims);
   await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 0, 0] }));
   assert.ok(pausedAims.length > 3, `the paused court should still be rendering, got ${pausedAims.length} frames`);
@@ -640,6 +626,8 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
     `stick movement while paused must not aim the court, got ${JSON.stringify(pausedAims.slice(0, 5))}`);
   const pausedMovement = await page.evaluate(() => window.__observedGame.movementX);
   await page.evaluate(() => window.__setTestPad({ axes: [1, 0, 0, 0] }));
+  // wall-clock: proving the carrier does NOT move while paused holds
+  // regardless of how many frames actually ran in this window.
   await page.waitForTimeout(200);
   assert.equal(await page.evaluate(() => window.__observedGame.movementX), pausedMovement,
     'the stick must not move the carrier while paused');
@@ -801,7 +789,10 @@ if (includeMobileLayouts) await check('portrait and landscape touch layouts rema
     await page.locator('#joystick').dispatchEvent('pointermove', { pointerId: 7, pointerType: 'touch', clientX: center.x + push.x, clientY: center.y + push.y, buttons: 1 });
   }
   await page.waitForFunction(() => window.__observedGame.input?.x > .5);
-  await page.waitForTimeout(250);
+  // Movement accrues per animation frame from dt, so wait for the carrier to
+  // actually have covered the threshold this asserts on.
+  await waitForGame(page, start => window.__observedGame.movementX > start + 1, touchStart,
+    { timeout: 10000, message: 'joystick drag should move the carrier' });
   const touchMoved = await page.evaluate(() => window.__observedGame.movementX);
   assert.ok(touchMoved > touchStart + 1, 'joystick drag should move the carrier');
   if (cdp) await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
@@ -975,11 +966,15 @@ await check('losing possession holds the round until a fresh button press', asyn
   await page.evaluate(() => window.__observedGame.game.turnover('PASS INTERCEPTED'));
   await page.locator('#resume-prompt').waitFor({ state: 'visible' });
   await expectText(page.locator('#resume-reason'), /INTERCEPTED/i);
+  // wall-clock: proving the hold does NOT release while the key stays down
+  // holds regardless of how many frames actually ran in this window.
   await page.waitForTimeout(450);
   assert.equal(await page.locator('#resume-prompt').isVisible(), true,
     'a key that was already down must not release the hold');
   // The round is genuinely frozen while it waits.
   const held = await page.evaluate(() => window.__observedGame.game.time);
+  // wall-clock: proving the clock does NOT run while held holds regardless of
+  // how many frames actually ran in this window.
   await page.waitForTimeout(300);
   assert.equal(await page.evaluate(time => Math.abs(window.__observedGame.game.time - time) < 0.01, held), true,
     'the clock must not run while the round waits for the player');
@@ -1055,6 +1050,8 @@ await check('a turnover says its piece exactly once', async () => {
   // Once, in the hold overlay — which is also the live region a screen reader
   // hears, since #resume-reason is role=status aria-live=assertive.
   await expectText(page.locator('#resume-reason'), /INTERCEPTED/i);
+  // wall-clock: proving the announcement strip stays empty holds regardless
+  // of how many frames actually ran in this window.
   await page.waitForTimeout(500);
   assert.equal((await page.locator('#game-announcement').textContent()).trim(), '',
     'the hold overlay owns the message, so the announcement strip must be empty');
@@ -1140,7 +1137,10 @@ await check('the right stick picks the smart-pass target and marks it on the cou
   const withTarget = await page.locator('#court').evaluate(c => c.toDataURL());
   await page.keyboard.press('Escape');
   await page.locator('#pause-menu').waitFor({ state: 'visible' });
-  await page.waitForTimeout(150);
+  // Clearing the target is itself a per-frame render effect, so wait for the
+  // real clear rather than a fixed slice of wall time.
+  await waitForGame(page, () => window.__targets.at(-1) === null, null,
+    { timeout: 10000, message: 'a paused round should select nobody' });
   assert.equal(await page.locator('#court-wrap').getAttribute('data-target'), '',
     'a paused round selects nobody');
   assert.equal(await page.evaluate(() => window.__targets.at(-1)), null);

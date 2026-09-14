@@ -4,6 +4,7 @@ import { accessSync, constants } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { freePort } from "./free-port.mjs";
 import { gotoArena, expectedCourtAspect } from "./open-arena.mjs";
+import { afterFrames } from "./wait.mjs";
 
 const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -66,13 +67,10 @@ function errorsFor(page) {
   return errors;
 }
 async function settled(page) {
-  await page.evaluate(
-    () =>
-      new Promise((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(resolve)),
-      ),
-  );
-  await page.waitForTimeout(100);
+  // Layout/paint settling after a navigation or resize is a per-frame effect
+  // with no single observable condition, so wait for real frames rather
+  // than a fixed slice of wall time.
+  await afterFrames(page, 6);
 }
 async function openPauseMenu(page) {
   if (!(await page.locator("#pause-menu").isVisible())) {
@@ -496,6 +494,10 @@ await check(
     });
     await page.locator("#start-button").click();
     await page.waitForFunction(() => window.__navGame);
+    // wall-clock: this just gives the round some genuine elapsed game time
+    // before capturing a baseline, so that "leaving freezes it" below has a
+    // moving clock to prove stopped; the comparison that matters is the
+    // did-not-change one further down.
     await page.waitForTimeout(180);
     const beforeHome = await page.evaluate(() => ({
       time: window.__navGame.time,
@@ -507,6 +509,8 @@ await check(
     assert.match(await page.locator("#title-play").textContent(), /Resume/i);
     assert.equal(await page.locator("#court-list button").count(), 6);
     const frozen = await page.evaluate(() => window.__navGame.time);
+    // wall-clock: proving the round clock does NOT run once home is reached
+    // holds regardless of how many frames actually ran in this window.
     await page.waitForTimeout(180);
     assert.equal(
       await page.evaluate(
@@ -1502,7 +1506,10 @@ await check(
     // desktop width (1080px) — the header must not have been fixed for one
     // width by breaking the other.
     await page.setViewportSize({ width: 1080, height: 1024 });
-    await page.waitForTimeout(100);
+    // A resize's layout settling is a per-frame effect with no single
+    // observable condition, so wait for real frames rather than a fixed
+    // slice of wall time.
+    await afterFrames(page, 6);
     const narrowTitleBox = await page.locator(".hl-title").boundingBox();
     assert.ok(
       narrowTitleBox && narrowTitleBox.height <= titleLineHeight * 1.4,

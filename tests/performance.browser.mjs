@@ -122,7 +122,10 @@ try {
   );
   await page.locator("#start-button").click();
   await page.locator("#game-overlay").waitFor({ state: "hidden" });
-  // Let startup work settle before recording a sustained, interactive scene.
+  // wall-clock: this is sampling PerformanceObserver long-task entries over a
+  // real elapsed window to let one-time startup work (bundle parse, first
+  // paint) drain out of the sample before the sustained-scene measurement
+  // below begins - it is a genuine timer window, not a per-frame condition.
   await page.waitForTimeout(1000);
   const warmupLongTasks = await page.evaluate(() => {
     const durations = window.__desktopPerformance.longTasks.splice(0);
