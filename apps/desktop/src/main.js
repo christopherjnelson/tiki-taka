@@ -1149,6 +1149,22 @@ function chooseTriangleTarget(demo) {
 function chooseOneTouchTarget(demo) {
   return (demo.carrier + 1) % 4;
 }
+// One-touch is a QUEUED mechanic, not a fast-reaction one: a player presses
+// pass while the ball is still travelling and Game#receive releases it the
+// instant it lands (see queuePass() in the engine, and the
+// "QUEUED -> N - RELEASE ON ARRIVAL" readout in the HUD). The demo used to
+// wait for the ball, then throw about 100ms later - inside the engine's
+// window, so it scored as a one-touch, but on screen it read as trapping the
+// ball and holding it. Queueing mid-flight is both what a player actually
+// does and what it should look like: the ball never settles.
+function queueNextOneTouch(demo) {
+  if (currentSetPiece() !== "onetouch") return;
+  if (!demo.ball || demo.queuedPass) return;
+  // The ball's destination is the next carrier, so the pass after this one
+  // goes to whoever follows THEM in the round robin.
+  const next = (demo.ball.to + 1) % 4;
+  demo.queuePass(next, false);
+}
 // Hit the bonus zone: pass to whichever teammate is currently standing in
 // it, if any are. The zone drifts on its own schedule so this often isn't
 // available the moment the step starts - SET_PIECE_PATIENCE.zone covers it.
@@ -1357,12 +1373,12 @@ function stepAttract(dt) {
   // teammates and the press on its own.
   let x = 0,
     y = 0;
-  // The one-touch set piece needs the receiving carrier to stay put (Game's
-  // own one-touch window allows only ~8px of drift - see ONE_TOUCH in
-  // game.js), including on the frames where the immediate re-pass below is
-  // still blocked by the engine's own pass cooldown, so it holds still
-  // rather than drifting for the whole step.
-  if (currentSetPiece() !== "onetouch") {
+  // Drift is suppressed only while the engine actually has a one-touch
+  // window open on this carrier (~8px of tolerance, see ONE_TOUCH in
+  // game.js). With the next pass queued mid-flight that window is now
+  // effectively zero - the ball is released on arrival - so the players keep
+  // moving through the chain instead of standing still waiting for it.
+  if (!demo.oneTouchEligible) {
     const nearest = demo.defenders
       .map((defender) => ({ defender, gap: distance(defender, carrier) }))
       .sort((a, b) => a.gap - b.gap)[0];
@@ -1374,6 +1390,7 @@ function stepAttract(dt) {
     y += (310 - carrier.y) / 560;
   }
   demo.update(dt, { x, y, focus: false });
+  queueNextOneTouch(demo);
   // The one-touch set piece needs consecutive passes thrown back-to-back
   // (see chooseOneTouchTarget) rather than paced on the usual timer, so it
   // bypasses attractPassIn entirely while it's the active step - Game#pass's
