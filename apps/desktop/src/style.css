@@ -2841,7 +2841,7 @@ body.play-view #bank-button {
     transition-duration: 0.01ms !important;
   }
   .boot-sync-mark,
-  .hl-refresh[aria-busy="true"] > span:first-child {
+  .hl-refresh[aria-busy="true"] .hl-refresh-icon {
     animation: none !important;
   }
 }
@@ -4138,26 +4138,37 @@ body:has(.noscript) .boot-sync {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  border: 1px solid color-mix(in srgb, var(--line), var(--accent) 30%);
+  justify-content: center;
+  box-sizing: border-box;
+  /* Matches the adjacent segmented toggle's computed 26.5px outer height. */
+  width: 26.5px;
+  height: 26.5px;
+  padding: 0;
+  border: 1px solid var(--line);
   border-radius: 3px;
-  padding: 4px 7px;
-  background: color-mix(in srgb, var(--surface), #000 30%);
-  color: var(--muted);
-  font: 700 10px/1 var(--sign);
-  letter-spacing: .7px;
+  background: color-mix(in srgb, var(--surface), #000 45%);
+  color: var(--ink);
   cursor: pointer;
+}
+.hl-refresh-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
 }
 .hl-refresh:hover,
 .hl-refresh:focus-visible {
   color: var(--accent);
   border-color: var(--accent);
 }
+.hl-refresh:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .hl-refresh:disabled {
   cursor: progress;
-  opacity: .7;
+  opacity: .65;
 }
-.hl-refresh[aria-busy="true"] > span:first-child {
+.hl-refresh[aria-busy="true"] .hl-refresh-icon {
   animation: boot-sync-spin .8s linear infinite;
 }
 @keyframes boot-sync-spin {
