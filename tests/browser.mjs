@@ -94,6 +94,20 @@ async function focusSeconds(page) {
   return page.evaluate(() => window.__observedGame.game.focus);
 }
 
+// The pad is sampled once per animation frame, and the HUD it feeds is written
+// in that same frame. So "wait for the poll to see this" means waiting for
+// FRAMES, not for milliseconds - on a loaded runner a fixed timeout can expire
+// before the loop has ticked even once, and the test then reads state from
+// before its own input. Waiting on frames scales with whatever the machine is
+// actually managing.
+async function afterFrames(page, count = 3) {
+  await page.evaluate(async (n) => {
+    for (let i = 0; i < n; i++) {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  }, count);
+}
+
 async function waitForPassToSettle(page, previousPasses = 0, timeout = 30000) {
   await page.waitForFunction(count => {
     const game = window.__observedGame?.game;
@@ -587,7 +601,11 @@ await check('actual gamepad polling supports menus, play, focus, pause, and disc
   await page.waitForTimeout(80);
   const focusBefore = await focusSeconds(page);
   await page.evaluate(() => window.__setTestPad({ button: 6, pressed: true, axes: [1, 0, 0, 0] }));
-  await page.waitForTimeout(350);
+  await page.waitForFunction(
+    (before) => window.__observedGame.game.focus < before,
+    focusBefore,
+    { timeout: 15000 },
+  );
   await page.evaluate(() => window.__setTestPad({ button: 6, pressed: false, axes: [0, 0, 0, 0] }));
   const focusAfter = await focusSeconds(page);
   assert.ok(focusAfter < focusBefore, 'LT should consume focus through the real animation poll');
@@ -1095,7 +1113,7 @@ await check('the right stick picks the smart-pass target and marks it on the cou
   const chosen = new Set();
   for (const axes of [[0, 0, 0, -1], [0, 0, 1, 0], [0, 0, 0, 1]]) {
     await page.evaluate(a => window.__setTestPad({ axes: a }), axes);
-    await page.waitForTimeout(200);
+    await afterFrames(page);
     const target = await page.locator('#court-wrap').getAttribute('data-target');
     assert.match(target || '', /^[0-3]$/, `the stick must select a teammate, got ${target}`);
     chosen.add(target);
