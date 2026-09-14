@@ -209,6 +209,26 @@ test("getLeaderboard selects and maps difficulty, and accepts an optional diffic
   assert.deepEqual(result.entries[0], { username: "player", score: 900, passes: 12, bestOneTouch: 4, triangles: 0, oles: 0, splits: 0, zones: 0, difficulty: "ruthless", createdAt: "2026-09-11T00:00:00Z" });
 });
 
+test("getLeaderboard forwards an optional AbortSignal without requiring it", async () => {
+  const controller = new AbortController();
+  let receivedSignal;
+  const query = {
+    eq() { return query; },
+    abortSignal(signal) { receivedSignal = signal; return query; },
+    order() { return query; },
+    limit: async () => ({ data: [], error: null }),
+  };
+  const client = {
+    auth: { getSession: async () => ({ data: { session: null }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
+    from: (table) => table === "leaderboard_entries" ? { select: () => query } : (() => { throw new Error(`unexpected table ${table}`); })(),
+  };
+  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+
+  await adapter.getLeaderboard({ signal: controller.signal });
+
+  assert.equal(receivedSignal, controller.signal);
+});
+
 test("Supabase adapter generates a UUIDv4 retry id without crypto.randomUUID", async () => {
   const writes = [];
   const user = { id: "user-1", email: "player@example.com", user_metadata: { username: "player" } };

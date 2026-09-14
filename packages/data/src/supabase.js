@@ -378,11 +378,15 @@ export function createSupabaseDataAdapter({
         return statsFor(user);
       }, () => guest.recordRound(round));
     },
-    async getLeaderboard({ mode = "career", court, difficulty: tier, limit = 10 } = {}) {
+    async getLeaderboard({ mode = "career", court, difficulty: tier, limit = 10, signal } = {}) {
       try {
         let query = supabase.from("leaderboard_entries").select("username, mode, court, score, passes, best_one_touch, triangles, oles, splits, zones, difficulty, created_at").eq("mode", mode);
         if (court !== undefined && court !== null) query = query.eq("court", court);
         if (tier !== undefined && tier !== null) query = query.eq("difficulty", difficulty(tier));
+        // Supabase/PostgREST accepts an AbortSignal on the query builder. Do
+        // not invoke the modifier when omitted so existing client adapters
+        // and lightweight test doubles retain the original contract.
+        if (signal !== undefined) query = query.abortSignal(signal);
         const result = await query.order("score", { ascending: false }).order("created_at", { ascending: true }).limit(Math.min(Math.max(integer(limit), 1), 100));
         throwIfError(result.error, "Supabase could not load the leaderboard.");
         return { mode, court: court ?? null, difficulty: tier ?? null, entries: (result.data ?? []).map((row) => ({ username: row.username ?? "Player", score: number(row.score), passes: integer(row.passes), bestOneTouch: integer(row.best_one_touch), triangles: integer(row.triangles), oles: integer(row.oles), splits: integer(row.splits), zones: integer(row.zones), difficulty: difficulty(row.difficulty), createdAt: row.created_at })) };

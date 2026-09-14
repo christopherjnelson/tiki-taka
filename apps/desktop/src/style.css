@@ -2840,6 +2840,10 @@ body.play-view #bank-button {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+  .boot-sync-mark,
+  .hl-refresh[aria-busy="true"] > span:first-child {
+    animation: none !important;
+  }
 }
 @media (min-width: 701px) and (max-width: 900px),
   (pointer: coarse) and (min-width: 701px) and (max-width: 1024px) {
@@ -4101,6 +4105,63 @@ body.play-view .arena-view .below-court {
 }
 .home-view[hidden] {
   display: none;
+}
+.boot-sync {
+  position: fixed;
+  z-index: 10000;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  background: #100b25;
+  color: var(--ink);
+  font: 700 14px/1.2 var(--sign);
+  letter-spacing: 1.2px;
+  text-align: center;
+}
+.boot-sync[hidden] {
+  display: none;
+}
+/* With scripting disabled, the body-level <noscript> contents are parsed as
+   real elements. Let its instruction be the only full-screen fallback; when
+   scripting is enabled those contents are text, so this selector never wins. */
+body:has(.noscript) .boot-sync {
+  display: none;
+}
+.boot-sync-mark {
+  color: var(--accent);
+  font: 32px/1 var(--sign);
+  animation: boot-sync-spin 1s linear infinite;
+}
+.hl-refresh {
+  appearance: none;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid color-mix(in srgb, var(--line), var(--accent) 30%);
+  border-radius: 3px;
+  padding: 4px 7px;
+  background: color-mix(in srgb, var(--surface), #000 30%);
+  color: var(--muted);
+  font: 700 10px/1 var(--sign);
+  letter-spacing: .7px;
+  cursor: pointer;
+}
+.hl-refresh:hover,
+.hl-refresh:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.hl-refresh:disabled {
+  cursor: progress;
+  opacity: .7;
+}
+.hl-refresh[aria-busy="true"] > span:first-child {
+  animation: boot-sync-spin .8s linear infinite;
+}
+@keyframes boot-sync-spin {
+  to { transform: rotate(360deg); }
 }
 .home-intro {
   min-width: 0;
