@@ -2287,6 +2287,7 @@ const hudCache = {
   isPlaying: null,
   isRound: null,
   courtTarget: null,
+  musicFocusActive: null,
 };
 
 function resetHudCache() {
@@ -2314,6 +2315,7 @@ function resetHudCache() {
   hudCache.focusTier = "";
   hudCache.energyBoostActive = null;
   hudCache.energyFocusActive = null;
+  hudCache.musicFocusActive = null;
 }
 
 function syncFocusButtons() {
@@ -2924,6 +2926,18 @@ function syncHud() {
   if (isFocus !== hudCache.energyFocusActive) {
     $("energy-info").classList.toggle("focus-active", isFocus);
     hudCache.energyFocusActive = isFocus;
+  }
+  // The engine only advances game.focusActive on a simulated tick, so it goes
+  // stale (stuck true) while paused instead of clearing itself. syncHud runs
+  // every frame the arena is visible, paused or not, so effective Focus for
+  // the soundtrack is gated on "playing" too — the same reasoning that keeps
+  // a mid-Focus pause from leaving the music slowed for as long as the menu
+  // is open. phase !== "playing" after the round ends covers that case too,
+  // on top of the engine's own reset in finish()/turnover().
+  const musicFocus = phase === "playing" && isFocus;
+  if (musicFocus !== hudCache.musicFocusActive) {
+    music.setFocus(musicFocus);
+    hudCache.musicFocusActive = musicFocus;
   }
 
   const goalPercent = game.config.target
