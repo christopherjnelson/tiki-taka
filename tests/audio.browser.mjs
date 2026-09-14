@@ -591,6 +591,108 @@ await check('the music bus reports its energy while playing and null when there 
   await context.close();
 });
 
+await check('holding Focus slows the source and dulls the filter, releasing restores both, and neither sticks after the round ends', async () => {
+  const context = await relaxedBrowser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const errors = errorsFor(page);
+  await page.goto(`${baseURL}/`);
+  const result = await page.evaluate(async () => {
+    const { createMusic } = await import('/apps/desktop/src/music.js');
+    const { TRACKS } = await import('/apps/desktop/src/playlist.js');
+
+    // Capture the real BiquadFilterNode/BufferSourceNode music.js creates, so
+    // the assertions below read actual Web Audio param values rather than a
+    // flag invented for the test.
+    window.__musicGraph = { filters: [], sources: [] };
+    const makeFilter = AudioContext.prototype.createBiquadFilter;
+    AudioContext.prototype.createBiquadFilter = function patchedFilter(...args) {
+      const node = makeFilter.apply(this, args);
+      window.__musicGraph.filters.push(node);
+      return node;
+    };
+    const makeSource = AudioContext.prototype.createBufferSource;
+    AudioContext.prototype.createBufferSource = function patchedSource(...args) {
+      const node = makeSource.apply(this, args);
+      window.__musicGraph.sources.push(node);
+      return node;
+    };
+
+    const music = createMusic({
+      tracks: TRACKS.slice(0, 1),
+      resolve: track => new URL(`/public/audio/${track.file}`, location.origin).href,
+    });
+    music.setEnabled(true);
+    music.unlock();
+
+    // The ramps run on the Web Audio clock (120ms), independent of animation
+    // frames, so this polls real elapsed time rather than a frame condition -
+    // there is nothing frame-based to wait on here.
+    const until = async (predicate, timeoutMs) => {
+      const start = performance.now();
+      while (performance.now() - start < timeoutMs) {
+        if (predicate()) return true;
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      return predicate();
+    };
+    const lastFilter = () => window.__musicGraph.filters.at(-1);
+    const lastSource = () => window.__musicGraph.sources.at(-1);
+
+    await until(() => music.state === 'playing', 20_000);
+    const openRate = lastSource().playbackRate.value;
+    const openFreq = lastFilter().frequency.value;
+
+    music.setFocus(true);
+    await until(() => lastSource().playbackRate.value < 0.85, 2000);
+    await until(() => lastFilter().frequency.value < 1500, 2000);
+    const focusedRate = lastSource().playbackRate.value;
+    const focusedFreq = lastFilter().frequency.value;
+
+    music.setFocus(false);
+    await until(() => lastSource().playbackRate.value > 0.95, 2000);
+    await until(() => lastFilter().frequency.value >= openFreq * 0.99, 2000);
+    const releasedRate = lastSource().playbackRate.value;
+    const releasedFreq = lastFilter().frequency.value;
+
+    // Hold Focus again, then release it the way syncHud does when the round
+    // stops being "playing" (paused or finished) - nothing should stay stuck.
+    music.setFocus(true);
+    await until(() => lastSource().playbackRate.value < 0.85, 2000);
+    music.setFocus(false);
+    await until(() => lastSource().playbackRate.value > 0.95, 2000);
+    await until(() => lastFilter().frequency.value >= openFreq * 0.99, 2000);
+    const afterEndRate = lastSource().playbackRate.value;
+    const afterEndFreq = lastFilter().frequency.value;
+
+    const state = music.state;
+    // Reported so the assertions can compare against what this context can
+    // actually do: music.js clamps the open cutoff to sampleRate * 0.45, so a
+    // context that hands out a low rate has a legitimately lower open value.
+    const sampleRate = lastFilter().context.sampleRate;
+    music.setEnabled(false);
+    return {
+      state, sampleRate, openRate, openFreq, focusedRate, focusedFreq,
+      releasedRate, releasedFreq, afterEndRate, afterEndFreq,
+    };
+  });
+  assert.equal(result.state, 'playing', `the track should be running, got ${result.state}`);
+  assert.equal(result.openRate, 1, 'not focused: playback rate should be unmodified');
+  assert.ok(result.openFreq >= Math.min(10_000, result.sampleRate * 0.45),
+    `not focused: the filter should sit open, got ${result.openFreq}Hz at ${result.sampleRate}Hz`);
+  assert.ok(result.focusedRate <= 0.85 && result.focusedRate >= 0.75,
+    `holding Focus should slow the source to about 0.8x, got ${result.focusedRate}`);
+  assert.ok(result.focusedFreq < 1500, `holding Focus should dull the filter, got ${result.focusedFreq}Hz`);
+  assert.ok(result.releasedRate > 0.95, `releasing Focus should restore playback rate, got ${result.releasedRate}`);
+  assert.ok(result.releasedFreq >= result.openFreq * 0.99,
+    `releasing Focus should reopen the filter to where it started, got ${result.releasedFreq}Hz vs ${result.openFreq}Hz`);
+  assert.ok(result.afterEndRate > 0.95,
+    `nothing should stay slowed after the round stops being "playing", got ${result.afterEndRate}`);
+  assert.ok(result.afterEndFreq >= result.openFreq * 0.99,
+    `nothing should stay dulled after the round stops being "playing", got ${result.afterEndFreq}Hz`);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 await browser.close();
 await relaxedBrowser.close();
 if (server) server.kill();

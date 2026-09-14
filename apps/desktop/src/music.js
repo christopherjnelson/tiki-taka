@@ -21,6 +21,19 @@
 
 const FADE = 0.35;
 
+// Focus slow-motion: a tape-slowdown feel to match the clock's own slow-mo
+// (packages/engine/src/game.js `focusedTime * 0.68`). 0.8, not that clock's
+// ~0.32, because matching the sim exactly turns the soundtrack into a drone;
+// 0.8 still reads as "the world just slowed" without losing the track.
+const FOCUS_RATE = 0.8;
+// Lowpass cutoff while Focus is held, for the "underwater" dulling. OPEN_HZ
+// is pinned near (but under) Nyquist per context, so the filter is
+// effectively transparent when Focus is not active — it must never colour
+// the normal-speed mix, only the focused one.
+const FOCUS_HZ = 900;
+const OPEN_HZ = 18000;
+const FOCUS_RAMP = 0.12;
+
 function clampTrim(value, fallback) {
   const trim = Number(value);
   if (!Number.isFinite(trim)) return fallback;
@@ -54,6 +67,12 @@ export function createMusic({
     analyser = null,
     analyserData = null,
     source = null,
+    // Sits between the source and the gain: source -> filter -> gain ->
+    // {destination, analyser}. It is created once in makeContext and outlives
+    // every track change, so a Focus ramp already in flight survives a track
+    // boundary without restarting; only `source` is per-track.
+    filter = null,
+    focusOn = false,
     buffer = null,
     loading = null,
     // Which track `buffer` and `loading` belong to, so a skip that lands
@@ -71,6 +90,64 @@ export function createMusic({
 
   const current = () => playlist[index] || null;
 
+  // Clamped under Nyquist for whatever sample rate this context landed on
+  // (mobile audio hardware can hand out low rates), so the "open" state never
+  // clips a param range and stays inaudible as a filter.
+  function openHz() {
+    return context ? Math.min(OPEN_HZ, context.sampleRate * 0.45) : OPEN_HZ;
+  }
+  function focusHz() {
+    return context ? Math.min(FOCUS_HZ, context.sampleRate * 0.45) : FOCUS_HZ;
+  }
+
+  // Buffer position advances at playbackRate, not at wall-clock speed. Fold
+  // the time played so far into `offset` at the rate that was in effect for
+  // it, and restart the clock. Called before every rate change and before a
+  // stop, so the "where was this track" bookkeeping stays true through a
+  // Focus hold - without it, muting or skipping mid-Focus resumes up to 20%
+  // of the focused time too far ahead.
+  function flushOffset() {
+    if (!context || !buffer || !source) return;
+    const now = context.currentTime;
+    offset =
+      (offset + (now - startedAt) * source.playbackRate.value) %
+      buffer.duration;
+    startedAt = now;
+  }
+
+  // Ramps playbackRate and the filter cutoff to the current focusOn target.
+  // `instant` snaps a brand-new source straight to the target with no ramp —
+  // used when a track change hands Focus a fresh node mid-hold, so playback
+  // starts at the right speed instead of audibly ramping down again.
+  function applyFocus(instant) {
+    if (!context) return;
+    // Bank the position played at the OLD rate before the new one applies.
+    // `instant` is a brand-new source that has played nothing yet, so there
+    // is nothing to bank and startedAt is already correct.
+    if (!instant) flushOffset();
+    const now = context.currentTime;
+    const rate = focusOn ? FOCUS_RATE : 1;
+    const hz = focusOn ? focusHz() : openHz();
+    if (source) {
+      source.playbackRate.cancelScheduledValues(now);
+      if (instant) {
+        source.playbackRate.setValueAtTime(rate, now);
+      } else {
+        source.playbackRate.setValueAtTime(source.playbackRate.value, now);
+        source.playbackRate.linearRampToValueAtTime(rate, now + FOCUS_RAMP);
+      }
+    }
+    if (filter) {
+      filter.frequency.cancelScheduledValues(now);
+      if (instant) {
+        filter.frequency.setValueAtTime(hz, now);
+      } else {
+        filter.frequency.setValueAtTime(filter.frequency.value, now);
+        filter.frequency.linearRampToValueAtTime(hz, now + FOCUS_RAMP);
+      }
+    }
+  }
+
   function makeContext() {
     if (context) return context;
     const Ctor = window.AudioContext || window.webkitAudioContext;
@@ -80,6 +157,19 @@ export function createMusic({
       gain = context.createGain();
       gain.gain.value = 0;
       gain.connect(context.destination);
+      try {
+        filter = context.createBiquadFilter();
+        filter.type = "lowpass";
+        // Butterworth Q: flat passband, so the open state adds no coloration
+        // or resonance of its own.
+        filter.Q.value = 0.707;
+        filter.frequency.value = openHz();
+        filter.connect(gain);
+      } catch {
+        // No filter is not a reason to lose the soundtrack; Focus simply
+        // keeps the pitch drop without the muffling.
+        filter = null;
+      }
       try {
         analyser = context.createAnalyser();
         analyser.fftSize = 1024;
@@ -133,8 +223,7 @@ export function createMusic({
   function stopSource({ keepPosition = true } = {}) {
     if (!source) return;
     // Remember where the track was so a mute/unmute does not restart it.
-    if (keepPosition && context && buffer)
-      offset = (context.currentTime - startedAt + offset) % buffer.duration;
+    if (keepPosition && context && buffer) flushOffset();
     else offset = 0;
     // Cleared before stop() so the natural-end handler cannot fire for a
     // deliberate stop and walk the playlist on unmute or on a skip.
@@ -170,7 +259,12 @@ export function createMusic({
       // had. With more than one track the source has to end for the next to be
       // scheduled, and the playlist itself supplies the continuity.
       source.loop = playlist.length <= 1;
-      source.connect(gain);
+      source.connect(filter || gain);
+      // A fresh BufferSourceNode always starts at rate 1: snap it to whatever
+      // Focus state is already current (holding across a track change is one
+      // of the required cases) rather than a click-free ramp, since there is
+      // no prior playback at the wrong rate to ramp away from.
+      applyFocus(true);
       startedAt = context.currentTime;
       source.onended = () => {
         // A natural end, and only for the track still selected: stopSource()
@@ -233,6 +327,20 @@ export function createMusic({
   }
 
   return {
+    // Focus slow-motion. Callers (main.js's syncHud, on transitions only —
+    // this is not meant to run every frame) pass the *effective* Focus state,
+    // already false while paused or after the round ends even if the engine's
+    // own flag is still stale from the last simulated frame. A no-op call
+    // (same state twice) costs nothing: the early return skips scheduling.
+    setFocus(active) {
+      const next = Boolean(active);
+      if (next === focusOn) return;
+      focusOn = next;
+      applyFocus(false);
+    },
+    get focusActive() {
+      return focusOn;
+    },
     // Called from any real user gesture; browsers block audio before one.
     unlock() {
       if (unlocked) {
