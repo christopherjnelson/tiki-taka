@@ -66,6 +66,54 @@ if (buildIdentityElement) {
   buildIdentityElement.textContent = buildIdentityText;
   buildIdentityElement.setAttribute("aria-label", `Build identity: ${buildIdentityText}`);
 }
+// Same pattern as buildIdentity just above: baked in at build/dev time from
+// the committed CHANGELOG.md (see scripts/changelog.mjs and
+// vite.desktop.config.js), never fetched at runtime. The fallback below only
+// matters when this file is served unbundled (serve.mjs with no SERVE_DIR,
+// which some browser suites use) - a real build or `npm start` always has
+// this defined, dev included, since both go through the same Vite config.
+const changelog = typeof __TIKI_TAKA_CHANGELOG__ !== "undefined"
+  ? __TIKI_TAKA_CHANGELOG__
+  : [];
+// Built once - the list is static for the lifetime of the page, there is no
+// runtime source for it to fall out of sync with - and left collapsed
+// (nested <details>, one per version) so opening the outer CHANGELOG group
+// never dumps every release's full prose into an already-dense dialog. Newest
+// first: that is simply CHANGELOG.md's own order (see scripts/changelog.mjs),
+// not a sort applied here.
+function renderChangelog() {
+  const list = $("changelog-list");
+  if (!list) return;
+  list.innerHTML = "";
+  for (const entry of changelog) {
+    const item = document.createElement("details");
+    item.className = "changelog-entry";
+    const summary = document.createElement("summary");
+    summary.textContent = `v${entry.version} — ${entry.date}`;
+    item.append(summary);
+    const body = document.createElement("div");
+    body.className = "changelog-body";
+    for (const paragraph of entry.summary) {
+      const p = document.createElement("p");
+      p.textContent = paragraph;
+      body.append(p);
+    }
+    for (const section of entry.sections) {
+      const heading = document.createElement("p");
+      heading.className = "changelog-heading";
+      heading.textContent = section.heading;
+      body.append(heading);
+      for (const paragraph of section.paragraphs) {
+        const p = document.createElement("p");
+        p.textContent = paragraph;
+        body.append(p);
+      }
+    }
+    item.append(body);
+    list.append(item);
+  }
+}
+renderChangelog();
 // Discord (or another OAuth provider) redirects back with `error` /
 // `error_description` in the query or hash when the player cancels or the
 // provider fails - e.g. closing the Discord consent window partway through.
@@ -556,7 +604,8 @@ const anyDialogOpen = () =>
   $("settings-dialog").open ||
   $("help-dialog").open ||
   $("account-dialog").open ||
-  $("score-save-dialog").open;
+  $("score-save-dialog").open ||
+  $("username-dialog").open;
 // Any menu that must swallow gameplay input before it reaches the court.
 const menuBlocking = () => menuOpen || anyDialogOpen();
 function syncPauseMenu() {
@@ -3490,13 +3539,24 @@ for (const id of ["music-toggle", "music-popup-toggle"]) {
     returnFocusToCourt();
   });
 }
+// The one skip implementation - the bar buttons, the settings binding rows'
+// keyboard/gamepad captures, and pollGamepad() all end up here rather than
+// each reimplementing it. Music off is a complete no-op: no playlist
+// advance, no state change at all, per the explicit brief this shipped
+// under - not even the rail-sync side effects below run. Music on at
+// volume zero still skips normally; it must never unmute as a side effect,
+// which is exactly what not touching settings.musicVolume here guarantees.
+// Audio unlocking is already handled before every click/keydown and fresh
+// gamepad press (see the global activation listeners and pollGamepad), so it
+// must not be repeated here while a track change is starting asynchronously.
+function skipTrack() {
+  if (!settings.musicOn) return;
+  music.skip(1);
+  syncMusicRail();
+  returnFocusToCourt();
+}
 for (const id of ["music-skip", "music-popup-skip"]) {
-  $(id)?.addEventListener("click", () => {
-    unlockAudio();
-    music.skip(1);
-    syncMusicRail();
-    returnFocusToCourt();
-  });
+  $(id)?.addEventListener("click", skipTrack);
 }
 // "input" fires for a mouse drag, an arrow key and the gamepad steps below
 // alike, so the level follows the control live and is written once it settles.
@@ -4205,6 +4265,25 @@ window.addEventListener("keydown", (e) => {
     togglePause();
     return;
   }
+  // Works on the home screen as well as mid-round, unlike the actions below
+  // that are gated on phase === "playing" - the soundtrack plays in both
+  // places. anyDialogOpen()/menuOpen already returned above, so this cannot
+  // fire while a dialog or the pause menu owns the keyboard; the target
+  // check on top of that keeps a plain "n" from skipping a track while it is
+  // being typed into a field this handler is not otherwise scoped to (there
+  // are none today - every <input> lives inside a <dialog> - but the check
+  // costs nothing and does not rely on that staying true).
+  if (action === "skipTrack") {
+    if (
+      !(e.target instanceof HTMLInputElement) &&
+      !(e.target instanceof HTMLTextAreaElement) &&
+      !(e.target instanceof HTMLSelectElement)
+    ) {
+      e.preventDefault();
+      skipTrack();
+    }
+    return;
+  }
   if (phase !== "playing" || e.target instanceof HTMLSelectElement) return;
   // The press that was still down when possession was lost is remembered, so
   // only a genuinely new key wakes the round back up.
@@ -4603,6 +4682,11 @@ function pollGamepad(dt) {
         : 0;
   const nav = (root, fallback) =>
     padNavigate(root, { dt, direction, horizontal, activate: tap(0), fallback });
+  // Skip track works on the home screen and mid-round alike (the soundtrack
+  // plays in both), so it is read here rather than inside any one of the
+  // view-scoped branches below - but never while a dialog or the pause menu
+  // owns the pad, where button 8 may mean something else to that surface.
+  if (!anyDialogOpen() && !menuOpen && tap(gb.skipTrack)) skipTrack();
   // Most modal context first: navigation is scoped to whatever is actually on
   // screen so the d-pad never wanders into controls the player cannot see.
   if ($("help-dialog").open) {

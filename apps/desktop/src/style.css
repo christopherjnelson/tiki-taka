@@ -411,6 +411,34 @@ input:focus-visible {
   background: transparent;
   font-size: 10px;
 }
+/* The invite's other home: #discord-invite in the top bar covers desktop and
+   is CSS-hidden below the same compact breakpoint (see .top-discord above),
+   so this row - styled like its sibling buttons even though it is a link -
+   only exists where the bar dropped it. */
+.discord-invite-link {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  text-decoration: none;
+  font-size: 10px;
+}
+.discord-invite-link:hover,
+.discord-invite-link:focus-visible {
+  color: #100923;
+  background: var(--cyan);
+  border-color: var(--cyan);
+  outline: none;
+}
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+  .discord-invite-link {
+    display: inline-flex;
+  }
+}
 .main {
   min-width: 0;
   min-height: 0;
@@ -1351,7 +1379,8 @@ dialog::backdrop {
   font-size: 9px;
 }
 .settings-gamepad,
-.settings-bindings {
+.settings-bindings,
+.settings-changelog {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
@@ -1377,8 +1406,18 @@ summary.settings-audio-heading {
   cursor: pointer;
   margin: 0;
 }
+.settings-gamepad:not([open]) > summary.settings-audio-heading,
+.settings-bindings:not([open]) > summary.settings-audio-heading,
+.settings-changelog:not([open]) > summary.settings-audio-heading {
+  /* A collapsed disclosure is still a control. Keep its hit area at least as
+     tall as the compact settings controls, rather than leaving a phone user
+     with only the 10px heading text to tap. Open desktop sections retain their
+     compact heading height so the full dialog continues to fit at 1080x1024. */
+  min-height: 24px;
+}
 .settings-gamepad[open] summary.settings-audio-heading,
-.settings-bindings[open] summary.settings-audio-heading {
+.settings-bindings[open] summary.settings-audio-heading,
+.settings-changelog[open] summary.settings-audio-heading {
   margin: 0 0 10px;
 }
 /* Driven off the `[open]` attribute explicitly rather than left to the
@@ -1388,7 +1427,8 @@ summary.settings-audio-heading {
    cases) when open instead of whatever the browser's built-in disclosure
    would fall back to. */
 .settings-gamepad > .gamepad-grid,
-.settings-bindings > .details-body {
+.settings-bindings > .details-body,
+.settings-changelog > .changelog-list {
   display: none;
 }
 .settings-gamepad[open] > .gamepad-grid {
@@ -1396,6 +1436,52 @@ summary.settings-audio-heading {
 }
 .settings-bindings[open] > .details-body {
   display: block;
+}
+.settings-changelog[open] > .changelog-list {
+  display: block;
+}
+/* Newest-release-first prose, kept out of the way of a dialog that is
+   already tight (see the markup comment in index.html): scrolls internally
+   past a modest height instead of pushing the dialog's own scroll further,
+   and each release stays a single collapsed line (its own nested <details>,
+   built in renderChangelog() in main.js) until opened. */
+.changelog-list {
+  max-height: 220px;
+  overflow-y: auto;
+}
+.changelog-entry {
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.changelog-entry:last-child {
+  margin-bottom: 0;
+  border-bottom: 0;
+}
+.changelog-entry summary {
+  cursor: pointer;
+  color: var(--muted);
+  font: 700 10px var(--sign);
+  letter-spacing: 0.5px;
+}
+.changelog-entry[open] summary {
+  color: var(--cyan);
+}
+.changelog-body {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.changelog-body p {
+  margin: 0 0 8px;
+}
+.changelog-body p:last-child {
+  margin-bottom: 0;
+}
+.changelog-heading {
+  color: #efe7ff;
+  font-weight: 700;
 }
 /* A landscape phone has ~300px of usable height once the top bar and the
    dialog's own outer margin are out, and this dialog's headline is sized
@@ -1426,7 +1512,8 @@ summary.settings-audio-heading {
     margin: 4px 0 0;
   }
   #settings-dialog .settings-gamepad,
-  #settings-dialog .settings-bindings {
+  #settings-dialog .settings-bindings,
+  #settings-dialog .settings-changelog {
     margin-top: 6px;
     padding-top: 6px;
   }
@@ -1439,7 +1526,10 @@ summary.settings-audio-heading {
 }
 @media (min-width: 901px) {
   .gamepad-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    /* One column per bindable action, so all six (skip track joined the
+       original five) stay on a single row at desktop widths - see the
+       comment on the base .gamepad-grid rule above. */
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
 .gamepad-field {
@@ -1529,7 +1619,7 @@ summary.settings-audio-heading {
    old 110px minimum and overflowing a 300px grid track. */
 @media (min-width: 901px) {
   .bindings-list {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
   }
   .binding-row {
     grid-template-columns: minmax(0, 1fr) minmax(76px, auto) minmax(76px, auto);
@@ -1892,6 +1982,23 @@ body.play-view .ambience {
 }
 .top-settings {
   display: inline-flex;
+}
+.top-discord {
+  text-decoration: none;
+}
+/* Icon-only past the same width the other bar labels collapse at (see the
+   `.top-bar-left .bar-button-label, .top-bar-right .bar-button-label` rule
+   below) - this link keeps its own label collapse in step with its
+   neighbours. Hidden entirely below the compact breakpoint the settings
+   dialog uses for its own tight layout (compactSettingsQuery in main.js);
+   #settings-discord-link picks the invite up there instead, since the bar
+   has no room left once fullscreen, Menu and the profile chip are on it too.
+   Never gated on accountsAvailable - the invite is not account
+   functionality and must stay reachable with no Supabase configuration. */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1024px) {
+  .top-discord {
+    display: none;
+  }
 }
 body[data-view="arena"] .top-pause,
 body[data-view="arena"] .top-home,
@@ -3796,6 +3903,7 @@ body.play-view #bank-button {
   line-height: 1.55;
 }
 .discord-button {
+  gap: 8px;
   background: #5865f2;
 }
 .account-divider {

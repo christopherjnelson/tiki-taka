@@ -354,6 +354,69 @@ await check('the volumes are reachable and operable by gamepad and survive a rel
   await context.close();
 });
 
+// The bound key and the bound pad button both advance the playlist, from the
+// home screen (no round needed - skip is not gated on phase === "playing").
+// #music-track's title attribute carries "<title> · track N of M", which is
+// read rather than the visible text so this does not depend on a track
+// actually having a display name.
+// Both the Node-side assertions and the in-page waitForGame predicates below
+// need this, so it is written once and read into the page as a string rather
+// than kept as two copies that could drift.
+const readTrackNumberInPage = () => {
+  const title = document.getElementById('music-track')?.title || '';
+  const match = /track (\d+) of (\d+)/.exec(title);
+  return match ? { index: Number(match[1]), count: Number(match[2]) } : null;
+};
+const trackNumber = page => page.evaluate(readTrackNumberInPage);
+
+await check('skip track: the bound key and the bound pad button both advance it, and music off is a true no-op', async () => {
+  const context = await browser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
+  await context.addInitScript(installPad);
+  const page = await context.newPage();
+  const errors = errorsFor(page);
+  await page.goto(`${baseURL}/`);
+  await page.locator('#home-view').waitFor({ state: 'visible' });
+  const before = await trackNumber(page);
+  assert.ok(before && before.count > 1, `the playlist needs more than one track for this test to mean anything, got ${JSON.stringify(before)}`);
+
+  // KeyN (default skipTrack binding) works from the home screen.
+  await page.keyboard.press('KeyN');
+  await waitForGame(page, (start) => {
+    const title = document.getElementById('music-track')?.title || '';
+    const match = /track (\d+) of (\d+)/.exec(title);
+    return Boolean(match) && Number(match[1]) !== start;
+  }, before.index, { timeout: 10_000, message: 'KeyN should advance the track from the home screen' });
+  const afterKey = await trackNumber(page);
+  assert.equal(afterKey.index, (before.index % before.count) + 1, 'KeyN should step to the next track');
+
+  // Gamepad button 8 (the default skipTrack binding) does the same.
+  await page.evaluate(() => window.__setTestPad({ button: 8, pressed: true }));
+  await waitForGame(page, (start) => {
+    const title = document.getElementById('music-track')?.title || '';
+    const match = /track (\d+) of (\d+)/.exec(title);
+    return Boolean(match) && Number(match[1]) !== start;
+  }, afterKey.index, { timeout: 10_000, message: 'gamepad button 8 should advance the track' });
+  await page.evaluate(() => window.__setTestPad({ button: 8, pressed: false }));
+  const afterPad = await trackNumber(page);
+  assert.equal(afterPad.index, (afterKey.index % afterKey.count) + 1, 'button 8 should step to the next track');
+
+  // With music off, neither control changes the playlist index or state.
+  await page.locator('#music-toggle').click();
+  assert.equal(await page.locator('#music-toggle').getAttribute('aria-pressed'), 'false');
+  await page.keyboard.press('KeyN');
+  await page.evaluate(() => window.__setTestPad({ button: 8, pressed: true }));
+  await afterFrames(page, 5);
+  await page.evaluate(() => window.__setTestPad({ button: 8, pressed: false }));
+  await afterFrames(page, 5);
+  const stillOff = await trackNumber(page);
+  assert.equal(stillOff.index, afterPad.index, 'music off must be a complete no-op: no playlist advance');
+  assert.equal(await page.locator('#music-toggle').getAttribute('aria-pressed'), 'false',
+    'skipping while off must never unmute as a side effect');
+
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 // The pass sound cannot be listened to from a test, so it is measured. The
 // graph is rendered through an OfflineAudioContext with the real Sound class
 // and the real master gain, and the numbers stand in for the ear: a body whose

@@ -1009,7 +1009,7 @@ async function offlineReload(baseURL) {
         smartPass: ['Space'], direct1: ['Digit1'], direct2: ['Digit2'],
         direct3: ['Digit3'], direct4: ['Digit4'], wallToggle: ['KeyB'],
         wallHold: ['ShiftLeft'], focusHold: ['KeyE'], boostHold: ['KeyR'],
-        shout: ['KeyF'], pause: ['Escape'],
+        shout: ['KeyF'], pause: ['Escape'], skipTrack: ['KeyN'],
       };
       const stats = () => ({ games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 });
       const data = () => ({

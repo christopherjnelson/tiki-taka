@@ -59,5 +59,5 @@ tests/                   # Node test runner unit tests and Playwright browser in
    - Default is guest-only device-local storage.
    - Supabase is optional (configured via `.env`). Account UI is hidden if credentials are not present.
    - Normalization functions (`normalizeProgress`, `normalizeSettings`) must safely recover from invalid/partial data.
-6. **Version Numbers**: Update only in root `package.json`.
+6. **Version Numbers**: Update only in root `package.json`. Add the release's entry to `CHANGELOG.md` in the same commit as the version bump — the in-app changelog (Settings) is baked from that file at build time and is never fetched at runtime, so a release that skips this ships a stale changelog silently.
 7. **Untracked Artifacts**: Never commit `dist/`, `test-results/`, `.tooling/`, `.env`, or caches.

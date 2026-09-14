@@ -30,6 +30,8 @@ test("defaults retain WASD and arrows and define every playable action", () => {
   assert.equal(settings.gamepadBindings.wallToggle, 2);
   assert.equal(settings.gamepadBindings.focusHold, 6);
   assert.equal(settings.gamepadBindings.boostHold, 7);
+  assert.equal(settings.gamepadBindings.skipTrack, 8, "default skip-track button should be Select/View (button 8)");
+  assert.deepEqual(settings.bindings.skipTrack, ["KeyN"]);
 });
 
 test("settings save and load round trip independently under their versioned key", () => {
@@ -112,6 +114,32 @@ test("Focus slowdown and ability mode default to today's behaviour and survive j
   const junk = normalizeSettings({ focusSlowdownOn: "nah", abilityMode: "latched" });
   assert.equal(junk.focusSlowdownOn, true);
   assert.equal(junk.abilityMode, "toggle");
+});
+
+test("skip track binds KeyN and gamepad button 8 by default, and junk falls back", () => {
+  const defaults = defaultSettings();
+  assert.deepEqual(defaults.bindings.skipTrack, ["KeyN"]);
+  assert.equal(defaults.gamepadBindings.skipTrack, 8);
+  // Absent (every settings blob written before this action existed) must
+  // mean the same default, not an unbound action.
+  const old = normalizeSettings({ theme: "light", preset: "arrows" });
+  assert.deepEqual(old.bindings.skipTrack, ["KeyN"]);
+  assert.equal(old.gamepadBindings.skipTrack, 8);
+  // An explicit rebind sticks, including to the newly-valid button 8.
+  const rebound = normalizeSettings({
+    bindings: { skipTrack: ["KeyM"] },
+    gamepadBindings: { skipTrack: 3 },
+  });
+  assert.deepEqual(rebound.bindings.skipTrack, ["KeyM"]);
+  assert.equal(rebound.gamepadBindings.skipTrack, 3);
+  // Junk normalizes to the defaults, never to an out-of-range button.
+  const junk = normalizeSettings({
+    bindings: { skipTrack: [4, "", null] },
+    gamepadBindings: { smartPass: 8, skipTrack: 99 },
+  });
+  assert.deepEqual(junk.bindings.skipTrack, []);
+  assert.equal(junk.gamepadBindings.smartPass, 0, "button 8 is only valid for skip track");
+  assert.equal(junk.gamepadBindings.skipTrack, 8, "an out-of-range button must fall back to the default");
 });
 
 test("presets return independent bindings and resolve held actions", () => {

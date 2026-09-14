@@ -176,6 +176,28 @@
               <path d="M14.5 10.5v3a1 1 0 0 1-1 1h-3" />
             </svg>
           </button>
+          <!-- The community invite, not an account feature: it must stay
+          visible even with no Supabase configuration (see accountsAvailable
+          in main.js, which only hides #discord-signin and the account/profile
+          chips). Only in the bar at desktop widths - #settings-discord-row
+          below carries the same link on a phone/compact layout, where the bar
+          has no room left (see the shared compactSettingsQuery breakpoint in
+          style.css). A plain link, not a button: it leaves the page, so it
+          gets target="_blank" and rel="noopener" like any outbound link. -->
+          <a
+            id="discord-invite"
+            class="bar-button top-discord"
+            href="https://discord.gg/QgVR4YwnC"
+            target="_blank"
+            rel="noopener"
+            title="Join the Discord"
+            aria-label="Join the Discord community server"
+          >
+            <svg class="bar-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
+              <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
+            </svg>
+            <span class="bar-button-label">Discord</span>
+          </a>
           <!-- Settings (outside a round) and the pause menu (inside one) are
           the same idea — the one place to open a drawer of options from — so
           they now share a shape: the same hamburger glyph and the same
@@ -992,6 +1014,9 @@
       </p>
       <div id="account-guest">
         <button id="discord-signin" class="primary-button discord-button" type="button">
+          <svg class="bar-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
+          </svg>
           Continue with Discord
         </button>
         <p class="account-divider"><span>or use email</span></p>
@@ -1133,6 +1158,26 @@
         <button id="account-button" type="button">
           <span aria-hidden="true">◎</span> Account
         </button>
+        <!-- The bar's own #discord-invite (index.html, top-bar-right) covers
+        this on desktop; it is CSS-hidden below the same compact breakpoint
+        the bar itself gets tight at (see compactSettingsQuery in main.js and
+        the media query on #discord-invite in style.css), and this row picks
+        it up so the invite - not account functionality, so it must stay
+        reachable with no Supabase configuration, unlike #discord-signin - is
+        never lost on a phone. Same link, same target/rel, just relocated. -->
+        <a
+          id="settings-discord-link"
+          class="discord-invite-link"
+          href="https://discord.gg/QgVR4YwnC"
+          target="_blank"
+          rel="noopener"
+          aria-label="Join the Discord community server"
+        >
+          <svg class="bar-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true">
+            <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" />
+          </svg>
+          Discord
+        </a>
       </div>
       <!-- Effects and soundtrack each get their own switch and trim. The
       Sound button above is still the one-press master mute for both. -->
@@ -1285,6 +1330,20 @@
               <option value="7">RT / R2 (Right Trigger)</option>
             </select>
           </div>
+          <div class="gamepad-field">
+            <label for="gamepad-skipTrack">Skip track</label>
+            <select id="gamepad-skipTrack" data-gamepad-action="skipTrack">
+              <option value="0">A / ✕ (South)</option>
+              <option value="1">B / ○ (East)</option>
+              <option value="2">X / □ (West)</option>
+              <option value="3">Y / △ (North)</option>
+              <option value="4">LB / L1 (Left Bumper)</option>
+              <option value="5">RB / R1 (Right Bumper)</option>
+              <option value="6">LT / L2 (Left Trigger)</option>
+              <option value="7">RT / R2 (Right Trigger)</option>
+              <option value="8" selected>Select / View (Back)</option>
+            </select>
+          </div>
         </div>
       </details>
       <!-- Same reasoning as the gamepad <details> above: fifteen bindable
@@ -1321,6 +1380,21 @@
             Reset bindings
           </button>
         </div>
+      </details>
+      <!-- Baked at build time from CHANGELOG.md (see scripts/changelog.mjs
+      and the buildIdentity-style injection in vite.desktop.config.js) - never
+      fetched, so it works offline. Collapsed by default like the two
+      <details> above, for the same reason: this dialog is already dense on a
+      phone. Each version is itself a nested, closed <details> (built in
+      renderChangelog() in main.js) so opening the group only ever adds one
+      short line per release, not every release's full text at once. -->
+      <details class="settings-changelog" id="settings-changelog-group">
+        <summary class="settings-audio-heading">CHANGELOG</summary>
+        <div
+          id="changelog-list"
+          class="changelog-list"
+          aria-label="Release notes"
+        ></div>
       </details>
     </dialog>
     <dialog id="help-dialog" aria-labelledby="help-title">
