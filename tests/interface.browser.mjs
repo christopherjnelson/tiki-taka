@@ -4,6 +4,7 @@ import { accessSync, constants, statSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { freePort } from "./free-port.mjs";
 import { gotoArena, expectedCourtAspect } from "./open-arena.mjs";
+import { afterFrames, waitForGame } from "./wait.mjs";
 
 const playwright = await import(
   process.env.PLAYWRIGHT_MODULE || "@playwright/test"
@@ -244,6 +245,8 @@ await check(
       true,
       "D-pad input from a drawer-opened modal must stay in the modal",
     );
+    // wall-clock: proving the round clock does NOT run while settings are
+    // open holds regardless of how many frames actually ran in this window.
     await page.waitForTimeout(250);
     const timePaused = await page.evaluate(
       () => window.__interfaceGame.game.time,
@@ -280,6 +283,8 @@ await check(
     const afterPadClose = await page.evaluate(
       () => window.__interfaceGame.game.time,
     );
+    // wall-clock: proving the clock stays frozen holds regardless of how many
+    // frames actually ran in this window.
     await page.waitForTimeout(180);
     assert.ok(
       Math.abs(
@@ -342,6 +347,8 @@ await check(
       ],
     }));
     await page.keyboard.down("KeyW");
+    // wall-clock: proving the rebound-away key does NOT move the carrier
+    // holds regardless of how many frames actually ran in this window.
     await page.waitForTimeout(220);
     await page.keyboard.up("KeyW");
     const afterOld = await page.evaluate(() => ({
@@ -354,7 +361,18 @@ await check(
       "old movement key must stop moving",
     );
     await page.keyboard.down("KeyT");
-    await page.waitForTimeout(220);
+    // Movement accrues per animation frame from dt, so wait for the carrier
+    // to actually have covered the threshold this asserts on, rather than a
+    // fixed slice of wall time that can expire before a frame has ticked.
+    await waitForGame(
+      page,
+      (baseline) =>
+        window.__interfaceGame.game.players[
+          window.__interfaceGame.game.carrier
+        ].y < baseline - 5,
+      afterOld.y,
+      { timeout: 10000, message: "new movement key must move the carrier" },
+    );
     await page.keyboard.up("KeyT");
     const afterNew = await page.evaluate(() => ({
       ...window.__interfaceGame.game.players[
@@ -384,7 +402,15 @@ await check(
       () => window.__interfaceGame.game.focus,
     );
     await page.keyboard.down("KeyQ");
-    await page.waitForTimeout(220);
+    // Focus drains per animation frame, so wait for it to actually start
+    // dropping rather than a fixed slice of wall time that can expire before
+    // the loop has ticked once on a loaded runner.
+    await waitForGame(
+      page,
+      (before) => window.__interfaceGame.game.focus < before,
+      focusBefore,
+      { timeout: 10000, message: "custom Focus key should drain earned reserve" },
+    );
     await page.keyboard.up("KeyQ");
     assert.ok(
       await page.evaluate(
@@ -607,13 +633,10 @@ await check(
         : []),
     ]) {
       await page.setViewportSize(viewport);
-      await page.evaluate(
-        () =>
-          new Promise((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(resolve)),
-          ),
-      );
-      await page.waitForTimeout(300);
+      // A resize's layout settling is a per-frame effect with no single
+      // observable condition to wait on, so wait for real frames rather than
+      // a fixed slice of wall time.
+      await afterFrames(page, 6);
       const box = await page.locator("#court").boundingBox();
       assert.ok(
         box &&
@@ -705,7 +728,21 @@ await check(
       errors = errorsFor(page);
     await gotoArena(page, baseURL);
     await useSettingsControl(page, "#fullscreen-button");
-    await page.waitForTimeout(100);
+    // Entering fullscreen fires 'fullscreenchange' when the browser grants
+    // it; a runner that refuses fullscreen (headless, no user gesture) never
+    // fires that event at all, so race it against a short fallback rather
+    // than assuming either outcome lands within a fixed delay.
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const done = () => {
+            document.removeEventListener("fullscreenchange", done);
+            resolve();
+          };
+          document.addEventListener("fullscreenchange", done);
+          setTimeout(done, 300);
+        }),
+    );
     const fullscreen = await page.evaluate(
       () => document.fullscreenElement === document.documentElement,
     );
@@ -737,13 +774,10 @@ await check(
       await page.locator(".court-item").nth(i).click();
       await page.locator("#title-play").click();
       await page.locator("#arena-view").waitFor({ state: "visible" });
-      await page.evaluate(
-        () =>
-          new Promise((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(resolve)),
-          ),
-      );
-      await page.waitForTimeout(250);
+      // The venue's canvas frame and CSS custom property are a per-frame
+      // paint effect with no single observable condition, so wait for real
+      // frames rather than a fixed slice of wall time.
+      await afterFrames(page, 6);
       ids.push(await page.locator("html").getAttribute("data-venue"));
       accents.push(
         await page
@@ -824,13 +858,10 @@ if (includeMobileLayouts) await check(
         true,
         `${viewport.width}x${viewport.height} play view is always on in the arena`,
       );
-      await page.evaluate(
-        () =>
-          new Promise((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(resolve)),
-          ),
-      );
-      await page.waitForTimeout(300);
+      // Touch control layout is a per-frame paint effect with no single
+      // observable condition, so wait for real frames rather than a fixed
+      // slice of wall time.
+      await afterFrames(page, 6);
       for (const selector of [
         "#court",
         "#touch-pass",
@@ -888,7 +919,12 @@ await check(
         errors = errorsFor(page);
       await gotoArena(page, baseURL);
       await page.locator("#start-button").click();
-      await page.waitForTimeout(400);
+      // The HUD's layout against the court's frame settles as the round's
+      // own render loop paints frames; it has no single observable condition
+      // to wait on, so wait for real frames rather than a fixed slice of
+      // wall time.
+      await page.waitForFunction(() => document.querySelector("#game-overlay")?.hidden === true);
+      await afterFrames(page, 6);
       const label = `${viewport.width}x${viewport.height}`;
       const layout = await page.evaluate(() => {
         const box = (selector) => {
@@ -1045,7 +1081,10 @@ await check(
       errors = errorsFor(page);
     await gotoArena(page, baseURL);
     await page.locator("#start-button").click();
-    await page.waitForTimeout(600);
+    // The ambience canvas is painted on the render loop, a per-frame effect
+    // with no single observable condition, so wait for real frames rather
+    // than a fixed slice of wall time.
+    await afterFrames(page, 6);
     const first = await sample();
     assert.equal(first.insideAlpha, 0,
       "nothing may be painted inside the court");
@@ -1061,10 +1100,17 @@ await check(
     await page.locator("#music-button").click();
     await page.locator("#close-settings").click();
     await page.locator("#pause-resume").click();
-    await page.waitForTimeout(400);
+    // The ambience canvas is painted on the render loop; wait for real
+    // frames before taking the baseline sample below, rather than a fixed
+    // slice of wall time.
+    await afterFrames(page, 6);
     let moved = false;
     let previous = (await sample()).outsideSum;
     for (let attempt = 0; attempt < 12 && !moved; attempt++) {
+      // wall-clock: the idle animation this polls for is genuinely driven by
+      // elapsed wall-clock time (not a frame count), and this loop already
+      // retries up to 12 times the way padUntil() does for input, so a slow
+      // runner still gets to see the animation move - it just takes longer.
       await page.waitForTimeout(350);
       const next = (await sample()).outsideSum;
       if (next !== previous) moved = true;
@@ -1085,6 +1131,8 @@ await check(
       stillErrors = errorsFor(stillPage);
     await gotoArena(stillPage, baseURL);
     await stillPage.locator("#start-button").click();
+    // wall-clock: proving the reduced-motion ambience stays still holds
+    // regardless of how many frames actually ran in this window.
     await stillPage.waitForTimeout(1200);
     const still = await stillPage.evaluate(() => {
       const canvas = document.querySelector("#ambience");

@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { accessSync, constants } from 'node:fs';
 import { freePort } from './free-port.mjs';
+import { afterFrames, waitForGame, pulsePad, padUntil } from './wait.mjs';
 
 const moduleName = process.env.PLAYWRIGHT_MODULE || '@playwright/test';
 const playwright = await import(moduleName);
@@ -91,26 +92,6 @@ const installPad = () => {
   };
 };
 
-// Activation is edge-triggered and polled once per animation frame, so a short
-// synthetic press can sit entirely between two polls on a CPU-starved runner.
-// D-pad presses must stay short: holding past the 0.2s repeat gate moves focus
-// twice. See the same helper in tests/browser.mjs.
-const isDpad = button => button >= 12 && button <= 15;
-async function pulsePad(page, button, hold = isDpad(button) ? 80 : 250) {
-  await page.evaluate(index => window.__setTestPad({ button: index, pressed: true }), button);
-  await page.waitForTimeout(hold);
-  await page.evaluate(index => window.__setTestPad({ button: index, pressed: false }), button);
-  await page.waitForTimeout(hold);
-}
-// A real player presses again when a press does not register; so does this.
-async function padUntil(page, button, ready, attempts = 6) {
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    if (await ready()) return true;
-    await pulsePad(page, button);
-  }
-  return await ready();
-}
-
 const audioState = page => page.evaluate(() => ({
   hint: !document.getElementById('audio-hint').hidden,
   music: document.body.dataset.music,
@@ -134,7 +115,10 @@ await check('a browser that blocks audio gets a hint, and one keypress clears bo
   const page = await context.newPage();
   const errors = errorsFor(page);
   await page.goto(`${baseURL}/`);
-  await page.waitForTimeout(700);
+  // Wait for the app to have actually built its audio contexts before
+  // reading them, rather than guessing how long boot takes.
+  await waitForGame(page, () => window.__audio?.contexts.length > 0, null,
+    { timeout: 10000, message: 'the shell should have built its audio contexts up front' });
   const blocked = await audioState(page);
   assert.ok(blocked.contexts.length > 0, 'the shell should have built its audio contexts up front');
   assert.equal(blocked.contexts.every(state => state !== 'running'), true,
@@ -149,6 +133,12 @@ await check('a browser that blocks audio gets a hint, and one keypress clears bo
   // that has to hold either way: the hint is shown exactly when audio is not
   // running, never on a guess about why.
   await pulsePad(page, 13);
+  // wall-clock: this only checks an invariant between two fields read in the
+  // same evaluate() call (the hint tracks whatever the contexts' real state
+  // is, whatever that state happens to be at read time), so it cannot be
+  // made to fail by how many frames ran while waiting - it is giving the pad
+  // press above room to be polled and possibly resume audio, not timing a
+  // specific outcome.
   await page.waitForTimeout(400);
   const afterPad = await audioState(page);
   assert.equal(afterPad.hint, afterPad.contexts.some(state => state !== 'running'),
@@ -205,6 +195,8 @@ await check('each switch silences its own bus and leaves the other playing', asy
   await page.locator('#game-overlay').waitFor({ state: 'hidden' });
   const before = (await audioState(page)).effects;
   await page.keyboard.press('Space');
+  // wall-clock: proving effects stay off and music keeps playing holds
+  // regardless of how many frames actually ran in this window.
   await page.waitForTimeout(700);
   const muted = await audioState(page);
   assert.equal(muted.effects, before, `a pass with effects off must play no voice, got ${muted.effects - before}`);
@@ -251,7 +243,9 @@ await check('the volumes are reachable and operable by gamepad and survive a rel
   const page = await context.newPage();
   const errors = errorsFor(page);
   await page.goto(`${baseURL}/`);
-  await page.waitForTimeout(200);
+  // Wait for the home view rather than a fixed boot delay before reading the
+  // sliders' defaults.
+  await page.locator('#home-view').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#effects-volume').inputValue(), '30',
     'effects should default well below the ceiling the constants set');
   assert.equal(await page.locator('#music-volume').inputValue(), '100');
@@ -306,12 +300,17 @@ await check('the volumes are reachable and operable by gamepad and survive a rel
 
   // Right raises it, left lowers it, and the readout follows.
   await page.evaluate(() => window.__setTestPad({ button: 15, pressed: true }));
-  await page.waitForTimeout(500);
+  // The slider only moves as the held d-pad is polled once per animation
+  // frame, so wait for it to have actually risen rather than a fixed slice
+  // of wall time.
+  await waitForGame(page, () => Number(document.getElementById('effects-volume').value) > 30, null,
+    { timeout: 10000, message: 'd-pad right should raise the effects volume' });
   await page.evaluate(() => window.__setTestPad({ button: 15, pressed: false }));
   const raised = Number(await page.locator('#effects-volume').inputValue());
   assert.ok(raised > 30, `d-pad right should raise the effects volume, got ${raised}`);
   await page.evaluate(() => window.__setTestPad({ button: 14, pressed: true }));
-  await page.waitForTimeout(900);
+  await waitForGame(page, (before) => Number(document.getElementById('effects-volume').value) < before, raised,
+    { timeout: 10000, message: 'd-pad left should lower the effects volume' });
   await page.evaluate(() => window.__setTestPad({ button: 14, pressed: false }));
   const lowered = Number(await page.locator('#effects-volume').inputValue());
   assert.ok(lowered < raised, `d-pad left should lower the effects volume, got ${lowered}`);
@@ -328,7 +327,11 @@ await check('the volumes are reachable and operable by gamepad and survive a rel
   }
   assert.equal(reached, true, 'the d-pad must reach the music volume slider');
   await page.evaluate(() => window.__setTestPad({ axes: [-1, 0, 0, 0] }));
-  await page.waitForTimeout(600);
+  // The slider only moves as the held stick is polled once per animation
+  // frame, so wait for it to have actually dropped rather than a fixed
+  // slice of wall time.
+  await waitForGame(page, () => Number(document.getElementById('music-volume').value) < 100, null,
+    { timeout: 10000, message: 'the left stick should lower the music volume' });
   await page.evaluate(() => window.__setTestPad({ axes: [0, 0, 0, 0] }));
   const music = Number(await page.locator('#music-volume').inputValue());
   assert.ok(music < 100, `the left stick should lower the music volume, got ${music}`);
@@ -338,7 +341,10 @@ await check('the volumes are reachable and operable by gamepad and survive a rel
   assert.equal(Math.round(stored.musicVolume * 100), music, 'the music level must be written down');
 
   await page.reload();
-  await page.waitForTimeout(300);
+  // Wait for the settings values to have actually been re-applied to the
+  // sliders after boot rather than a fixed reload delay.
+  await waitForGame(page, (value) => Number(document.getElementById('effects-volume').value) === value, lowered,
+    { timeout: 10000, message: 'the effects level should survive a reload' });
   assert.equal(Number(await page.locator('#effects-volume').inputValue()), lowered,
     'the effects level must survive a reload');
   assert.equal(Number(await page.locator('#music-volume').inputValue()), music,
