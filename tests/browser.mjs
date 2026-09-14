@@ -455,7 +455,17 @@ await check('Boost and Shout work through remappable keyboard controls and analo
   const focusBeforeKeyboardBoost = await focusSeconds(page);
   await page.keyboard.down('KeyR');
   await page.waitForFunction(() => window.__observedGame.input?.boost === true);
-  await page.waitForTimeout(180);
+  // Wait for Focus to actually start draining rather than for a fixed slice of
+  // wall time. Boost drains per animation frame, so 180ms of wall clock is only
+  // 180ms of draining on a machine that is painting; on a busy CI runner the
+  // loop can tick once or not at all in that window, leaving Focus untouched
+  // and failing the assertion below for reasons that have nothing to do with
+  // Boost. Waiting on the drain itself tests the behaviour, not the runner.
+  await page.waitForFunction(
+    (before) => window.__observedGame.game.focus < before,
+    focusBeforeKeyboardBoost,
+    { timeout: 15000 },
+  );
   await page.keyboard.up('KeyR');
   assert.ok(await focusSeconds(page) < focusBeforeKeyboardBoost, 'R should hold Boost and consume Focus');
 
@@ -463,7 +473,12 @@ await check('Boost and Shout work through remappable keyboard controls and analo
   const focusBeforeTriggerBoost = await focusSeconds(page);
   await page.evaluate(() => window.__setAbilityPad({ button: 7, value: 0.8 }));
   await page.waitForFunction(() => window.__observedGame.input?.boost === true);
-  await page.waitForTimeout(180);
+  // Same as the keyboard case above: wait for the drain, not for the clock.
+  await page.waitForFunction(
+    (before) => window.__observedGame.game.focus < before,
+    focusBeforeTriggerBoost,
+    { timeout: 15000 },
+  );
   await page.evaluate(() => window.__setAbilityPad({ button: 7, value: 0 }));
   assert.ok(await focusSeconds(page) < focusBeforeTriggerBoost, 'an analog RT pull should hold Boost');
 
