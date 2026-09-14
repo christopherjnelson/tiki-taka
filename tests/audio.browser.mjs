@@ -650,7 +650,7 @@ await check('holding Focus slows the source and dulls the filter, releasing rest
 
     music.setFocus(false);
     await until(() => lastSource().playbackRate.value > 0.95, 2000);
-    await until(() => lastFilter().frequency.value > 10_000, 2000);
+    await until(() => lastFilter().frequency.value >= openFreq * 0.99, 2000);
     const releasedRate = lastSource().playbackRate.value;
     const releasedFreq = lastFilter().frequency.value;
 
@@ -660,28 +660,34 @@ await check('holding Focus slows the source and dulls the filter, releasing rest
     await until(() => lastSource().playbackRate.value < 0.85, 2000);
     music.setFocus(false);
     await until(() => lastSource().playbackRate.value > 0.95, 2000);
-    await until(() => lastFilter().frequency.value > 10_000, 2000);
+    await until(() => lastFilter().frequency.value >= openFreq * 0.99, 2000);
     const afterEndRate = lastSource().playbackRate.value;
     const afterEndFreq = lastFilter().frequency.value;
 
     const state = music.state;
+    // Reported so the assertions can compare against what this context can
+    // actually do: music.js clamps the open cutoff to sampleRate * 0.45, so a
+    // context that hands out a low rate has a legitimately lower open value.
+    const sampleRate = lastFilter().context.sampleRate;
     music.setEnabled(false);
     return {
-      state, openRate, openFreq, focusedRate, focusedFreq,
+      state, sampleRate, openRate, openFreq, focusedRate, focusedFreq,
       releasedRate, releasedFreq, afterEndRate, afterEndFreq,
     };
   });
   assert.equal(result.state, 'playing', `the track should be running, got ${result.state}`);
   assert.equal(result.openRate, 1, 'not focused: playback rate should be unmodified');
-  assert.ok(result.openFreq > 10_000, `not focused: the filter should sit open, got ${result.openFreq}Hz`);
+  assert.ok(result.openFreq >= Math.min(10_000, result.sampleRate * 0.45),
+    `not focused: the filter should sit open, got ${result.openFreq}Hz at ${result.sampleRate}Hz`);
   assert.ok(result.focusedRate <= 0.85 && result.focusedRate >= 0.75,
     `holding Focus should slow the source to about 0.8x, got ${result.focusedRate}`);
   assert.ok(result.focusedFreq < 1500, `holding Focus should dull the filter, got ${result.focusedFreq}Hz`);
   assert.ok(result.releasedRate > 0.95, `releasing Focus should restore playback rate, got ${result.releasedRate}`);
-  assert.ok(result.releasedFreq > 10_000, `releasing Focus should reopen the filter, got ${result.releasedFreq}Hz`);
+  assert.ok(result.releasedFreq >= result.openFreq * 0.99,
+    `releasing Focus should reopen the filter to where it started, got ${result.releasedFreq}Hz vs ${result.openFreq}Hz`);
   assert.ok(result.afterEndRate > 0.95,
     `nothing should stay slowed after the round stops being "playing", got ${result.afterEndRate}`);
-  assert.ok(result.afterEndFreq > 10_000,
+  assert.ok(result.afterEndFreq >= result.openFreq * 0.99,
     `nothing should stay dulled after the round stops being "playing", got ${result.afterEndFreq}Hz`);
   assert.deepEqual(errors, []);
   await context.close();

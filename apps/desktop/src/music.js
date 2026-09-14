@@ -100,12 +100,31 @@ export function createMusic({
     return context ? Math.min(FOCUS_HZ, context.sampleRate * 0.45) : FOCUS_HZ;
   }
 
+  // Buffer position advances at playbackRate, not at wall-clock speed. Fold
+  // the time played so far into `offset` at the rate that was in effect for
+  // it, and restart the clock. Called before every rate change and before a
+  // stop, so the "where was this track" bookkeeping stays true through a
+  // Focus hold - without it, muting or skipping mid-Focus resumes up to 20%
+  // of the focused time too far ahead.
+  function flushOffset() {
+    if (!context || !buffer || !source) return;
+    const now = context.currentTime;
+    offset =
+      (offset + (now - startedAt) * source.playbackRate.value) %
+      buffer.duration;
+    startedAt = now;
+  }
+
   // Ramps playbackRate and the filter cutoff to the current focusOn target.
   // `instant` snaps a brand-new source straight to the target with no ramp —
   // used when a track change hands Focus a fresh node mid-hold, so playback
   // starts at the right speed instead of audibly ramping down again.
   function applyFocus(instant) {
     if (!context) return;
+    // Bank the position played at the OLD rate before the new one applies.
+    // `instant` is a brand-new source that has played nothing yet, so there
+    // is nothing to bank and startedAt is already correct.
+    if (!instant) flushOffset();
     const now = context.currentTime;
     const rate = focusOn ? FOCUS_RATE : 1;
     const hz = focusOn ? focusHz() : openHz();
@@ -204,8 +223,7 @@ export function createMusic({
   function stopSource({ keepPosition = true } = {}) {
     if (!source) return;
     // Remember where the track was so a mute/unmute does not restart it.
-    if (keepPosition && context && buffer)
-      offset = (context.currentTime - startedAt + offset) % buffer.duration;
+    if (keepPosition && context && buffer) flushOffset();
     else offset = 0;
     // Cleared before stop() so the natural-end handler cannot fire for a
     // deliberate stop and walk the playlist on unmute or on a skip.
