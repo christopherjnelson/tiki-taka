@@ -22,7 +22,13 @@ export const DEFAULT_AUDIO = {
 // gamepad bindings already do). "toggle" is a tap that latches the ability on
 // until tapped again — see ACTION_BUTTON_MAP and toggleFocus/toggleBoost in
 // apps/desktop/src/main.js.
-export const DEFAULT_ABILITY_MODE = "hold";
+// Touch taps on the ability buttons have always latched: #touch-focus and
+// #touch-boost bind on pointerdown with no release handling, so a tap turns
+// Focus or Boost on and a second tap turns it off. "toggle" is therefore what
+// players already have, and an absent or unrecognised setting has to mean
+// exactly that - "hold" is the new opt-in for anyone who would rather press
+// and hold.
+export const DEFAULT_ABILITY_MODE = "toggle";
 
 export const ACTIONS = {
   moveUp: "Move up",
@@ -176,7 +182,7 @@ export function normalizeSettings(value) {
     playView: value.playView === true,
     sidebarCollapsed: value.sidebarCollapsed === true,
     mobileWallMode: value.mobileWallMode === "instant" ? "instant" : "armed",
-    abilityMode: value.abilityMode === "toggle" ? "toggle" : "hold",
+    abilityMode: value.abilityMode === "hold" ? "hold" : "toggle",
     effectsOn: value.effectsOn !== false,
     effectsVolume: normalizeVolume(value.effectsVolume, DEFAULT_AUDIO.effectsVolume),
     musicOn: value.musicOn !== false,
