@@ -815,12 +815,42 @@ function selectHomeLeaderboardCourt(courtIdx) {
 }
 
 let leaderboardFetchId = 0;
+let leaderboardRequestController = null;
+const testLeaderboardTimeoutMs = Number(globalThis.__TIKI_TAKA_TEST_LEADERBOARD_TIMEOUT_MS__);
+const LEADERBOARD_REQUEST_TIMEOUT_MS =
+  Number.isFinite(testLeaderboardTimeoutMs) && testLeaderboardTimeoutMs > 0
+    ? testLeaderboardTimeoutMs
+    : 8000;
 
-async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeLeaderboardDifficulty) {
+async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeLeaderboardDifficulty, { manual = false } = {}) {
   const list = $("home-leaderboard-list");
   if (!list) return;
   const statusEl = $("home-leaderboard-status");
+  const table = document.querySelector("#home-leaderboard .hl-table");
+  const refreshButton = $("home-leaderboard-refresh");
   const fetchId = ++leaderboardFetchId;
+  leaderboardRequestController?.abort();
+  const controller = new AbortController();
+  leaderboardRequestController = controller;
+  const isCurrentFilter = courtIdx === homeLeaderboardCourt && tier === homeLeaderboardDifficulty;
+  const preserveRows = manual && isCurrentFilter && list.children.length > 0;
+
+  function setLoadingState(message) {
+    table?.setAttribute("aria-busy", "true");
+    refreshButton?.setAttribute("aria-busy", "true");
+    if (refreshButton) refreshButton.disabled = true;
+    if (statusEl) {
+      statusEl.textContent = message;
+      statusEl.classList.remove("is-error");
+    }
+  }
+
+  function finishLoadingState() {
+    if (fetchId !== leaderboardFetchId) return;
+    table?.setAttribute("aria-busy", "false");
+    refreshButton?.removeAttribute("aria-busy");
+    if (refreshButton) refreshButton.disabled = false;
+  }
 
   // Bonus counts are secondary to score, so a bonus cell dims itself when it
   // is zero — the same "nothing to see here" language the results modal
@@ -948,23 +978,43 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
     }
     list.replaceChildren();
     syncUserBest([]);
+    finishLoadingState();
     return;
   }
 
-  if (statusEl) {
-    statusEl.textContent = "Loading scores…";
-    statusEl.classList.remove("is-error");
+  setLoadingState(preserveRows ? "Refreshing scores…" : "Loading scores…");
+  if (!preserveRows) {
+    list.replaceChildren();
+    syncUserBest([]);
   }
-  list.replaceChildren();
-  syncUserBest([]);
 
+  let timeoutId;
+  let timedOut = false;
   try {
-    const board = await dataAdapter.getLeaderboard({
-      mode: "career",
-      court: courtIdx,
-      difficulty: tier,
-      limit: 10,
-    });
+    const board = await Promise.race([
+      dataAdapter.getLeaderboard({
+        mode: "career",
+        court: courtIdx,
+        difficulty: tier,
+        limit: 10,
+        signal: controller.signal,
+      }),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          // Reject first so this timeout remains the race's visible reason;
+          // abort() synchronously notifies the listener below.
+          timedOut = true;
+          reject(new Error("Leaderboard request timed out"));
+          controller.abort();
+        }, LEADERBOARD_REQUEST_TIMEOUT_MS);
+        controller.signal.addEventListener("abort", () => {
+          clearTimeout(timeoutId);
+          if (!timedOut)
+            reject(new DOMException("Leaderboard request superseded", "AbortError"));
+        }, { once: true });
+      }),
+    ]);
+    clearTimeout(timeoutId);
     if (fetchId !== leaderboardFetchId) return;
 
     if (
@@ -990,14 +1040,21 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
       renderEntries([]);
       syncUserBest([]);
     }
-  } catch {
+  } catch (error) {
     if (fetchId !== leaderboardFetchId) return;
     if (statusEl) {
-      statusEl.textContent = "Unable to load leaderboard scores.";
+      statusEl.textContent = timedOut || error?.message === "Leaderboard request timed out"
+        ? "Leaderboard is taking too long. Try again."
+        : "Unable to load leaderboard scores.";
       statusEl.classList.add("is-error");
     }
-    list.replaceChildren();
-    syncUserBest([]);
+    if (!preserveRows) {
+      list.replaceChildren();
+      syncUserBest([]);
+    }
+  } finally {
+    clearTimeout(timeoutId);
+    finishLoadingState();
   }
 }
 function applyView(next, { updateHash = true } = {}) {
@@ -4148,6 +4205,9 @@ courtLeaderboardTabs.forEach((tab, index) => {
     }
   });
 });
+$("home-leaderboard-refresh")?.addEventListener("click", () => {
+  void syncHomeLeaderboard(homeLeaderboardCourt, homeLeaderboardDifficulty, { manual: true });
+});
 addEventListener("hashchange", () => {
   applyView(viewForHash(), { updateHash: false });
 });
@@ -5034,6 +5094,13 @@ for (const type of ["pointerdown", "click", "keydown", "touchstart"])
   window.addEventListener(type, unlockAudio, { capture: true, passive: true });
 setInterval(syncMusicState, 500);
 requestAnimationFrame(frame);
+// The startup reads above can include a remote session/profile restore. Keep
+// this acknowledgement up until all controls and the first frame are wired,
+// rather than leaving a still home screen that resembles a frozen reload.
+const bootSync = $("boot-sync");
+requestAnimationFrame(() => {
+  if (bootSync) bootSync.hidden = true;
+});
 if (storageFallback)
   toast("Browser storage is unavailable. Progress will last for this session.");
 if (import.meta.env?.PROD && "serviceWorker" in navigator) {

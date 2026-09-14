@@ -28,6 +28,10 @@
     <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
+    <div id="boot-sync" class="boot-sync" role="status" aria-live="polite" aria-label="Loading Tiki Taka">
+      <span class="boot-sync-mark" aria-hidden="true">◌</span>
+      <span>Syncing your game…</span>
+    </div>
     <a class="skip-link" href="#main">Skip to the court</a>
     <div class="app-shell">
       <!-- One bar, every screen, including during play. It carries the
@@ -333,6 +337,7 @@
                   <span class="hl-icon" aria-hidden="true">🏆</span>
                   <span class="hl-title">CIRCUIT LEADERBOARDS</span>
                 </div>
+                <button id="home-leaderboard-refresh" class="hl-refresh" type="button" aria-label="Refresh leaderboard" title="Refresh leaderboard"><span aria-hidden="true">↻</span><span class="hl-refresh-label">Refresh</span></button>
                 <!-- The selected segment below is the one place the active
                 tier is shown here — a separate badge used to repeat the same
                 name right next to it, which read as a duplicate rather than
@@ -366,7 +371,7 @@
                   <span class="hl-tab-num">06</span> AMSTERDAM
                 </button>
               </nav>
-              <div class="hl-table">
+              <div class="hl-table" aria-busy="true">
                 <div class="hl-head">
                   <span class="hl-cell hl-cell-rank">#</span>
                   <span class="hl-cell hl-cell-player">PLAYER</span>

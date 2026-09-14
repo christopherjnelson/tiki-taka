@@ -1369,6 +1369,133 @@ await check(
 );
 
 await check(
+  "a delayed saved-game restore acknowledges syncing until controls are ready",
+  async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: "block" });
+    await context.addInitScript(() => {
+      window.__releaseBootData = null;
+      window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
+        kind: "local",
+        async getSession() { return null; },
+        loadUserData() { return new Promise((resolve) => { window.__releaseBootData = resolve; }); },
+        async saveUserData() { return {}; }, async recordRound() { return {}; },
+        async getLeaderboard() { return { entries: [] }; }, onAuthStateChange() { return () => {}; },
+      });
+    });
+    const page = await context.newPage(), errors = errorsFor(page);
+    const navigation = page.goto(`${baseURL}/`);
+    const boot = page.locator("#boot-sync");
+    await boot.waitFor({ state: "visible" });
+    assert.match(await boot.textContent(), /syncing your game/i);
+    await page.waitForFunction(() => typeof window.__releaseBootData === "function");
+    await page.evaluate(() => window.__releaseBootData({
+      progress: { version: 1, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: "balanced", difficulty: "standard", lastCourt: 0 },
+      settings: {
+        theme: "dark", effectsOn: false, effectsVolume: 0, musicOn: false,
+        musicVolume: 0, audioMigrated: true, preset: "wasd", bindings: {
+          moveUp: ["KeyW", "ArrowUp"], moveDown: ["KeyS", "ArrowDown"],
+          moveLeft: ["KeyA", "ArrowLeft"], moveRight: ["KeyD", "ArrowRight"],
+          smartPass: ["Space"], direct1: ["Digit1"], direct2: ["Digit2"], direct3: ["Digit3"], direct4: ["Digit4"],
+          wallToggle: ["KeyB"], wallHold: ["ShiftLeft"], focusHold: ["KeyE"], boostHold: ["KeyR"], shout: ["KeyF"], pause: ["Escape"], skipTrack: ["KeyN"],
+        },
+      }, stats: { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 }, preferences: { scoreSaveChoice: "ask" },
+    }));
+    await navigation;
+    await afterFrames(page, 2);
+    await boot.waitFor({ state: "hidden" });
+    assert.equal(await page.locator("#home-view").isVisible(), true);
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
+  "leaderboard loading stays responsive, refreshes in place, times out safely, and ignores stale results",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    await context.addInitScript(() => {
+      // Keep the hung-request assertion deterministic without making this
+      // navigation suite wait for the production eight-second deadline.
+      globalThis.__TIKI_TAKA_TEST_LEADERBOARD_TIMEOUT_MS__ = 500;
+      window.__leaderboardCalls = [];
+      window.__leaderboardResolvers = [];
+      const bindings = {
+        moveUp: ["KeyW", "ArrowUp"], moveDown: ["KeyS", "ArrowDown"],
+        moveLeft: ["KeyA", "ArrowLeft"], moveRight: ["KeyD", "ArrowRight"],
+        smartPass: ["Space"], direct1: ["Digit1"], direct2: ["Digit2"], direct3: ["Digit3"], direct4: ["Digit4"],
+        wallToggle: ["KeyB"], wallHold: ["ShiftLeft"], focusHold: ["KeyE"], boostHold: ["KeyR"], shout: ["KeyF"], pause: ["Escape"], skipTrack: ["KeyN"],
+      };
+      window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
+        kind: "local",
+        async getSession() { return null; },
+        async loadUserData() {
+          return { progress: { version: 1, xp: 0, unlocked: 5, courts: {}, records: {}, sound: true, tactic: "balanced", difficulty: "standard", lastCourt: 0 }, settings: { theme: "dark", effectsOn: false, effectsVolume: 0, musicOn: false, musicVolume: 0, audioMigrated: true, preset: "wasd", bindings }, stats: { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 }, preferences: { scoreSaveChoice: "ask" } };
+        },
+        async saveUserData() { return {}; },
+        async recordRound() { return {}; },
+        getLeaderboard(args) {
+          window.__leaderboardCalls.push(args);
+          return new Promise((resolve) => window.__leaderboardResolvers.push(resolve));
+        },
+        onAuthStateChange() { return () => {}; },
+      });
+    });
+    const page = await context.newPage(), errors = errorsFor(page);
+    await page.goto(`${baseURL}/`);
+    await page.locator("#home-view").waitFor({ state: "visible" });
+    const board = page.locator("#home-leaderboard");
+    const table = board.locator(".hl-table");
+    const status = page.locator("#home-leaderboard-status");
+    assert.equal(await table.getAttribute("aria-busy"), "true");
+    assert.match(await status.textContent(), /loading/i);
+    await page.waitForFunction(() => window.__leaderboardCalls.length > 0);
+    const initialCallCount = await page.evaluate(() => window.__leaderboardCalls.length);
+    // A slow remote query must not turn Home into a frozen screen: another
+    // Home control remains interactive while the first query is unresolved.
+    await page.locator("[data-home-mode]").last().click();
+    assert.equal(await page.locator("[data-home-mode]").last().getAttribute("aria-pressed"), "true");
+    await page.evaluate(() => window.__leaderboardResolvers.at(-1)({ entries: [{ username: "before-refresh", score: 100, passes: 1 }] }));
+    await page.locator("#home-leaderboard-list .hl-row").first().waitFor({ state: "visible" });
+
+    const refresh = page.locator("#home-leaderboard-refresh");
+    await refresh.click();
+    await page.waitForFunction((count) => window.__leaderboardCalls.length > count, initialCallCount);
+    assert.deepEqual(await page.evaluate(() => {
+      const { mode, court, difficulty, limit } = window.__leaderboardCalls.at(-1);
+      return { mode, court, difficulty, limit };
+    }), { mode: "career", court: 0, difficulty: "standard", limit: 10 });
+    assert.equal(await table.getAttribute("aria-busy"), "true");
+    assert.match(await status.textContent(), /refreshing/i);
+    assert.equal(await page.locator("#home-leaderboard-list .hl-cell-player").first().textContent(), "before-refresh");
+    await page.evaluate(() => window.__leaderboardResolvers.at(-1)({ entries: [{ username: "after-refresh", score: 200, passes: 2 }] }));
+    await page.waitForFunction(() => document.querySelector("#home-leaderboard-list .hl-cell-player")?.textContent === "after-refresh");
+    assert.equal(await table.getAttribute("aria-busy"), "false");
+
+    // Let the next request hang. The UI must recover with a useful retry path.
+    const refreshedCallCount = await page.evaluate(() => window.__leaderboardCalls.length);
+    await refresh.click();
+    await page.waitForFunction((count) => window.__leaderboardCalls.length > count, refreshedCallCount);
+    await page.waitForFunction(() => /taking too long|try again/i.test(document.querySelector("#home-leaderboard-status")?.textContent || ""), null, { timeout: 10_000 });
+    assert.equal(await refresh.isEnabled(), true);
+    assert.equal(await page.locator("#home-leaderboard-list .hl-cell-player").first().textContent(), "after-refresh");
+
+    // A superseded request can resolve eventually, but must never repaint a newer court.
+    const hungCallCount = await page.evaluate(() => window.__leaderboardCalls.length);
+    await page.locator("#hl-tab-1").click();
+    await page.waitForFunction((count) => window.__leaderboardCalls.length > count, hungCallCount);
+    await page.evaluate(() => window.__leaderboardResolvers.at(-2)({ entries: [{ username: "stale", score: 1, passes: 1 }] }));
+    await page.evaluate(() => window.__leaderboardResolvers.at(-1)({ entries: [{ username: "court-one", score: 300, passes: 3 }] }));
+    await page.waitForFunction(() => document.querySelector("#home-leaderboard-list .hl-cell-player")?.textContent === "court-one");
+    assert.equal(await page.locator("#home-leaderboard-list .hl-cell-player").first().textContent(), "court-one");
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
   "the circuit leaderboard shows an offline error when no remote adapter is configured and does not render hardcoded data",
   async () => {
     const context = await browser.newContext({
