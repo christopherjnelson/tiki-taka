@@ -10,8 +10,11 @@ on:
         required: true
         type: string
 
-# A release build only reads the tagged source. Deployment credentials are
-# intentionally not granted until a host-specific deployment is configured.
+# A release build only reads the tagged source, so the workflow's default
+# permissions stay read-only. The deploy job below does reach production: it
+# runs only for a published Release (never a manual rebuild), takes its
+# credentials from the `production` environment rather than from these
+# permissions, and ships the artifact this same run built.
 permissions:
   contents: read
 
