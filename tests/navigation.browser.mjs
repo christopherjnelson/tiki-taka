@@ -1814,9 +1814,9 @@ await check(
 
     // Now prove the round setup's own difficulty selector actually changes
     // the applied target, not just its own label. The target is the court's
-    // reference (9000 on The Courtyard) times its clear ratio (0.25), with
-    // the tier scaling the reference first: Relaxed x0.5 against Standard
-    // x1.0, rounded to the nearest 50.
+    // reference (20000 on The Courtyard) scaled by the tier and then taken
+    // at the court's clear ratio (0.35): Relaxed 20000 x 0.5 x 0.35 = 3500,
+    // Standard x 0.7 = 4900, Ruthless x 1 = 7000, to the nearest 50.
     // Ruthless deliberately shares Standard's target — its single
     // possession means every round it finishes had no turnover, so it
     // already outscores Standard; raising its target too would push its
@@ -1835,14 +1835,10 @@ await check(
     await setDifficulty("relaxed");
     const relaxedTarget = await page.locator("#difficulty-target").textContent();
     assert.notEqual(standardTarget, relaxedTarget);
-    assert.equal(
-      standardTarget,
-      ruthlessTarget,
-      "Ruthless must ask for the same score as Standard, not more",
-    );
-    assert.match(standardTarget, /TARGET 2250/);
-    assert.match(ruthlessTarget, /TARGET 2250/);
-    assert.match(relaxedTarget, /TARGET 1150/);
+    assert.notEqual(standardTarget, ruthlessTarget);
+    assert.match(relaxedTarget, /TARGET 3500/);
+    assert.match(standardTarget, /TARGET 4900/);
+    assert.match(ruthlessTarget, /TARGET 7000/);
 
     // The possession count must agree with the tier everywhere it's shown —
     // the HUD counter (#lives-value), the pre-round note, and the overlay

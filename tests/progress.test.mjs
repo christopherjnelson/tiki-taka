@@ -134,13 +134,13 @@ test('practice remains clearable after unlimited recoveries, but earns no XP', (
 
 test('stars and personal bests are tracked separately per tier on the same court', () => {
   const progress = freshProgress();
-  awardMatch(progress, finishedGame({ score: 400, difficulty: 'relaxed' }), 'career', 0);
+  awardMatch(progress, finishedGame({ score: 500, difficulty: 'relaxed' }), 'career', 0);
   awardMatch(progress, finishedGame({ score: 250, difficulty: 'ruthless' }), 'career', 0);
-  // 400 clears (180) and passes two stars (360) but not three (570).
-  assert.deepEqual(progress.courts[0].relaxed, { stars: 2, best: 400 });
+  // Against the fixture's reference of 600: two stars at 450, three at 600.
+  assert.deepEqual(progress.courts[0].relaxed, { stars: 2, best: 500 });
   assert.deepEqual(progress.courts[0].ruthless, { stars: 1, best: 250 });
   assert.equal(progress.courts[0].standard, undefined);
-  assert.equal(progress.records['court-0-relaxed'], 400);
+  assert.equal(progress.records['court-0-relaxed'], 500);
   assert.equal(progress.records['court-0-ruthless'], 250);
 });
 
