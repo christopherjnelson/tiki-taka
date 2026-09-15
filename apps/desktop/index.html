@@ -560,7 +560,17 @@
               <div class="hud-group hud-group-score">
                 <div class="stat score-stat">
                   <span id="score-label" class="stat-label">FLOW SCORE</span>
-                  <strong id="score-value">000</strong>
+                  <!-- The score itself stays the biggest thing on the band;
+                  the target rides along as a dimmer, smaller suffix inside
+                  the same <strong> so it inherits the score's font-size at
+                  every breakpoint automatically instead of needing its own
+                  copy of every responsive rule. #score-value stays digits-only
+                  (tests read its textContent as a bare number) so the target
+                  is a sibling span, never a descendant. -->
+                  <strong class="score-readout"
+                    ><span id="score-value">000</span
+                    ><span id="score-target" class="score-target" hidden></span
+                  ></strong>
                 </div>
                 <div class="stat best-stat">
                   <span class="stat-label">BEST</span>
@@ -685,8 +695,7 @@
                   </p>
                   <div id="overlay-difficulty" class="overlay-difficulty" hidden>
                     <div class="card-heading">
-                      <span class="section-label">DIFFICULTY</span
-                      ><span id="overlay-difficulty-target" class="difficulty-target"></span>
+                      <span class="section-label">DIFFICULTY</span>
                     </div>
                     <div
                       id="overlay-difficulty-toggle"
@@ -695,6 +704,13 @@
                       aria-label="Choose difficulty"
                     >
                       <!-- dynamic buttons generated from DIFFICULTIES by renderDifficultyOptions() -->
+                    </div>
+                    <!-- The required score is what a player's eye should land
+                    on before a round starts, so it gets its own big-number
+                    row rather than sitting as small print in the heading. -->
+                    <div id="overlay-difficulty-target-row" class="overlay-difficulty-target-row">
+                      <span class="overlay-difficulty-target-label">TARGET</span
+                      ><strong id="overlay-difficulty-target" class="overlay-difficulty-target-value"></strong>
                     </div>
                     <p id="overlay-difficulty-description" class="overlay-difficulty-description"></p>
                   </div>

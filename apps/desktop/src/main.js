@@ -1848,41 +1848,100 @@ function renderOverlayDifficultyToggle() {
     }),
   );
 }
+// The concrete number that varies by tier (5 / 3 / 1), wrapped in <strong>
+// so it stands out from the surrounding prose. Read off tier.facts — the
+// same DIFFICULTY_TIERS values applyDifficulty() applies — never restated by
+// hand, so this can never drift from what a round actually enforces.
+function tierPossessionsHtml(tier) {
+  const n = tier.facts.possessions;
+  return `<strong>${n} ${n === 1 ? "possession" : "possessions"}</strong>`;
+}
+// Only Relaxed and Ruthless actually change the press speed (0.9x / 1.12x) -
+// Standard's own multiplier is 1, the baseline everything else is measured
+// against, so its press reads as plain "standard press" rather than bolding
+// a word that does not represent a change on this tier's own card.
+function tierPressHtml(tier) {
+  const mult = tier.facts.speedMultiplier;
+  if (mult > 1) return "<strong>quicker press</strong>";
+  if (mult < 1) return "<strong>gentler press</strong>";
+  return "standard press";
+}
+// Builds the pre-round card's description as HTML for a real round (career/
+// endless): only the facts DIFFICULTY_TIERS actually turns for this tier -
+// the possession count, the press speed, and (Ruthless only) the extra
+// defender - get <strong>. Everything else is connecting prose at the same
+// weight, on purpose: bolding it too would bury the parts that differ back
+// into undifferentiated text, just with more bold in it.
+function tierDifficultyDescriptionHtml(tier) {
+  const possessions = tierPossessionsHtml(tier);
+  const press = tierPressHtml(tier);
+  if (tier.id === "relaxed") {
+    return `Softer targets, ${possessions}, and a ${press} — find your rhythm first.`;
+  }
+  if (tier.id === "ruthless") {
+    return `Tighter targets, ${possessions}, a ${press}, and <strong>an extra defender</strong> closing you down.`;
+  }
+  return `The intended challenge, exactly as built: ${possessions} against the ${press}.`;
+}
+// Practice ignores the possession limit entirely (unlimited recoveries — see
+// the isPractice branches in syncHud), so its facts line never mentions
+// possessions and only ever differs by press speed and, on Ruthless, the
+// extra defender.
+function tierPracticeDescriptionHtml(tier) {
+  const press = tierPressHtml(tier);
+  if (tier.id === "relaxed") {
+    return `Looser targets and a ${press}. Find your rhythm first.`;
+  }
+  if (tier.id === "ruthless") {
+    return `Tighter targets, a ${press}, and <strong>an extra defender</strong>.`;
+  }
+  return "Standard targets and defense. Your space to experiment.";
+}
 // Reflects the tier actually in effect (game.config.difficulty, as
 // applyDifficulty stamped it) onto every difficulty-related control: the
 // below-court select/description (mirroring the pre-existing, currently
-// off-screen tactic-select pattern) and the overlay toggle/description/
-// target, which is what a player actually sees before a round.
+// off-screen tactic-select pattern) and the overlay toggle/target/
+// description, which is what a player actually sees before a round.
 function syncDifficultyChrome() {
   const activeDifficulty = game.config.difficulty;
   const difficultyMeta =
     DIFFICULTIES.find((tier) => tier.id === activeDifficulty) || DIFFICULTIES[1];
-  const practiceDescriptions = {
-    relaxed: "Looser targets and a gentle press. Find your rhythm first.",
-    standard: "Standard targets and defense. Your space to experiment.",
-    ruthless: "Tighter targets and a quicker press.",
-  };
-  const description =
+  // The below-court card is permanently hidden (see body.play-view
+  // .below-court / .arena-view .below-court in style.css) — it only ever
+  // needs plain-text fallback prose, not the emphasized markup built below
+  // for the card players actually see.
+  const plainDescription =
     mode === "practice"
-      ? (practiceDescriptions[activeDifficulty] || difficultyMeta.label)
+      ? tierPracticeDescriptionHtml(difficultyMeta).replace(/<\/?strong>/g, "")
       : difficultyMeta.label;
+  const descriptionHtml =
+    mode === "practice"
+      ? tierPracticeDescriptionHtml(difficultyMeta)
+      : tierDifficultyDescriptionHtml(difficultyMeta);
 
   $("difficulty-select").disabled = false;
   $("difficulty-select").value = activeDifficulty;
-  $("difficulty-description").textContent = description;
+  $("difficulty-description").textContent = plainDescription;
   $("difficulty-target").textContent = game.config.target ? `TARGET ${game.config.target}` : "";
 
   $("overlay-difficulty").hidden = false;
+  $("overlay-difficulty-target-row").hidden = !game.config.target;
   $("overlay-difficulty-target").textContent = game.config.target
-    ? `TARGET ${game.config.target}`
+    ? String(game.config.target)
     : "";
-  $("overlay-difficulty-description").textContent = description;
+  // innerHTML, not textContent: this is the one field built from the trusted
+  // template functions above (tier id/facts, both engine data), never from
+  // anything a player can type.
+  $("overlay-difficulty-description").innerHTML = descriptionHtml;
   document.querySelectorAll("#overlay-difficulty-toggle .hl-diff-btn").forEach((btn) => {
     const isActive = btn.dataset.tier === activeDifficulty;
     btn.classList.toggle("active", isActive);
     btn.setAttribute("aria-pressed", String(isActive));
     if (mode === "practice") {
-      btn.title = practiceDescriptions[btn.dataset.tier] || btn.title;
+      const tier = DIFFICULTIES.find((t) => t.id === btn.dataset.tier);
+      btn.title = tier
+        ? tierPracticeDescriptionHtml(tier).replace(/<\/?strong>/g, "")
+        : btn.title;
     }
     btn.disabled = false;
   });
@@ -2152,9 +2211,16 @@ function prepare() {
     mode === "career"
       ? `THE CIRCUIT / ${String(courtIndex + 1).padStart(2, "0")}`
       : mode.toUpperCase();
-  $("score-label").textContent = game.config.target
-    ? `SCORE / ${game.config.target}`
-    : "FLOW SCORE";
+  // Endless sets target: 0, and Free practice's target is an internal pacing
+  // number for the objective/goal-bar rather than a real pass/fail line (it
+  // has unlimited recoveries and no clock) — neither should show a "/ N"
+  // denominator on the HUD's big readout, so both fall back to the plain
+  // "FLOW SCORE" label with no target suffix, same as before this target
+  // pairing existed.
+  const hasScoreTarget = Boolean(game.config.target) && !game.config.practice;
+  $("score-label").textContent = hasScoreTarget ? "SCORE" : "FLOW SCORE";
+  $("score-target").textContent = hasScoreTarget ? `/ ${game.config.target}` : "";
+  $("score-target").hidden = !hasScoreTarget;
   $("goal-label").textContent =
     mode === "endless"
       ? "TRIANGLE = +5 SECONDS"

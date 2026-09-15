@@ -541,6 +541,23 @@ h1 span {
   color: var(--cyan);
   text-shadow: 0 0 13px #27ead866;
 }
+/* The score/target pair: `.score-readout` is the literal <strong> that every
+   `.stat strong` / `.score-stat strong` rule (at every breakpoint) already
+   sizes and colors, so #score-value and #score-target inherit that font-size
+   for free with no per-breakpoint copy of their own. #score-target is sized
+   relative to it (em) and faded rather than colored down, so it rides along
+   at the right scale everywhere the score itself is sized. */
+.score-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 0.12em;
+}
+.score-target {
+  font-size: 0.42em;
+  opacity: 0.55;
+  text-shadow: none;
+  white-space: nowrap;
+}
 .lives-stat strong {
   color: var(--pink);
   font-size: 22px;
@@ -1209,11 +1226,40 @@ kbd {
   flex: 1 1 0;
   text-align: center;
 }
+/* The required score, not the tier toggle or the prose below it, is meant to
+   be the thing a player's eye lands on here — a big number of its own row,
+   not the 8px corner label it used to be squeezed into. */
+.overlay-difficulty-target-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+.overlay-difficulty-target-label {
+  color: var(--muted);
+  font: 700 8px var(--sign);
+  letter-spacing: 1.5px;
+}
+.overlay-difficulty-target-value {
+  color: var(--pink);
+  font: italic 800 clamp(22px, 5vw, 30px) / 1 var(--display);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 13px color-mix(in srgb, var(--pink), transparent 55%);
+}
 .overlay-difficulty-description {
   margin: 7px 0 0;
   color: #d0c4dd;
   font-size: 9.5px;
   line-height: 1.5;
+}
+/* Only the facts that actually change between tiers (possessions, press
+   speed, the Ruthless extra defender) are marked up with <strong> in the
+   description text built by tierDifficultyDescriptionHtml() in main.js — so
+   this is the one place that differs from the surrounding prose, not a
+   generic bold reset. */
+.overlay-difficulty-description strong {
+  color: #fff;
+  font-weight: 800;
 }
 .game-footer {
   display: flex;

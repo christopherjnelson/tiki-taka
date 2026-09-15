@@ -1160,6 +1160,105 @@ await check(
   },
 );
 
+// The pre-round card used to bury the required score as an 8px corner label
+// next to "DIFFICULTY", and the description was undifferentiated prose at
+// one weight. It should now be the biggest thing on the card, and the facts
+// that actually change between tiers (possessions, press speed, the
+// Ruthless extra defender) should carry real <strong> emphasis rather than
+// decorative bolding of the surrounding text.
+await check(
+  "the pre-round card makes the target prominent and emphasizes only the facts that change between tiers",
+  async () => {
+    const context = await browser.newContext({ serviceWorkers: "block" });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await gotoArena(page, baseURL);
+    assert.equal(
+      await page.locator("#overlay-difficulty-target-row").isHidden(),
+      false,
+      "a targeted court must show the target row",
+    );
+    const overlayTarget = await page.evaluate(
+      () => document.querySelector("#overlay-difficulty-target")?.textContent,
+    );
+    assert.ok(Number(overlayTarget) > 0, "the target row must show a positive number");
+    const descriptionHtml = await page.evaluate(
+      () => document.querySelector("#overlay-difficulty-description")?.innerHTML,
+    );
+    assert.match(
+      descriptionHtml,
+      /<strong>\d+ possessions?<\/strong>/,
+      "the possession count must be the emphasized fact, not decorative bolding",
+    );
+    assert.match(
+      descriptionHtml,
+      /standard press|<strong>(quicker|gentler) press<\/strong>/,
+      "the press phrase must only be bolded when it actually differs from the standard press",
+    );
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+// The HUD's big number used to be undifferentiated ("000" with the target
+// welded into a small label above it, "SCORE / 600"). The live score and its
+// target should now read as a pair on the readout itself, with the target
+// visibly secondary, and modes without a real target (Endless's target: 0,
+// Free practice's sandbox) must never show a "/ 0" or nonsense denominator.
+await check(
+  "the HUD score readout pairs the live score with its target, and degrades cleanly with no target",
+  async () => {
+    const context = await browser.newContext({ serviceWorkers: "block" });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await gotoArena(page, baseURL);
+    await page.locator("#start-button").click();
+    await page.waitForFunction(() => document.querySelector("#game-overlay")?.hidden === true);
+    // syncHud writes score-value/-target on the frame after a change, so read
+    // these on the far side of real frames rather than synchronously.
+    await afterFrames(page, 3);
+    const careerReadout = await page.evaluate(() => ({
+      label: document.querySelector("#score-label")?.textContent,
+      scoreValue: document.querySelector("#score-value")?.textContent,
+      targetHidden: document.querySelector("#score-target")?.hidden,
+      targetText: document.querySelector("#score-target")?.textContent,
+    }));
+    assert.equal(careerReadout.label, "SCORE");
+    assert.match(careerReadout.scoreValue, /^\d+$/, "#score-value must stay digits-only for existing helpers");
+    assert.equal(careerReadout.targetHidden, false);
+    assert.match(careerReadout.targetText, /^\/ \d+$/);
+    assert.deepEqual(errors, []);
+    await context.close();
+
+    // Free practice: unlimited recoveries, no clock — its target is an
+    // internal pacing number for the objective card, not a real pass/fail
+    // line, so the HUD readout must not show it as a denominator.
+    const practiceContext = await browser.newContext({ serviceWorkers: "block" });
+    const practicePage = await practiceContext.newPage(),
+      practiceErrors = errorsFor(practicePage);
+    await practicePage.goto(`${baseURL}/`);
+    await practicePage.locator("#home-view").waitFor({ state: "visible" });
+    await practicePage.locator('[data-home-mode="practice"]').click();
+    await practicePage.locator("#title-play").click();
+    await practicePage.locator("#arena-view").waitFor({ state: "visible" });
+    await practicePage.locator("#start-button").click();
+    await practicePage.waitForFunction(() => document.querySelector("#game-overlay")?.hidden === true);
+    await afterFrames(practicePage, 3);
+    const practiceReadout = await practicePage.evaluate(() => ({
+      label: document.querySelector("#score-label")?.textContent,
+      scoreValue: document.querySelector("#score-value")?.textContent,
+      targetHidden: document.querySelector("#score-target")?.hidden,
+      targetText: document.querySelector("#score-target")?.textContent,
+    }));
+    assert.equal(practiceReadout.label, "FLOW SCORE");
+    assert.match(practiceReadout.scoreValue, /^\d+$/);
+    assert.equal(practiceReadout.targetHidden, true, "practice must not show a target denominator");
+    assert.equal(practiceReadout.targetText, "");
+    assert.deepEqual(practiceErrors, []);
+    await practiceContext.close();
+  },
+);
+
 await browser.close();
 if (server) server.kill();
 if (failures) process.exitCode = 1;
