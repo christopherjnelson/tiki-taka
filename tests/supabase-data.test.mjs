@@ -126,30 +126,35 @@ test("Supabase adapter aggregates bonus-counter totals across rounds and normali
   assert.equal(stats.totalZones, 2);
 });
 
+// getLeaderboard talks straight to PostgREST rather than through the client
+// (see fetchPublicLeaderboard in packages/data/src/supabase.js) - the one
+// call this adapter must serve without the Supabase library ever having
+// loaded (createDeferredSupabaseDataAdapter in packages/data/src/index.js
+// calls it directly, with no adapter at all). These tests stub global fetch
+// instead of the client's query builder.
+function withFetch(handler, run) {
+  const original = globalThis.fetch;
+  globalThis.fetch = handler;
+  return run().finally(() => {
+    globalThis.fetch = original;
+  });
+}
+
 test("Supabase adapter's leaderboard selects and maps the bonus-counter columns", async () => {
-  let selected;
+  let requestUrl;
   const client = {
     auth: { getSession: async () => ({ data: { session: null }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
-    from(table) {
-      if (table !== "leaderboard_entries") throw new Error(`unexpected table ${table}`);
-      const query = {
-        select: (columns) => { selected = columns; return query; },
-        eq: () => query,
-        order: () => query,
-        limit: async () => ({
-          data: [{ username: "player", score: 10, passes: 3, best_one_touch: 2, triangles: 1, oles: 2, splits: 3, zones: 4, created_at: "now" }],
-          error: null,
-        }),
-      };
-      return query;
-    },
   };
-  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
-  const board = await adapter.getLeaderboard({ mode: "career" });
-  assert.match(selected, /\btriangles\b/);
-  assert.match(selected, /\boles\b/);
-  assert.match(selected, /\bsplits\b/);
-  assert.match(selected, /\bzones\b/);
+  const adapter = createSupabaseDataAdapter({ client, url: "https://proj.supabase.co", publishableKey: "anon-key", storage: memoryStorage() });
+  const board = await withFetch(async (url) => {
+    requestUrl = url;
+    return new Response(JSON.stringify([{ username: "player", score: 10, passes: 3, best_one_touch: 2, triangles: 1, oles: 2, splits: 3, zones: 4, created_at: "now" }]), { status: 200 });
+  }, () => adapter.getLeaderboard({ mode: "career" }));
+  const select = new URL(requestUrl).searchParams.get("select");
+  assert.match(select, /\btriangles\b/);
+  assert.match(select, /\boles\b/);
+  assert.match(select, /\bsplits\b/);
+  assert.match(select, /\bzones\b/);
   assert.deepEqual(board.entries[0], {
     username: "player",
     score: 10,
@@ -187,24 +192,21 @@ test("Supabase adapter threads difficulty into the round payload and defaults an
 });
 
 test("getLeaderboard selects and maps difficulty, and accepts an optional difficulty filter", async () => {
-  const filters = [];
   const user = { id: "user-1", email: "player@example.com", user_metadata: { username: "player" } };
   const row = { username: "player", mode: "career", court: 0, score: 900, passes: 12, best_one_touch: 4, difficulty: "ruthless", created_at: "2026-09-11T00:00:00Z" };
-  function queryFor(rows) {
-    const query = {
-      eq(field, value) { filters.push([field, value]); return query; },
-      order() { return query; },
-      limit: async () => ({ data: rows, error: null }),
-    };
-    return query;
-  }
   const client = {
     auth: { getSession: async () => ({ data: { session: { user } }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
-    from: (table) => table === "leaderboard_entries" ? { select: () => queryFor([row]) } : (() => { throw new Error(`unexpected table ${table}`); })(),
   };
-  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
-  const result = await adapter.getLeaderboard({ mode: "career", court: 0, difficulty: "ruthless" });
-  assert.deepEqual(filters, [["mode", "career"], ["court", 0], ["difficulty", "ruthless"]]);
+  const adapter = createSupabaseDataAdapter({ client, url: "https://proj.supabase.co", publishableKey: "anon-key", storage: memoryStorage() });
+  let requestUrl;
+  const result = await withFetch(async (url) => {
+    requestUrl = url;
+    return new Response(JSON.stringify([row]), { status: 200 });
+  }, () => adapter.getLeaderboard({ mode: "career", court: 0, difficulty: "ruthless" }));
+  const params = new URL(requestUrl).searchParams;
+  assert.equal(params.get("mode"), "eq.career");
+  assert.equal(params.get("court"), "eq.0");
+  assert.equal(params.get("difficulty"), "eq.ruthless");
   assert.equal(result.difficulty, "ruthless");
   assert.deepEqual(result.entries[0], { username: "player", score: 900, passes: 12, bestOneTouch: 4, triangles: 0, oles: 0, splits: 0, zones: 0, difficulty: "ruthless", createdAt: "2026-09-11T00:00:00Z" });
 });
@@ -212,19 +214,15 @@ test("getLeaderboard selects and maps difficulty, and accepts an optional diffic
 test("getLeaderboard forwards an optional AbortSignal without requiring it", async () => {
   const controller = new AbortController();
   let receivedSignal;
-  const query = {
-    eq() { return query; },
-    abortSignal(signal) { receivedSignal = signal; return query; },
-    order() { return query; },
-    limit: async () => ({ data: [], error: null }),
-  };
   const client = {
     auth: { getSession: async () => ({ data: { session: null }, error: null }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
-    from: (table) => table === "leaderboard_entries" ? { select: () => query } : (() => { throw new Error(`unexpected table ${table}`); })(),
   };
-  const adapter = createSupabaseDataAdapter({ client, storage: memoryStorage() });
+  const adapter = createSupabaseDataAdapter({ client, url: "https://proj.supabase.co", publishableKey: "anon-key", storage: memoryStorage() });
 
-  await adapter.getLeaderboard({ signal: controller.signal });
+  await withFetch(async (_url, init) => {
+    receivedSignal = init?.signal;
+    return new Response(JSON.stringify([]), { status: 200 });
+  }, () => adapter.getLeaderboard({ signal: controller.signal }));
 
   assert.equal(receivedSignal, controller.signal);
 });

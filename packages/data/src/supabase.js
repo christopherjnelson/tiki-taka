@@ -118,6 +118,63 @@ async function maybeSingle(query, fallback) {
   return result.data ?? fallback;
 }
 
+// A direct PostgREST call rather than a `supabase.from(...)` query built by
+// the JS client. leaderboard_entries is a public, read-only view (RLS grants
+// anon select) and this is the one adapter call the home screen fires on
+// every load, signed in or not - routing it through the real client would
+// force the ~56 KiB Supabase vendor chunk to load for every guest the moment
+// they land on the page, which is exactly what loading the client on demand
+// (see createDeferredSupabaseDataAdapter in index.js) is meant to avoid. It
+// needs only the project URL and its public, non-secret publishable key -
+// the same two values the client would have used - so it works identically
+// whether or not the real client has been loaded yet.
+export async function fetchPublicLeaderboard({ url, publishableKey, mode = "career", court, difficulty: tier, limit = 10, signal } = {}) {
+  if (!url || !publishableKey)
+    throw new LocalDataError("STORAGE_REQUIRED", "Supabase URL and publishable key must be configured.");
+  const params = new URLSearchParams();
+  params.set("select", "username,mode,court,score,passes,best_one_touch,triangles,oles,splits,zones,difficulty,created_at");
+  params.set("mode", `eq.${mode}`);
+  if (court !== undefined && court !== null) params.set("court", `eq.${court}`);
+  if (tier !== undefined && tier !== null) params.set("difficulty", `eq.${difficulty(tier)}`);
+  params.set("order", "score.desc,created_at.asc");
+  params.set("limit", String(Math.min(Math.max(integer(limit), 1), 100)));
+  let response;
+  try {
+    response = await fetch(`${String(url).replace(/\/+$/, "")}/rest/v1/leaderboard_entries?${params.toString()}`, {
+      headers: { apikey: publishableKey, Authorization: `Bearer ${publishableKey}`, Accept: "application/json" },
+      signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") throw error;
+    throw errorFrom(error, "Supabase could not load the leaderboard.");
+  }
+  if (!response.ok)
+    throw errorFrom(new Error(`Supabase leaderboard request failed (${response.status})`), "Supabase could not load the leaderboard.");
+  let rows;
+  try {
+    rows = await response.json();
+  } catch (error) {
+    throw errorFrom(error, "Supabase could not load the leaderboard.");
+  }
+  return {
+    mode,
+    court: court ?? null,
+    difficulty: tier ?? null,
+    entries: (rows ?? []).map((row) => ({
+      username: row.username ?? "Player",
+      score: number(row.score),
+      passes: integer(row.passes),
+      bestOneTouch: integer(row.best_one_touch),
+      triangles: integer(row.triangles),
+      oles: integer(row.oles),
+      splits: integer(row.splits),
+      zones: integer(row.zones),
+      difficulty: difficulty(row.difficulty),
+      createdAt: row.created_at,
+    })),
+  };
+}
+
 /**
  * Browser-only Supabase implementation of the data-adapter contract.
  *
@@ -378,21 +435,15 @@ export function createSupabaseDataAdapter({
         return statsFor(user);
       }, () => guest.recordRound(round));
     },
-    async getLeaderboard({ mode = "career", court, difficulty: tier, limit = 10, signal } = {}) {
-      try {
-        let query = supabase.from("leaderboard_entries").select("username, mode, court, score, passes, best_one_touch, triangles, oles, splits, zones, difficulty, created_at").eq("mode", mode);
-        if (court !== undefined && court !== null) query = query.eq("court", court);
-        if (tier !== undefined && tier !== null) query = query.eq("difficulty", difficulty(tier));
-        // Supabase/PostgREST accepts an AbortSignal on the query builder. Do
-        // not invoke the modifier when omitted so existing client adapters
-        // and lightweight test doubles retain the original contract.
-        if (signal !== undefined) query = query.abortSignal(signal);
-        const result = await query.order("score", { ascending: false }).order("created_at", { ascending: true }).limit(Math.min(Math.max(integer(limit), 1), 100));
-        throwIfError(result.error, "Supabase could not load the leaderboard.");
-        return { mode, court: court ?? null, difficulty: tier ?? null, entries: (result.data ?? []).map((row) => ({ username: row.username ?? "Player", score: number(row.score), passes: integer(row.passes), bestOneTouch: integer(row.best_one_touch), triangles: integer(row.triangles), oles: integer(row.oles), splits: integer(row.splits), zones: integer(row.zones), difficulty: difficulty(row.difficulty), createdAt: row.created_at })) };
-      } catch (error) {
-        throw errorFrom(error, "Supabase could not load the leaderboard.");
-      }
+    // Goes straight to PostgREST (see fetchPublicLeaderboard above) rather
+    // than through `supabase`/`client` - this is the one call on this
+    // adapter that must work identically whether or not the real client has
+    // loaded, since createDeferredSupabaseDataAdapter (packages/data/src/
+    // index.js) calls this same helper directly, without ever constructing
+    // a real adapter, whenever a guest is just reading the public
+    // leaderboard.
+    async getLeaderboard(options = {}) {
+      return fetchPublicLeaderboard({ url, publishableKey, ...options });
     },
   };
 }

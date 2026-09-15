@@ -72,7 +72,11 @@ const cacheVersion = cacheHash.digest("hex").slice(0, 12);
 // Audio is downloaded on demand instead of during installation. The fetch
 // handler below caches same-origin responses, so every track/effect becomes
 // available offline after its first successful request.
-const precacheAssets = desktopAssets.filter(shouldPrecacheAsset);
+// The entry HTML decides which JS is "the shell": anything it references is
+// needed to render, anything it does not is a deferred chunk that the fetch
+// handler can cache on first use instead.
+const entryHtml = await readFile("dist/desktop/index.html", "utf8");
+const precacheAssets = desktopAssets.filter((asset) => shouldPrecacheAsset(asset, entryHtml));
 const serviceWorker = `const CACHE = "tiki-taka-desktop-${cacheVersion}";
 const ASSETS = ${JSON.stringify(precacheAssets, null, 2)};
 self.addEventListener("install", event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())));
