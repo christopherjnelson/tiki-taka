@@ -4878,17 +4878,13 @@ body:has(.noscript) .boot-sync {
     letter-spacing: 0.8px;
     white-space: nowrap;
   }
-  .hl-head .hl-cell-bonus.hl-cell-tri {
+  .hl-head .hl-cell-bonus.hl-cell-tri,
+  .hl-head .hl-cell-bonus.hl-cell-split,
+  .hl-head .hl-cell-bonus.hl-cell-zone {
     color: #ffd043;
   }
   .hl-head .hl-cell-bonus.hl-cell-ole {
     color: var(--pink);
-  }
-  .hl-head .hl-cell-bonus.hl-cell-split {
-    color: #ffd043;
-  }
-  .hl-head .hl-cell-bonus.hl-cell-zone {
-    color: #ffd043;
   }
   /* ── User Best Footer ──────────────────────────────────────────────── */
   /* The tag ("YOUR BEST") is a decorative label, not a data column, so it
