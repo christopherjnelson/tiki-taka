@@ -87,19 +87,21 @@ test('DIFFICULTIES describes the three tiers in order for the UI to render direc
 });
 
 test('applyDifficulty is pure and produces the documented values for every tier', () => {
-  const court = COURTS[0]; // target 600, speed 76, defenders 2
+  const court = COURTS[0]; // reference 9000, clearRatio 0.25, speed 76, defenders 2
   const frozen = JSON.parse(JSON.stringify(court));
 
   const relaxed = applyDifficulty(court, 'relaxed');
   assert.deepEqual(court, frozen, 'applyDifficulty must not mutate its input');
-  assert.equal(relaxed.target, 300); // 600 * 0.5
+  assert.equal(relaxed.reference, 4500); // 9000 * 0.5
+  assert.equal(relaxed.target, 1150); // 4500 * 0.25, to the nearest 50
   assert.equal(relaxed.possessions, 5);
   assert.equal(relaxed.speed, 76 * 0.9);
   assert.equal(relaxed.defenders, 2);
   assert.equal(relaxed.difficulty, 'relaxed');
 
   const standard = applyDifficulty(court, 'standard');
-  assert.equal(standard.target, 600);
+  assert.equal(standard.reference, 9000);
+  assert.equal(standard.target, 2250); // 9000 * 0.25
   assert.equal(standard.possessions, 3);
   assert.equal(standard.speed, 76);
   assert.equal(standard.defenders, 2);
@@ -110,7 +112,8 @@ test('applyDifficulty is pure and produces the documented values for every tier'
   // harder run at the same court rather than a different court. See the
   // note above DIFFICULTY_TIERS for why its target is not raised.
   const ruthless = applyDifficulty(court, 'ruthless');
-  assert.equal(ruthless.target, 600);
+  assert.equal(ruthless.reference, 9000);
+  assert.equal(ruthless.target, 2250);
   assert.equal(ruthless.possessions, 1);
   assert.equal(ruthless.speed, 76);
   assert.equal(ruthless.defenders, 2);
@@ -124,9 +127,9 @@ test('applyDifficulty is pure and produces the documented values for every tier'
 
 // Every finished Ruthless round has zero turnovers (one possession, and the
 // first loss ends it), so it is also the highest-scoring kind of round the
-// game produces - zoneStreak never resets. Stars are fixed ratios of the
-// target, and the 3-star rung additionally demands zero turnovers, so a
-// Ruthless targetMultiplier above 1 would put its 2- and 3-star thresholds
+// game produces - zoneStreak never resets. Stars are ratios of the court's
+// reference, and the 3-star rung additionally demands zero turnovers, so a
+// Ruthless scoreMultiplier above 1 would put its 2- and 3-star thresholds
 // beyond what the tier can physically score. Guard the ratio directly.
 test('no tier sets a target a cleared round of that tier could never star on', () => {
   for (const tier of DIFFICULTIES) {
@@ -160,7 +163,12 @@ test('applyDifficulty caps total defenders and falls back to standard on an unkn
 test('standard is byte-equivalent to the pre-tier court behavior', () => {
   for (const court of COURTS) {
     const standard = applyDifficulty(court, 'standard');
-    assert.equal(standard.target, court.target, court.name);
+    assert.equal(standard.reference, court.reference, court.name);
+    assert.equal(
+      standard.target,
+      Math.round((court.reference * court.clearRatio) / 50) * 50,
+      court.name,
+    );
     assert.equal(standard.speed, court.speed, court.name);
     assert.equal(standard.defenders, court.defenders, court.name);
     assert.equal(standard.possessions, 3, court.name);
@@ -1002,22 +1010,32 @@ test('identical seed and inputs reproduce an entire match exactly', () => {
 });
 
 test('every campaign court has a feasible passing strategy under seeded pressure', () => {
-  assert.deepEqual(COURTS.map(court => court.target), [600, 900, 1200, 1600, 2000, 2400]);
+  // The clear line is a ratio of each court's reference now, and it walks
+  // up the roster rather than being written per court.
+  assert.deepEqual(
+    COURTS.map(court => Math.round((court.reference * court.clearRatio) / 50) * 50),
+    [2250, 2500, 2800, 3050, 3350, 3600],
+  );
   for (const court of COURTS) {
+    const target = applyDifficulty(court, 'standard').target;
     const quick = playAssisted(court, court.seed, 0.25);
     const { game, attempts } = playMoving(court, 0.5);
     assert.equal(quick.game.time, 0, `${court.name}: quick passing must survive the timer`);
-    assert.ok(quick.game.score >= court.target, `${court.name}: quick ${quick.game.score}/${court.target}`);
+    assert.ok(quick.game.score >= target, `${court.name}: quick ${quick.game.score}/${target}`);
     assert.equal(game.time, 0, `${court.name}: moving strategy must survive the timer`);
     assert.ok(game.turnovers < 3, `${court.name}: moving strategy retains a life`);
-    // The multiplier now only climbs by actively chasing the zone, which
-    // this bot (evading defenders, not calling for the zone) does only
-    // opportunistically - so it is held to a lower bar than the quick
-    // reflex bot above. Court targets are unchanged by this pass (see
-    // CLAUDE.md decision: no target rebalance in this change); a bot this
-    // passive falling a bit short of the full target on the hardest courts
-    // is expected, not a regression.
-    assert.ok(game.score >= court.target * 0.8, `${court.name}: ${game.score}/${court.target}`);
+    // This bot evades defenders and never calls for the zone, and the
+    // multiplier now climbs by zone receptions alone - so it is structurally
+    // incapable of the score the clear line asks for, and SHOULD fall short.
+    // Requiring it to reach 80% of the target would be asserting that
+    // passive possession clears a court, which is the opposite of the
+    // design. What is worth guarding is that the court is playable at all:
+    // it survives the clock, keeps a life, completes its passes, and puts a
+    // real score on the board rather than collapsing to nothing.
+    assert.ok(
+      game.score >= target * 0.4,
+      `${court.name}: passive possession should still score, got ${game.score}/${target}`,
+    );
     assert.ok(game.passes / attempts > 0.75, `${court.name}: viable pass completion`);
   }
 });

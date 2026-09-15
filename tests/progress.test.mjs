@@ -2,8 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { freshProgress, readProgress, saveProgress, awardMatch, rank, isReadableProgress } from '../src/progress.js';
 
-function finishedGame({ score = 200, target = 180, time = 0, turnovers = 0, key, difficulty, possessions, endless } = {}) {
-  return { score, turnovers, time, config: { target, key, difficulty, possessions, endless } };
+// `reference` is what a clean round scores on the court; `target` is the
+// clear line taken from it, and the star rungs are their own ratios of the
+// reference (STAR_RATIOS: 0.6 and 0.95). The default pair keeps the same
+// ~0.3 relationship the real courts use, so 600/180 means: clear at 180,
+// two stars at 360, three at 570 and no turnovers.
+function finishedGame({ score = 200, reference = 600, target = 180, time = 0, turnovers = 0, key, difficulty, possessions, endless } = {}) {
+  return { score, turnovers, time, config: { reference, target, key, difficulty, possessions, endless } };
 }
 
 test('fresh progress has a stable, independent shape', () => {
@@ -15,11 +20,13 @@ test('fresh progress has a stable, independent shape', () => {
 
 test('a timer-and-score clear awards stars, XP, a best, and the next court', () => {
   const progress = freshProgress();
-  const result = awardMatch(progress, finishedGame({ score: 400 }), 'career', 0);
+  // 600 is the fixture's reference: a clean round that scores what the court
+  // is tuned to produce, which is precisely what three stars now means.
+  const result = awardMatch(progress, finishedGame({ score: 600 }), 'career', 0);
   assert.deepEqual(result, { cleared: true, stars: 3, xp: 98, newBest: true });
   assert.equal(progress.unlocked, 1);
-  assert.deepEqual(progress.courts[0], { standard: { stars: 3, best: 400 } });
-  assert.equal(progress.records['court-0-standard'], 400);
+  assert.deepEqual(progress.courts[0], { standard: { stars: 3, best: 600 } });
+  assert.equal(progress.records['court-0-standard'], 600);
 });
 
 test('failed and prematurely abandoned results do not unlock a court', () => {
@@ -34,11 +41,11 @@ test('failed and prematurely abandoned results do not unlock a court', () => {
 
 test('replays preserve higher stars and personal bests', () => {
   const progress = freshProgress();
-  awardMatch(progress, finishedGame({ score: 450 }), 'career', 0);
+  awardMatch(progress, finishedGame({ score: 600 }), 'career', 0);
   awardMatch(progress, finishedGame({ score: 200, turnovers: 2 }), 'career', 0);
   assert.equal(progress.courts[0].standard.stars, 3);
-  assert.equal(progress.courts[0].standard.best, 450);
-  assert.equal(progress.records['court-0-standard'], 450);
+  assert.equal(progress.courts[0].standard.best, 600);
+  assert.equal(progress.records['court-0-standard'], 600);
 });
 
 test('save and read round-trip while corrupt or unavailable storage fails safely', () => {
@@ -129,7 +136,8 @@ test('stars and personal bests are tracked separately per tier on the same court
   const progress = freshProgress();
   awardMatch(progress, finishedGame({ score: 400, difficulty: 'relaxed' }), 'career', 0);
   awardMatch(progress, finishedGame({ score: 250, difficulty: 'ruthless' }), 'career', 0);
-  assert.deepEqual(progress.courts[0].relaxed, { stars: 3, best: 400 });
+  // 400 clears (180) and passes two stars (360) but not three (570).
+  assert.deepEqual(progress.courts[0].relaxed, { stars: 2, best: 400 });
   assert.deepEqual(progress.courts[0].ruthless, { stars: 1, best: 250 });
   assert.equal(progress.courts[0].standard, undefined);
   assert.equal(progress.records['court-0-relaxed'], 400);
@@ -145,10 +153,12 @@ test('a clear on Relaxed unlocks the next court, same as any other tier', () => 
 
 test('the first clear of a court/tier pays far more than a repeat clear of the same one', () => {
   const progress = freshProgress();
-  const first = awardMatch(progress, finishedGame({ score: 200, target: 180 }), 'career', 0);
-  const repeat = awardMatch(progress, finishedGame({ score: 200, target: 180 }), 'career', 0);
-  assert.equal(first.xp, 77);
-  assert.equal(repeat.xp, 22);
+  const round = () => finishedGame({ score: 200, target: 180, reference: 400 });
+  const first = awardMatch(progress, round(), 'career', 0);
+  const repeat = awardMatch(progress, round(), 'career', 0);
+  // performance 10 + one star 6 + clear bonus (60 first, 5 repeat).
+  assert.equal(first.xp, 76);
+  assert.equal(repeat.xp, 21);
   assert.ok(first.xp > repeat.xp);
 });
 
@@ -163,8 +173,9 @@ test('the repeat-clear bonus scales with court index too, not just the first cle
   ];
   for (const [difficulty, courtIndex, target, expected] of cases) {
     const progress = freshProgress();
-    awardMatch(progress, finishedGame({ score: target, target, difficulty }), 'career', courtIndex);
-    const repeat = awardMatch(progress, finishedGame({ score: target, target, difficulty }), 'career', courtIndex);
+    const round = () => finishedGame({ score: target, target, reference: target * 2, difficulty });
+    awardMatch(progress, round(), 'career', courtIndex);
+    const repeat = awardMatch(progress, round(), 'career', courtIndex);
     assert.equal(repeat.xp, expected, `${difficulty} court ${courtIndex}`);
   }
   // Same tier, harder court must pay a strictly bigger repeat bonus - this
@@ -172,11 +183,11 @@ test('the repeat-clear bonus scales with court index too, not just the first cle
   // no court term made grinding the easiest court as efficient as the
   // hardest.
   const easy = freshProgress();
-  awardMatch(easy, finishedGame({ score: 180, target: 180, difficulty: 'standard' }), 'career', 0);
-  const easyRepeat = awardMatch(easy, finishedGame({ score: 180, target: 180, difficulty: 'standard' }), 'career', 0);
+  awardMatch(easy, finishedGame({ score: 180, target: 180, reference: 360, difficulty: 'standard' }), 'career', 0);
+  const easyRepeat = awardMatch(easy, finishedGame({ score: 180, target: 180, reference: 360, difficulty: 'standard' }), 'career', 0);
   const hard = freshProgress();
-  awardMatch(hard, finishedGame({ score: 2400, target: 2400, difficulty: 'standard' }), 'career', 5);
-  const hardRepeat = awardMatch(hard, finishedGame({ score: 2400, target: 2400, difficulty: 'standard' }), 'career', 5);
+  awardMatch(hard, finishedGame({ score: 2400, target: 2400, reference: 4800, difficulty: 'standard' }), 'career', 5);
+  const hardRepeat = awardMatch(hard, finishedGame({ score: 2400, target: 2400, reference: 4800, difficulty: 'standard' }), 'career', 5);
   assert.ok(hardRepeat.xp > easyRepeat.xp, 'court 5 Standard repeat must pay more than court 0 Standard repeat');
 });
 
@@ -191,16 +202,17 @@ test('first-clear XP scales with tier and with court index', () => {
   ];
   for (const [difficulty, courtIndex, target, expected] of cases) {
     const progress = freshProgress();
-    const result = awardMatch(progress, finishedGame({ score: target, target, difficulty }), 'career', courtIndex);
+    const result = awardMatch(progress, finishedGame({ score: target, target, reference: target * 2, difficulty }), 'career', courtIndex);
     assert.equal(result.xp, expected, `${difficulty} court ${courtIndex}`);
   }
 });
 
 test('endless pays performance XP only - no star bonus, no clear bonus', () => {
   const progress = freshProgress();
-  const result = awardMatch(progress, finishedGame({ score: 900, target: 0, endless: true }), 'endless', 0);
-  assert.equal(result.stars, 3); // trivially true at target 0, but must not be paid for
-  assert.equal(result.xp, 15);
+  const result = awardMatch(progress, finishedGame({ score: 900, reference: 0, target: 0, endless: true }), 'endless', 0);
+  assert.equal(result.stars, 3); // trivially true with no target, but must not be paid for
+  // Performance only, against ENDLESS_REFERENCE (600) and capped at 20.
+  assert.equal(result.xp, 20);
 });
 
 test('a non-practice mode that fails to clear still gets the 3 XP floor', () => {

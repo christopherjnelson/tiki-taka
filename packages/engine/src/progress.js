@@ -1,4 +1,4 @@
-import { COURTS, DIFFICULTIES } from "./game.js";
+import { COURTS, DIFFICULTIES, STAR_RATIOS } from "./game.js";
 const DIFFICULTY_IDS = DIFFICULTIES.map((tier) => tier.id);
 // XP rewards clearing NEW ground, not grinding a round that's already been
 // won. Score alone pays a small, capped amount ("performance"); both clear
@@ -190,13 +190,26 @@ export function awardMatch(progress, game, mode, courtIndex) {
     (game.time <= 0 || isPractice) &&
     (isPractice || game.turnovers < possessions) &&
     game.score >= game.config.target;
+  // Stars are graded against the court's reference - what a clean round
+  // scores there - not against its clear line. Deriving them from the target
+  // meant one number set both the "you may move on" bar and the "you played
+  // this beautifully" bar, so neither could be tuned without breaking the
+  // other. See the note above COURT_DEFS in game.js.
+  const reference =
+    game.config.reference > 0
+      ? game.config.reference
+      : game.config.target > 0
+        ? game.config.target
+        : ENDLESS_REFERENCE;
   const stars = cleared
     ? 1 +
-      Number(game.score >= game.config.target * 1.5) +
-      Number(game.score >= game.config.target * 2.2 && game.turnovers === 0)
+      Number(game.score >= reference * STAR_RATIOS.two) +
+      Number(game.score >= reference * STAR_RATIOS.three && game.turnovers === 0)
     : 0;
-  const reference = game.config.target > 0 ? game.config.target : ENDLESS_REFERENCE;
-  const performance = Math.min(20, Math.max(0, Math.floor((10 * game.score) / reference)));
+  // Full performance XP lands at a round that matches the reference. The old
+  // divisor was the target, roughly a third of it, so this saturated at its
+  // cap on any competent round and stopped distinguishing anything.
+  const performance = Math.min(20, Math.max(0, Math.floor((20 * game.score) / reference)));
   const key = mode === "career" ? `court-${courtIndex}-${tier}` : mode;
   // Read "is this new ground" BEFORE the writes further down overwrite it.
   const isFirstClearOfCourtTier =
