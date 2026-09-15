@@ -1813,8 +1813,12 @@ await check(
     await page.setViewportSize({ width: 1280, height: 900 });
 
     // Now prove the round setup's own difficulty selector actually changes
-    // the applied target, not just its own label: Relaxed x0.7, Standard
-    // x1.0 and Ruthless x1.3 over the same court, rounded to the nearest 50.
+    // the applied target, not just its own label: Relaxed x0.5 against
+    // Standard x1.0 over the same court, rounded to the nearest 50.
+    // Ruthless deliberately shares Standard's target — its single
+    // possession means every round it finishes had no turnover, so it
+    // already outscores Standard; raising its target too would push its
+    // star rungs past what the tier can score (see DIFFICULTY_TIERS).
     // The arena is always Play view (.below-court, which holds this
     // selector, stays hidden the whole time per the existing "reclaim the
     // window for the court" design) — set the value directly and dispatch
@@ -1828,12 +1832,15 @@ await check(
     const ruthlessTarget = await page.locator("#difficulty-target").textContent();
     await setDifficulty("relaxed");
     const relaxedTarget = await page.locator("#difficulty-target").textContent();
-    assert.notEqual(standardTarget, ruthlessTarget);
     assert.notEqual(standardTarget, relaxedTarget);
-    assert.notEqual(relaxedTarget, ruthlessTarget);
+    assert.equal(
+      standardTarget,
+      ruthlessTarget,
+      "Ruthless must ask for the same score as Standard, not more",
+    );
     assert.match(standardTarget, /TARGET 600/);
-    assert.match(ruthlessTarget, /TARGET \d+/);
-    assert.match(relaxedTarget, /TARGET \d+/);
+    assert.match(ruthlessTarget, /TARGET 600/);
+    assert.match(relaxedTarget, /TARGET 300/);
 
     // The possession count must agree with the tier everywhere it's shown —
     // the HUD counter (#lives-value), the pre-round note, and the overlay
