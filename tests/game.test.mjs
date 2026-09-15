@@ -92,7 +92,7 @@ test('applyDifficulty is pure and produces the documented values for every tier'
 
   const relaxed = applyDifficulty(court, 'relaxed');
   assert.deepEqual(court, frozen, 'applyDifficulty must not mutate its input');
-  assert.equal(relaxed.target, 400); // 600 * 0.7 = 420, rounded to nearest 50
+  assert.equal(relaxed.target, 300); // 600 * 0.5
   assert.equal(relaxed.possessions, 5);
   assert.equal(relaxed.speed, 76 * 0.9);
   assert.equal(relaxed.defenders, 2);
@@ -105,17 +105,47 @@ test('applyDifficulty is pure and produces the documented values for every tier'
   assert.equal(standard.defenders, 2);
   assert.equal(standard.difficulty, 'standard');
 
+  // Ruthless turns exactly one dial: the possession count. Its target,
+  // press and defender count are the court's own, so a Ruthless round is a
+  // harder run at the same court rather than a different court. See the
+  // note above DIFFICULTY_TIERS for why its target is not raised.
   const ruthless = applyDifficulty(court, 'ruthless');
-  assert.equal(ruthless.target, 800); // 600 * 1.3 = 780, rounded to nearest 50
+  assert.equal(ruthless.target, 600);
   assert.equal(ruthless.possessions, 1);
-  assert.equal(ruthless.speed, 76 * 1.12);
-  assert.equal(ruthless.defenders, 3);
+  assert.equal(ruthless.speed, 76);
+  assert.equal(ruthless.defenders, 2);
   assert.equal(ruthless.difficulty, 'ruthless');
+  assert.deepEqual(
+    { ...ruthless, possessions: standard.possessions, difficulty: standard.difficulty },
+    standard,
+    'possessions must be the only field Ruthless changes',
+  );
+});
+
+// Every finished Ruthless round has zero turnovers (one possession, and the
+// first loss ends it), so it is also the highest-scoring kind of round the
+// game produces - zoneStreak never resets. Stars are fixed ratios of the
+// target, and the 3-star rung additionally demands zero turnovers, so a
+// Ruthless targetMultiplier above 1 would put its 2- and 3-star thresholds
+// beyond what the tier can physically score. Guard the ratio directly.
+test('no tier sets a target a cleared round of that tier could never star on', () => {
+  for (const tier of DIFFICULTIES) {
+    const applied = applyDifficulty(COURTS[0], tier.id);
+    const standardTarget = applyDifficulty(COURTS[0], 'standard').target;
+    assert.ok(
+      applied.target <= standardTarget,
+      `${tier.id} must not ask for more points than Standard: its rounds have fewer resets, not more`,
+    );
+  }
 });
 
 test('applyDifficulty caps total defenders and falls back to standard on an unknown tier', () => {
-  const crowded = { ...COURTS[4], defenders: 4 }; // ruthless would add one more: 5, at the cap
-  assert.equal(applyDifficulty(crowded, 'ruthless').defenders, MAX_DEFENDERS);
+  // No tier adds defenders any more, so the clamp now guards authored court
+  // data rather than a tier bonus: a court written above the cap is still
+  // brought back to it.
+  const overCap = { ...COURTS[4], defenders: 9 };
+  assert.equal(applyDifficulty(overCap, 'ruthless').defenders, MAX_DEFENDERS);
+  assert.equal(applyDifficulty(overCap, 'standard').defenders, MAX_DEFENDERS);
   const alreadyAtCap = { ...COURTS[4], defenders: 5 };
   assert.equal(applyDifficulty(alreadyAtCap, 'ruthless').defenders, MAX_DEFENDERS);
 

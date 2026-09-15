@@ -2019,21 +2019,22 @@ function tierDifficultyDescriptionHtml(tier) {
     return `Softer targets, ${possessions}, and a ${press} — find your rhythm first.`;
   }
   if (tier.id === "ruthless") {
-    return `Tighter targets, ${possessions}, a ${press}, and <strong>an extra defender</strong> closing you down.`;
+    return `The same target against the same ${press}, but ${possessions} — one mistake ends the round.`;
   }
   return `The intended challenge, exactly as built: ${possessions} against the ${press}.`;
 }
 // Practice ignores the possession limit entirely (unlimited recoveries — see
-// the isPractice branches in syncHud), so its facts line never mentions
-// possessions and only ever differs by press speed and, on Ruthless, the
-// extra defender.
+// the isPractice branches in syncHud), which is the only dial Ruthless turns
+// now that the press and the defender count belong to the court. So in
+// practice Ruthless genuinely is Standard, and the card says so rather than
+// inventing a difference to describe.
 function tierPracticeDescriptionHtml(tier) {
   const press = tierPressHtml(tier);
   if (tier.id === "relaxed") {
     return `Looser targets and a ${press}. Find your rhythm first.`;
   }
   if (tier.id === "ruthless") {
-    return `Tighter targets, a ${press}, and <strong>an extra defender</strong>.`;
+    return "Practice ignores the possession limit, so Ruthless plays exactly like Standard here.";
   }
   return "Standard targets and defense. Your space to experiment.";
 }
