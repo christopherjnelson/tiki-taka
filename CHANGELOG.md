@@ -7,6 +7,21 @@ this file is not touched by ordinary pull requests. Parsed at build time by
 in Settings by `apps/desktop/src/main.js` - never fetched at runtime, so it
 works offline behind the service worker like everything else.
 
+## 0.4.5 - 2026-09-15
+
+### The soundtrack lives outside the app now
+
+Music is no longer packaged with the game. Tracks are fetched at runtime from
+a manifest, so new music can be added without shipping a new version of the
+game — and the download you get on a release dropped from about 19 MB to just
+over 1 MB.
+
+Nothing changes about how it plays. If the soundtrack cannot be reached, the
+game runs exactly as it always does, just without music.
+
+This is the groundwork for per-court soundtracks: each court will be able to
+have its own music, unlocked as you clear it.
+
 ## 0.4.4 - 2026-09-14
 
 ### Release packaging recovery
