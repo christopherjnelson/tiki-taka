@@ -6,6 +6,7 @@ import {
   segmentDistance,
 } from "../../engine/src/game.js";
 import { getVenue } from "../../engine/src/venues.js";
+import { BONUS_GOLD } from "./palette.js";
 
 const FONT = '"Tiki Signage","Arial Narrow","Arial Black",sans-serif';
 // Badge popups (score, focus, one-touch) can land on the same pass at nearly
@@ -58,7 +59,7 @@ function getScoreEventColor(e) {
     best === "ole" ||
     /TRIANGLE|ZONE|SPLIT|OL[EÉ]/i.test(text)
   ) {
-    return "#ffd32f";
+    return BONUS_GOLD;
   }
   if (bonuses.includes("wall") || best === "wall" || /WALL/i.test(text)) {
     return "#38f5e5";
@@ -243,7 +244,7 @@ const BORDERS = {
     c.moveTo(0, D * 0.18);
     c.lineTo(L, D * 0.18);
     c.stroke();
-    c.fillStyle = "#ffd32f";
+    c.fillStyle = BONUS_GOLD;
     for (let x = step / 2; x < L; x += step * 2) c.fillRect(x - D * 0.06, D * 0.12, D * 0.12, D * 0.12);
   },
   // Mosaic courtyard: the best pattern in the game, moved off the pitch and
@@ -809,7 +810,7 @@ export class Renderer {
       const splitTightness = isSplit ? game.ball.split : 0;
       c.save();
       if (isSplit) {
-        c.shadowColor = "#ffd32f";
+        c.shadowColor = BONUS_GOLD;
         c.shadowBlur = 12 + splitTightness * 14;
       }
       for (let i = 1; i < tr.length; i++) {
@@ -844,7 +845,7 @@ export class Renderer {
           for (let s = 0; s < 3; s++) {
             const angle = time + s * 2.1;
             const dist = 6 + (s * 5) % 12;
-            c.fillStyle = s % 2 === 0 ? "#ffd32f" : "#fff";
+            c.fillStyle = s % 2 === 0 ? BONUS_GOLD : "#fff";
             c.beginPath();
             c.arc(head.x + Math.cos(angle) * dist, head.y + Math.sin(angle) * dist, 1.5 + (s % 2), 0, Math.PI * 2);
             c.fill();
@@ -869,7 +870,7 @@ export class Renderer {
         c.closePath();
         c.strokeStyle = `rgba(255, 225, 75, ${0.95 * fade})`;
         c.lineWidth = 2.5;
-        c.shadowColor = "#ffd32f";
+        c.shadowColor = BONUS_GOLD;
         c.shadowBlur = 10 * fade;
         c.stroke();
         c.shadowBlur = 0;
@@ -915,7 +916,7 @@ export class Renderer {
       return this.upright(z.x, z.y, () => this.drawZone(z, t));
     const c = this.ctx,
       p = this.reducedMotion ? 0 : Math.sin(this.clock * 2) * 2;
-    c.strokeStyle = "#ffd32f";
+    c.strokeStyle = BONUS_GOLD;
     c.lineWidth = 2;
     c.setLineDash([6, 7]);
     circle(c, z.x, z.y, z.r + p);
@@ -962,7 +963,7 @@ export class Renderer {
     c.setLineDash([]);
     if (w) {
       circle(c, w.x, w.y, 8);
-      c.fillStyle = "#ffd32f";
+      c.fillStyle = BONUS_GOLD;
       c.fill();
       circle(c, w.x, w.y, 3);
       c.fillStyle = "#091526";
@@ -991,7 +992,7 @@ export class Renderer {
     const c = this.ctx;
     c.save();
     c.globalAlpha = Math.max(0, Math.min(1, alpha));
-    c.strokeStyle = "#ffd32f";
+    c.strokeStyle = BONUS_GOLD;
     c.lineWidth = 2.4;
     c.setLineDash([4, 6]);
     c.lineDashOffset = this.reducedMotion ? 0 : -this.clock * 14;
@@ -1064,7 +1065,7 @@ export class Renderer {
           -Math.PI / 2,
           -Math.PI / 2 + Math.PI * 2 * Math.min(1, (hold - 2) / 4),
         );
-        c.strokeStyle = hold > 4 ? this.venue.secondary : "#ffd32f";
+        c.strokeStyle = hold > 4 ? this.venue.secondary : BONUS_GOLD;
         c.lineWidth = 4;
         c.stroke();
       }
@@ -1282,7 +1283,7 @@ export class Renderer {
             : e.text?.match(/\+\d+/)
               ? e.text.match(/\+\d+/)[0]
               : e.text,
-        badgeColor = focus ? "#ffd32f" : getScoreEventColor(e),
+        badgeColor = focus ? BONUS_GOLD : getScoreEventColor(e),
         worldY = Math.max(
           40,
           e.y -

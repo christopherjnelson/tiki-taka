@@ -444,6 +444,56 @@ await check('a complete playable career run clears and unlocks the next court', 
   await context.close();
 });
 
+await check('the results screen colours triangles/split/zone with the possession-bonus gold and olés with pink, matching the leaderboard', async () => {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  const errors = watchErrors(page);
+  await gotoArena(page, baseURL);
+  await page.clock.install();
+  await page.locator('#start-button').click();
+  // window.__game is the live round main.js publishes on prepare(); force a
+  // win with known bonus counts (splits left at 0 on purpose, to prove the
+  // zero-state dimming still wins over the colour) rather than playing one
+  // out, same technique as the career-run check above.
+  await page.waitForFunction(() => !!window.__game);
+  await page.evaluate(() => {
+    const game = window.__game;
+    game.triangles = 3;
+    game.oles = 2;
+    game.splits = 0;
+    game.zones = 4;
+    game.score = Math.max(game.score, Math.ceil(game.config.target * 1.5));
+    game.time = 0.01;
+  });
+  await page.clock.runFor(500);
+  await page.locator('#game-overlay').waitFor({ state: 'visible' });
+  const colors = await page.evaluate(() => {
+    const swatch = (token) => {
+      const probe = document.createElement('span');
+      probe.style.color = `var(${token})`;
+      document.body.append(probe);
+      const rgb = getComputedStyle(probe).color;
+      probe.remove();
+      return rgb;
+    };
+    const cellColor = (id) => getComputedStyle(document.querySelector(`#${id} dd`)).color;
+    return {
+      gold: swatch('--bonus-gold'),
+      pink: swatch('--pink'),
+      triangles: cellColor('result-triangles-cell'),
+      oles: cellColor('result-oles-cell'),
+      splits: cellColor('result-splits-cell'),
+      zones: cellColor('result-zones-cell'),
+    };
+  });
+  assert.equal(colors.triangles, colors.gold, 'triangles should carry the shared possession-bonus gold');
+  assert.equal(colors.zones, colors.gold, 'zone passes should carry the shared possession-bonus gold');
+  assert.equal(colors.oles, colors.pink, 'olés should carry the shared pink, like the leaderboard header');
+  assert.notEqual(colors.splits, colors.gold, 'a zero split count must keep the dimmed zero-state colour, not gold');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 await check('Boost and Shout work through remappable keyboard controls and analog gamepad triggers', async () => {
   const context = await browser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
   await context.addInitScript(() => {
