@@ -331,6 +331,11 @@
           </div>
           <!-- Expanded Circuit Leaderboard deck replacing the attract demo -->
           <div class="home-stage console-panel console-panel-notch-tr">
+            <!-- Release announcement strip. Static, hand-edited copy lives in
+            src/announcement.js (ANNOUNCEMENT_TEXT) — edit that one constant
+            each release, not this markup. Hidden entirely (not just emptied)
+            when the text is blank; see renderHomeAnnouncement() in main.js. -->
+            <p id="home-announcement" class="home-announcement" hidden></p>
             <section id="home-leaderboard" class="home-leaderboard" aria-label="Circuit Leaderboards" data-pad-zone="leaderboard" data-pad-axis="row">
               <header class="hl-header">
                 <div class="hl-header-title">

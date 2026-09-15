@@ -25,6 +25,13 @@
   --pink: #ff3aa7;
   --gold: #ffd64d;
   --court: #102e3c;
+  /* Possession-bonus gold (triangle / split the press / zone pass), shared
+     with the canvas renderer, the leaderboard header, and the results
+     screen. The canvas can't read CSS custom properties, so this value is
+     hand-mirrored from BONUS_GOLD in packages/presentation/src/palette.js —
+     keep the two in sync if either changes. Olé keeps --pink instead of
+     this token. */
+  --bonus-gold: #ffd32f;
   /* The one row the shell reserves for the top bar. The play view's court is
      height-limited in a wide window, so this is exactly what the canvas pays
      for having a player, a wordmark and a profile on every screen. */
@@ -815,6 +822,18 @@ dialog h2 {
 }
 .result-stat.is-zero dd {
   color: #9c8fb3;
+}
+/* Match the leaderboard header and in-game badges: triangle/split/zone
+   share the possession-bonus gold, olé keeps the pink used everywhere else
+   for it. :not(.is-zero) keeps the dimmed zero-state colour above winning
+   even though these ID selectors would otherwise outrank it. */
+#result-triangles-cell:not(.is-zero) dd,
+#result-splits-cell:not(.is-zero) dd,
+#result-zones-cell:not(.is-zero) dd {
+  color: var(--bonus-gold);
+}
+#result-oles-cell:not(.is-zero) dd {
+  color: var(--pink);
 }
 .result-cheer {
   margin: 0 0 10px;
@@ -4585,6 +4604,26 @@ body:has(.noscript) .boot-sync {
     background: #080414;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
+  /* ── Home Announcement Strip ───────────────────────────────────────── */
+  /* Small and calm on purpose: it sits above the leaderboard, not a modal,
+     nothing to dismiss. flex-shrink: 0 so the leaderboard below it (flex: 1
+     1 auto) is the one that gives up height if the panel gets short. [hidden]
+     is enough to collapse it to nothing when ANNOUNCEMENT_TEXT is blank —
+     see renderHomeAnnouncement() in main.js. */
+  .home-announcement {
+    flex: 0 0 auto;
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--line), var(--accent) 30%);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--panel), #000 24%);
+    color: var(--muted);
+    font: 600 12px/1.4 var(--sign);
+    letter-spacing: 0.2px;
+  }
+  .home-announcement[hidden] {
+    display: none;
+  }
   /* ── Home Leaderboard Deck ─────────────────────────────────────────── */
   .home-leaderboard {
     display: flex;
@@ -4847,7 +4886,7 @@ body:has(.noscript) .boot-sync {
   .hl-head .hl-cell-bonus.hl-cell-tri,
   .hl-head .hl-cell-bonus.hl-cell-split,
   .hl-head .hl-cell-bonus.hl-cell-zone {
-    color: #ffd043;
+    color: var(--bonus-gold);
   }
   .hl-head .hl-cell-bonus.hl-cell-ole {
     color: var(--pink);

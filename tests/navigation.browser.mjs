@@ -200,6 +200,44 @@ await check(
 );
 
 await check(
+  "the home announcement strip renders static release copy above the leaderboard, and disappears rather than showing empty when there is none",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(baseURL, { waitUntil: "networkidle" });
+    await page.locator("#home-view").waitFor({ state: "visible" });
+    // ANNOUNCEMENT_TEXT (apps/desktop/src/announcement.js) is non-empty for
+    // this build, so the strip must show real text, sit above the
+    // leaderboard, and never render as an empty box.
+    const strip = page.locator("#home-announcement");
+    assert.equal(await strip.isVisible(), true);
+    const text = (await strip.textContent())?.trim();
+    assert.ok(text && text.length > 0, "the strip must carry non-empty copy");
+    const [stripBox, boardBox] = await Promise.all([
+      strip.boundingBox(),
+      page.locator("#home-leaderboard").boundingBox(),
+    ]);
+    assert.ok(
+      stripBox && boardBox && stripBox.y + stripBox.height <= boardBox.y + 1,
+      "the announcement strip must sit above the leaderboard",
+    );
+    // The empty case, through the real render path: window.__renderHomeAnnouncement
+    // is renderHomeAnnouncement() itself (see main.js), called here with
+    // blank text the same way it runs with ANNOUNCEMENT_TEXT normally.
+    await page.evaluate(() => window.__renderHomeAnnouncement("   "));
+    assert.equal(await strip.isVisible(), false);
+    const emptyBox = await strip.boundingBox();
+    assert.equal(emptyBox, null, "a hidden strip must not occupy layout space");
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
   "selecting a different court re-skins the attract demo's venue without replacing the running game",
   async () => {
     const context = await browser.newContext({
