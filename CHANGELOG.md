@@ -7,6 +7,43 @@ this file is not touched by ordinary pull requests. Parsed at build time by
 in Settings by `apps/desktop/src/main.js` - never fetched at runtime, so it
 works offline behind the service worker like everything else.
 
+## 0.4.3 - 2026-09-14
+
+### More ways to make the game yours
+
+Focus now gives the soundtrack a tape-slowdown, underwater feel while it is
+active. Prefer the original music? Turn that effect off in Settings.
+
+On touch devices, choose whether Focus and Boost are tap-to-toggle (the
+existing behaviour) or press-and-hold. You can also skip tracks with
+remappable keyboard or controller controls.
+
+### Discord and the community
+
+Sign in with Discord as well as email. New Discord players choose their
+leaderboard name once, then are ready to play.
+
+The Discord invite is now available throughout the game, including compact
+layouts.
+
+### A leaderboard that keeps up
+
+Leaderboard requests now time out cleanly instead of appearing stuck, and a
+manual refresh keeps the scores already on screen while it updates. Changing
+a court or difficulty cancels the obsolete request, so the board always
+settles on the scores you asked for.
+
+After a reload, a syncing state stays visible while your account and save data
+restore, instead of leaving the home screen looking frozen.
+
+The refresh control is now a clear, high-contrast icon button sized to match
+the difficulty toggle.
+
+### Release notes in Settings
+
+The changelog is built into Settings, so you can read what changed even
+offline.
+
 ## 0.4.2 - 2026-09-14
 
 Fixes found by playing 0.4.1.

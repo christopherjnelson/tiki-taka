@@ -1,6 +1,6 @@
 {
   "name": "tiki-taka",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "releaseStage": "alpha",
   "private": true,
   "workspaces": [
