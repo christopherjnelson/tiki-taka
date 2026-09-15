@@ -210,6 +210,28 @@ test('a non-practice mode that fails to clear still gets the 3 XP floor', () => 
   assert.equal(result.xp, 3);
 });
 
+test('a cleared career round records a personal best; an uncleared one does not', () => {
+  const cleared = freshProgress();
+  const clearedResult = awardMatch(cleared, finishedGame({ score: 400 }), 'career', 0);
+  assert.equal(clearedResult.cleared, true);
+  assert.equal(cleared.records['court-0-standard'], 400);
+
+  const failed = freshProgress();
+  const failedResult = awardMatch(failed, finishedGame({ score: 400, turnovers: 3 }), 'career', 0);
+  assert.equal(failedResult.cleared, false);
+  assert.equal(failedResult.newBest, false);
+  assert.equal(failed.records['court-0-standard'], undefined);
+  assert.deepEqual(failed.courts, {});
+});
+
+test('practice records nothing at all, cleared or not', () => {
+  const progress = freshProgress();
+  const result = awardMatch(progress, finishedGame({ score: 999, target: 120, turnovers: 8 }), 'practice', 0);
+  assert.equal(result.cleared, true);
+  assert.equal(result.newBest, false);
+  assert.deepEqual(progress.records, {});
+});
+
 test('a version-1 stored progress resets xp to 0 but keeps everything else', () => {
   const storage = { getItem: () => JSON.stringify({
     version: 1,

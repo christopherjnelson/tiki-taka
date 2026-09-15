@@ -19,6 +19,41 @@ const ENDLESS_REFERENCE = 600;
 // excluded on purpose: a no-stakes sandbox for finding your feet, not a way
 // to grind levels.
 const XP_MODES = new Set(["career", "endless", "kotc"]);
+// Per-mode "does this round save?" rule. An attempt is not a result: only a
+// round that actually counts as a win in ITS mode should write a personal
+// best, a round_scores row, or a leaderboard entry. This is deliberately a
+// per-mode switch and not one global `if (cleared)` gate. `cleared` means
+// `turnovers < possessions`, and Endless is one possession that ends BY
+// losing it - turnovers is always 1, so `cleared` is always false for
+// Endless no matter how the run went. A single global check would silently
+// stop Endless from ever saving anything the day it ships, which is exactly
+// backwards for the one mode whose whole point is a leaderboard result.
+// Endless is being redesigned as a survival mode scored on elapsed time, not
+// points, so it needs its own condition here (not `cleared`) when it ships -
+// same for King of the Court once it has gameplay. Until then both are
+// explicit `false` below, on their own seam, rather than falling through to
+// a shared rule that might accidentally start counting them.
+export function roundCounts(mode, cleared) {
+  switch (mode) {
+    case "career":
+      return cleared;
+    case "practice":
+      // No-stakes sandbox for finding your feet - never saved, never a
+      // personal best, no matter the score.
+      return false;
+    case "endless":
+      // TODO(endless-survival): replace with the elapsed-time survival rule
+      // once Endless ships its redesign. `cleared` is always false here (see
+      // above) - do not swap this for `cleared`.
+      return false;
+    case "kotc":
+      // TODO(kotc): King of the Court has no gameplay yet; give it its own
+      // rule here when it ships.
+      return false;
+    default:
+      return false;
+  }
+}
 export function freshProgress() {
   return {
     version: 2,
@@ -184,9 +219,18 @@ export function awardMatch(progress, game, mode, courtIndex) {
     xp = Math.max(3, performance);
   }
   progress.xp += xp;
+  const counts = roundCounts(mode, cleared);
   const prev = Number(progress.records[key]) || 0;
-  progress.records[key] = Math.max(prev, game.score);
-  if (mode === "career") {
+  let newBest = false;
+  if (counts) {
+    // "Personal best" now means "best CLEARED round" - a big score on a
+    // round you failed stops counting. Deliberate (see roundCounts above):
+    // an attempt is not a result, so this must not be "fixed" back to
+    // Math.max(prev, game.score) unconditionally.
+    progress.records[key] = Math.max(prev, game.score);
+    newBest = game.score > prev;
+  }
+  if (mode === "career" && counts) {
     const courtEntry =
       progress.courts[courtIndex] &&
       typeof progress.courts[courtIndex] === "object" &&
@@ -203,13 +247,14 @@ export function awardMatch(progress, game, mode, courtIndex) {
     };
     // Unlocks stay global: clearing on ANY tier, including Relaxed, unlocks
     // the next court. This is deliberate - unlocking is not tier-gated.
-    if (cleared)
-      progress.unlocked = Math.max(
-        progress.unlocked,
-        Math.min(COURTS.length - 1, courtIndex + 1),
-      );
+    // (`counts` already implies `cleared` for career, but spell it out since
+    // this line is the one that grants progression.)
+    progress.unlocked = Math.max(
+      progress.unlocked,
+      Math.min(COURTS.length - 1, courtIndex + 1),
+    );
   }
-  return { cleared, stars, xp, newBest: game.score > prev };
+  return { cleared, stars, xp, newBest };
 }
 const MAX_LEVEL = 50;
 // Cumulative XP needed to REACH level L (1-indexed; level 1 is 0). Built once
