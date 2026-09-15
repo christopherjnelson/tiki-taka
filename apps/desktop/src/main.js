@@ -89,6 +89,29 @@ function closeOnBackdropClick(dialog, dismiss = () => dialog.close()) {
     pressStartedOnBackdrop = false;
   });
 }
+// Help and the changelog are sub-pages of Settings now, not separate stops:
+// opening either never closes settings-dialog first (a native <dialog>
+// happily keeps an older showModal() dialog open underneath a newer one, the
+// same top-layer stacking a browser already gives nested modals), so the ×
+// each used to close with was already doing exactly what a back button
+// would - dialog.close() reveals settings again because settings never
+// stopped being open. The only thing that did not say "back" was the glyph.
+// `backTo` is what decides that glyph: pass a label when this dialog was
+// reached from another one still open beneath it, or omit it for a dialog
+// opened on its own, and this swaps the icon/aria-label without touching the
+// close handler at all. Every dialog here keeps a plain, unconditional
+// dialog.close() as its only dismissal action - see closeOnBackdropClick
+// above, which reuses that same default for a backdrop click, and the
+// gamepad B/Select handling below, which does the same. Escape is native
+// <dialog> behaviour and is left alone: it already closes only the topmost
+// dialog, which is exactly "back" when one is open beneath it.
+function setDialogBackChrome(buttonId, backTo, closeLabel) {
+  const button = $(buttonId);
+  const isBack = Boolean(backTo);
+  button.textContent = isBack ? "‹" : "×";
+  button.classList.toggle("is-back", isBack);
+  button.setAttribute("aria-label", isBack ? `Back to ${backTo}` : closeLabel);
+}
 // Vite replaces this allowlisted object during a build. The fallback keeps
 // source-served development and browser tests identifiable without exposing
 // process environment values to the client.
@@ -704,6 +727,7 @@ async function savePendingScores() {
 const anyDialogOpen = () =>
   $("settings-dialog").open ||
   $("help-dialog").open ||
+  $("changelog-dialog").open ||
   $("account-dialog").open ||
   $("score-save-dialog").open ||
   $("username-dialog").open;
@@ -4351,6 +4375,7 @@ $("settings-dialog").addEventListener("close", () => {
   $("score-save-dialog"),
   $("settings-dialog"),
   $("help-dialog"),
+  $("changelog-dialog"),
 ].forEach((dialog) => closeOnBackdropClick(dialog));
 $("preset-select").addEventListener("change", (event) => {
   capture = null;
@@ -4516,11 +4541,23 @@ $("home-leaderboard-refresh")?.addEventListener("click", () => {
 addEventListener("hashchange", () => {
   applyView(viewForHash(), { updateHash: false });
 });
+// The only entry point today is settings-dialog's own "How to play" row, so
+// this always opens as a back-able sub-page - see setDialogBackChrome()
+// above for what that changes (just the dismiss button's glyph/label) and
+// what it deliberately leaves alone (dialog.close(), unconditionally).
 $("help-button").addEventListener("click", () => {
+  setDialogBackChrome("close-help", "settings", "Close instructions");
   pause();
   $("help-dialog").showModal();
 });
 $("close-help").addEventListener("click", () => $("help-dialog").close());
+$("changelog-button").addEventListener("click", () => {
+  setDialogBackChrome("close-changelog", "settings", "Close changelog");
+  $("changelog-dialog").showModal();
+});
+$("close-changelog").addEventListener("click", () =>
+  $("changelog-dialog").close(),
+);
 // Any keyboard or pointer activity switches the toolbar chips back off
 // gamepad glyphs, however the player got there — capturing a new binding,
 // clicking a menu, or just typing, not only in-round play.
@@ -5045,6 +5082,9 @@ function pollGamepad(dt) {
   if ($("help-dialog").open) {
     if (tap(1) || tap(9)) $("help-dialog").close();
     else nav($("help-dialog"));
+  } else if ($("changelog-dialog").open) {
+    if (tap(1) || tap(9)) $("changelog-dialog").close();
+    else nav($("changelog-dialog"));
   } else if ($("score-save-dialog").open) {
     if (tap(1) || tap(9)) $("score-save-dialog").close();
     else nav($("score-save-dialog"));

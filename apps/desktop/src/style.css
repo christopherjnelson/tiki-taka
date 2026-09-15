@@ -1371,26 +1371,78 @@ dialog::backdrop {
   background: transparent;
   font-size: 25px;
 }
+/* The back affordance a sub-dialog opened from Settings gets instead of a
+   plain ×: see openSubDialog() in main.js, which swaps this class and the
+   glyph/aria-label together at open time, driven by where the dialog was
+   opened from rather than hard-coded per dialog. The click handler
+   underneath never changes - dialog.close() reveals whatever is still open
+   beneath exactly as it always did. */
+.dialog-top button.is-back {
+  font-size: 21px;
+  font-weight: 700;
+}
 .help-lead,
 .help-grid p,
 .help-grid li,
-.help-modes {
+.help-modes,
+#help-dialog .help-grid-note {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.65;
+}
+#help-dialog h3 {
+  color: var(--cyan);
+  text-transform: uppercase;
+  font: 700 15px var(--sign);
+  margin: 14px 0 8px;
+}
+#help-dialog h3:first-of-type {
+  margin-top: 4px;
 }
 .help-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 28px;
 }
-.help-grid h3 {
-  color: var(--cyan);
-  text-transform: uppercase;
-  font: 700 15px var(--sign);
-}
 .help-grid strong,
-.help-modes strong {
+.help-modes strong,
+#help-dialog .help-grid-note strong {
+  color: var(--ink);
+}
+/* Four small inline diagrams pulled straight from the arena's own rendering
+   language (see drawLane()/drawZone()/drawPlayer()/drawDefender() in
+   packages/presentation/src/renderer.js and the <defs> comment on the
+   hidden gradient <svg> in index.html) rather than screenshots: no network
+   fetch, nothing that breaks under the game's CSP, and they inherit the
+   dialog's own light/dark handling for free since they are markup, not
+   images. Two columns even on a phone - see the phone media query below -
+   because four rows of prose-plus-figure is taller than two rows of two,
+   and this dialog was already the one the player said felt long. */
+.diagram-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 4px 0 16px;
+}
+.diagram-figure {
+  margin: 0;
+  padding: 8px 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.diagram-figure svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.diagram-figure figcaption {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+.diagram-figure figcaption strong {
   color: var(--ink);
 }
 .control-list > div {
@@ -1481,8 +1533,7 @@ dialog::backdrop {
   font-size: 9px;
 }
 .settings-gamepad,
-.settings-bindings,
-.settings-changelog {
+.settings-bindings {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid var(--line);
@@ -1509,8 +1560,7 @@ summary.settings-audio-heading {
   margin: 0;
 }
 .settings-gamepad:not([open]) > summary.settings-audio-heading,
-.settings-bindings:not([open]) > summary.settings-audio-heading,
-.settings-changelog:not([open]) > summary.settings-audio-heading {
+.settings-bindings:not([open]) > summary.settings-audio-heading {
   /* A collapsed disclosure is still a control. Keep its hit area at least as
      tall as the compact settings controls, rather than leaving a phone user
      with only the 10px heading text to tap. Open desktop sections retain their
@@ -1518,19 +1568,17 @@ summary.settings-audio-heading {
   min-height: 24px;
 }
 .settings-gamepad[open] summary.settings-audio-heading,
-.settings-bindings[open] summary.settings-audio-heading,
-.settings-changelog[open] summary.settings-audio-heading {
+.settings-bindings[open] summary.settings-audio-heading {
   margin: 0 0 10px;
 }
 /* Driven off the `[open]` attribute explicitly rather than left to the
    details/summary default: the collapse only has to work, not to be the
    platform's own mechanism for it, and doing it this way also gives the
-   gamepad grid and the bindings body their own real `display` (grid, in both
-   cases) when open instead of whatever the browser's built-in disclosure
-   would fall back to. */
+   gamepad grid and the bindings body their own real `display` (grid) when
+   open instead of whatever the browser's built-in disclosure would fall
+   back to. */
 .settings-gamepad > .gamepad-grid,
-.settings-bindings > .details-body,
-.settings-changelog > .changelog-list {
+.settings-bindings > .details-body {
   display: none;
 }
 .settings-gamepad[open] > .gamepad-grid {
@@ -1539,16 +1587,15 @@ summary.settings-audio-heading {
 .settings-bindings[open] > .details-body {
   display: block;
 }
-.settings-changelog[open] > .changelog-list {
-  display: block;
-}
-/* Newest-release-first prose, kept out of the way of a dialog that is
-   already tight (see the markup comment in index.html): scrolls internally
-   past a modest height instead of pushing the dialog's own scroll further,
-   and each release stays a single collapsed line (its own nested <details>,
-   built in renderChangelog() in main.js) until opened. */
+/* Newest-release-first prose, in its own dialog now (see the markup comment
+   on #changelog-dialog in index.html) rather than a collapsed strip inside
+   Settings: scrolls internally past a modest height instead of pushing the
+   dialog's own scroll further, and each release stays a single collapsed
+   line (its own nested <details>, built in renderChangelog() in main.js)
+   until opened. */
 .changelog-list {
-  max-height: 220px;
+  margin-top: 12px;
+  max-height: min(420px, 60svh);
   overflow-y: auto;
 }
 .changelog-entry {
@@ -1591,13 +1638,19 @@ summary.settings-audio-heading {
    two <details> above already gets the common case (audio) to fit; this
    trims the decorative rest — the oversized headline, the loose paragraph
    spacing between sections — the same way the pre-round card and the result
-   sheet already give up size before content. */
+   sheet already give up size before content. Help and the changelog get the
+   same treatment here: they are reached from this dialog and are just as
+   short on landscape-phone height. */
 @media (max-height: 500px) and (orientation: landscape),
   (pointer: coarse) and (max-width: 1024px) and (orientation: landscape) {
-  #settings-dialog {
+  #settings-dialog,
+  #help-dialog,
+  #changelog-dialog {
     padding: 12px 20px;
   }
-  #settings-dialog h2 {
+  #settings-dialog h2,
+  #help-dialog h2,
+  #changelog-dialog h2 {
     margin: 4px 0;
     font-size: 22px;
   }
@@ -1614,10 +1667,30 @@ summary.settings-audio-heading {
     margin: 4px 0 0;
   }
   #settings-dialog .settings-gamepad,
-  #settings-dialog .settings-bindings,
-  #settings-dialog .settings-changelog {
+  #settings-dialog .settings-bindings {
     margin-top: 6px;
     padding-top: 6px;
+  }
+  #help-dialog .help-lead,
+  #help-dialog .help-grid-note {
+    margin: 6px 0;
+  }
+  #help-dialog h3 {
+    margin: 8px 0 6px;
+  }
+  #help-dialog .diagram-grid {
+    gap: 6px;
+    margin: 2px 0 10px;
+  }
+  #help-dialog .diagram-figure {
+    padding: 5px 6px 6px;
+  }
+  #help-dialog .diagram-figure figcaption {
+    font-size: 9.5px;
+    line-height: 1.35;
+  }
+  #help-dialog .control-list > div {
+    padding: 4px 0;
   }
 }
 .gamepad-grid {

@@ -1199,6 +1199,9 @@
         <button id="help-button" type="button">
           <span aria-hidden="true">?</span> How to play
         </button>
+        <button id="changelog-button" type="button">
+          <span aria-hidden="true">&#9998;</span> What's new
+        </button>
         <button id="account-button" type="button">
           <span aria-hidden="true">◎</span> Account
         </button>
@@ -1425,81 +1428,150 @@
           </button>
         </div>
       </details>
-      <!-- Baked at build time from CHANGELOG.md (see scripts/changelog.mjs
-      and the buildIdentity-style injection in vite.desktop.config.js) - never
-      fetched, so it works offline. Collapsed by default like the two
-      <details> above, for the same reason: this dialog is already dense on a
-      phone. Each version is itself a nested, closed <details> (built in
-      renderChangelog() in main.js) so opening the group only ever adds one
-      short line per release, not every release's full text at once. -->
-      <details class="settings-changelog" id="settings-changelog-group">
-        <summary class="settings-audio-heading">CHANGELOG</summary>
-        <div
-          id="changelog-list"
-          class="changelog-list"
-          aria-label="Release notes"
-        ></div>
-      </details>
+    </dialog>
+    <!-- The changelog used to live here as a collapsed <details> - this
+    dialog was already dense on a phone (see the settings-gamepad/-bindings
+    comments above), and a changelog entry can run long, so it now gets its
+    own surface, reached from the "What's new" button above and sharing the
+    same back navigation as help-dialog below (see openSubDialog() in
+    main.js). Content still comes from the build-time CHANGELOG.md parse
+    (scripts/changelog.mjs, vite.desktop.config.js) via renderChangelog() in
+    main.js - only where it renders moved, not how it is sourced. Each
+    version stays its own nested, closed <details> so opening the dialog
+    never dumps every release's full text at once. -->
+    <dialog id="changelog-dialog" aria-labelledby="changelog-title">
+      <div class="dialog-top">
+        <p class="eyebrow">RELEASE HISTORY</p>
+        <button
+          id="close-changelog"
+          type="button"
+          aria-label="Close changelog"
+        >
+          ×
+        </button>
+      </div>
+      <h2 id="changelog-title">What's new.</h2>
+      <div
+        id="changelog-list"
+        class="changelog-list"
+        aria-label="Release notes"
+      ></div>
     </dialog>
     <dialog id="help-dialog" aria-labelledby="help-title">
       <div class="dialog-top">
         <p class="eyebrow">THE POSSESSION CLUB / FIELD NOTES</p>
-        <button id="close-help" aria-label="Close instructions">×</button>
+        <button id="close-help" type="button" aria-label="Close instructions">
+          ×
+        </button>
       </div>
       <h2 id="help-title">Keep it moving.</h2>
       <p class="help-lead">
-        You have four players and one job: keep the ball. There are no goals
-        and no shooting. Your score comes from the way you play.
+        Four players, one job: keep the ball. No goals, no shooting — your
+        score comes from how you move it. Move the carrier to open a lane;
+        teammates find space on their own, and defenders press harder the
+        longer you hold it. Hit the target and survive the clock to clear a
+        court — how many turnovers you can lose depends on your difficulty
+        tier.
       </p>
+      <!-- Fills for the diagrams below, defined once and referenced by every
+      figure's shapes via fill="url(#id)" - an inline SVG's ids resolve
+      against the whole document, not just its own <svg>, so this single
+      hidden block feeds all four. Read drawLane(), drawZone() and
+      drawPlayer()/drawDefender() in packages/presentation/src/renderer.js
+      before touching these: the colours and dash patterns here are pulled
+      straight from the arena's own rendering, not invented for this dialog. -->
+      <svg width="0" height="0" aria-hidden="true" focusable="false" class="sr-only">
+        <defs>
+          <linearGradient id="dg-team" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#71fff0" />
+            <stop offset="1" stop-color="#13aebe" />
+          </linearGradient>
+          <linearGradient id="dg-def" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#ff5b84" />
+            <stop offset="1" stop-color="#c22a63" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <h3>Make something beautiful</h3>
+      <p class="help-grid-note">
+        Clean passes score 12–18 by distance (a return pass earns half), and
+        banking one off the boundary — a wall pass — adds 18. These four pay
+        more, and every one of them stacks with your multiplier, which climbs
+        every four completed passes, up to ×5, and resets on a turnover.
+      </p>
+      <div class="diagram-grid">
+        <figure class="diagram-figure">
+          <svg viewBox="0 0 160 120" aria-hidden="true" focusable="false">
+            <path d="M28 95 L132 95" fill="none" stroke="#58f6e7" stroke-width="2" stroke-dasharray="4 6" />
+            <path d="M132 95 L80 20" fill="none" stroke="#58f6e7" stroke-width="2" stroke-dasharray="4 6" />
+            <path d="M80 20 L28 95" fill="none" stroke="#58f6e7" stroke-width="2" stroke-dasharray="4 6" />
+            <circle cx="28" cy="95" r="14" fill="url(#dg-team)" stroke="#d7fffb" stroke-width="2" />
+            <text x="28" y="99" text-anchor="middle" font-size="12" font-weight="700" fill="#062332">1</text>
+            <circle cx="132" cy="95" r="14" fill="url(#dg-team)" stroke="#d7fffb" stroke-width="2" />
+            <text x="132" y="99" text-anchor="middle" font-size="12" font-weight="700" fill="#062332">2</text>
+            <circle cx="80" cy="20" r="14" fill="url(#dg-team)" stroke="#d7fffb" stroke-width="2" />
+            <text x="80" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#062332">3</text>
+          </svg>
+          <figcaption>
+            <strong>Triangle — +35, +3 Energy.</strong> Pass through three
+            different teammates and back to the first, all within 3.5
+            seconds. Completing one starts the sequence over.
+          </figcaption>
+        </figure>
+        <figure class="diagram-figure">
+          <svg viewBox="0 0 160 120" aria-hidden="true" focusable="false">
+            <path d="M16 100 L144 20" fill="none" stroke="#fff" stroke-width="2.5" stroke-dasharray="3 8" />
+            <g transform="translate(64,70) rotate(45)">
+              <rect x="-10" y="-10" width="20" height="20" rx="3" fill="url(#dg-def)" stroke="#3a0714" stroke-width="1.5" />
+            </g>
+            <g transform="translate(92,52) rotate(45)">
+              <rect x="-10" y="-10" width="20" height="20" rx="3" fill="url(#dg-def)" stroke="#3a0714" stroke-width="1.5" />
+            </g>
+            <circle cx="16" cy="100" r="14" fill="url(#dg-team)" stroke="#d7fffb" stroke-width="2" />
+            <text x="16" y="104" text-anchor="middle" font-size="11" font-weight="700" fill="#062332">A</text>
+            <circle cx="144" cy="20" r="14" fill="url(#dg-team)" stroke="#d7fffb" stroke-width="2" />
+            <text x="144" y="24" text-anchor="middle" font-size="11" font-weight="700" fill="#062332">B</text>
+          </svg>
+          <figcaption>
+            <strong>Split the press — +50 and up.</strong> Thread a pass so
+            its lane crosses between a pair of defenders. Tighter gaps and
+            longer passes pay more; a triangle pass shows the split but only
+            pays the triangle.
+          </figcaption>
+        </figure>
+        <figure class="diagram-figure">
+          <svg viewBox="0 0 160 120" aria-hidden="true" focusable="false">
+            <path d="M18 60 L80 60" fill="none" stroke="rgba(88,246,231,.35)" stroke-width="2" stroke-dasharray="2 9" />
+            <path d="M80 60 L142 60" fill="none" stroke="#fff" stroke-width="2.5" stroke-dasharray="3 8" />
+            <circle cx="110" cy="60" r="5" fill="#fff" />
+            <circle cx="80" cy="60" r="20" fill="none" stroke="#ffd32f" stroke-width="1.6" stroke-dasharray="3 4" />
+            <circle cx="18" cy="60" r="14" fill="url(#dg-team)" stroke="#d7fffb" stroke-width="2" />
+            <text x="18" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#062332">1</text>
+            <circle cx="80" cy="60" r="14" fill="url(#dg-team)" stroke="#d7fffb" stroke-width="2" />
+            <text x="80" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#062332">2</text>
+            <circle cx="142" cy="60" r="14" fill="url(#dg-team)" stroke="#d7fffb" stroke-width="2" />
+            <text x="142" y="64" text-anchor="middle" font-size="12" font-weight="700" fill="#062332">3</text>
+          </svg>
+          <figcaption>
+            <strong>One-touch — +5, +50 every 10th.</strong> Queue your next
+            pass while the ball is still travelling to you. Release it within
+            0.35s of catching it, barely moving, and it counts.
+          </figcaption>
+        </figure>
+        <figure class="diagram-figure">
+          <svg viewBox="0 0 160 120" aria-hidden="true" focusable="false">
+            <circle cx="70" cy="65" r="40" fill="none" stroke="#ffd32f" stroke-width="2" stroke-dasharray="6 7" />
+            <circle cx="95" cy="40" r="14" fill="url(#dg-team)" stroke="#d7fffb" stroke-width="2" />
+            <text x="95" y="44" text-anchor="middle" font-size="12" font-weight="700" fill="#062332">4</text>
+            <text x="70" y="112" text-anchor="middle" font-size="10" font-weight="700" fill="#ffe66b">ZONE +25</text>
+          </svg>
+          <figcaption>
+            <strong>Zone — +25, +2 Energy.</strong> Receive a pass with your
+            player overlapping the dashed circle before it rotates away.
+          </figcaption>
+        </figure>
+      </div>
       <div class="help-grid">
-        <section>
-          <h3>Find your rhythm</h3>
-          <p>
-            Move the player with the ball to open a passing lane. Your teammates
-            find space automatically. Orange defenders press harder the longer
-            you hold it. Pass before they arrive.
-          </p>
-          <p>
-            <strong>Hit the target and survive the clock</strong> to clear a
-            court. Losing the ball too many times ends the match — how many
-            turnovers you get depends on your difficulty tier. Earn XP,
-            collect court stars, and travel the world.
-          </p>
-          <h3>Make something beautiful</h3>
-          <ul>
-            <li>
-              <strong>Clean pass:</strong> 12–18 points by straight-line
-              distance (return passes earn half).
-            </li>
-            <li>
-              <strong>Triangle:</strong> A → B → C → A adds 35 points and earns
-              3 Energy, then resets the sequence—make three fresh passes for
-              another triangle.
-            </li>
-            <li>
-              <strong>Zone:</strong> touch or overlap the highlighted circle
-              with your player for 25 extra points and 2 Energy.
-            </li>
-            <li>
-              <strong>Split the press:</strong> thread defenders for an extra
-              reward that rises modestly with pass distance. A triangle pass
-              shows the split but pays only the triangle.
-            </li>
-            <li>
-              <strong>Wall pass:</strong> bank off the boundary for 18 extra
-              points.
-            </li>
-          </ul>
-          <p>
-            Your multiplier climbs every four completed passes, up to ×5. It
-            applies to pass, triangle, wall, and zone points and resets after a
-            turnover. One-touch passes add 5; every tenth adds another 50.
-          </p>
-          <p>
-            <strong>Queue your next pass before the ball arrives.</strong>
-            Quick releases build one-touch streaks; 10 gets the crowd going.
-          </p>
-        </section>
         <section>
           <h3>Your controls</h3>
           <dl class="control-list">
@@ -1559,32 +1631,22 @@
             </div>
           </dl>
           <p>
-            <strong>Focus slows the action</strong> and gives you time to find
-            the next pass. Each round starts with an empty Energy reserve.
-            Bonus zones earn 2 Energy, triangles earn 3 Energy, and split passes
-            or Olé streaks earn 4 Energy. Rewards stack up to your tactic’s
-            reserve (10 / 6 / 8 Energy); plain passes and passes slowed by Focus
-            earn none. You cannot earn while Focus is active. After it runs out,
-            release E or LT before using newly earned Energy.
-          </p>
-          <p>
-            <strong>Boost uses the same Energy reserve</strong> to make the
-            ball carrier faster while you hold it, consuming Energy three
-            times as fast as Focus. Use it to escape pressure, but it cannot
-            run alongside Focus.
+            <strong>Focus</strong> slows the action to find the next pass.
+            Each round starts with an empty Energy reserve — zones earn 2,
+            triangles 3, splits and Olé streaks 4, up to your tactic's cap
+            (10 / 6 / 8). You can't earn while Focus is active, and must
+            release E / LT before spending what you just earned.
+            <strong>Boost</strong> spends the same reserve, three times as
+            fast, to speed the carrier instead — it can't run alongside
+            Focus.
           </p>
           <p>
             <strong>Gamepad:</strong> left stick moves, right stick aims and
-            picks the teammate A will pass to — the chosen player is ringed on
-            the court, so you can deliberately thread a lane between two
-            defenders for SPLIT THE PRESS. X arms the wall pass, LT holds Focus,
-            RT holds Boost, and LB shouts the selected target to the bonus zone.
-            Start opens the pause menu. Use the D-pad and A in menus, B to go
-            back.
-          </p>
-          <p>
-            <strong>Touch:</strong> move with the joystick, tap a teammate to
-            pass, or use the Pass, Wall and Focus buttons.
+            rings your pass target — thread it between two defenders for
+            Split the Press. X arms the wall pass, LT holds Focus, RT holds
+            Boost, LB shouts to the zone, Start pauses.
+            <strong>Touch:</strong> joystick to move, tap a teammate to pass,
+            or use the Pass / Wall / Focus buttons.
           </p>
         </section>
       </div>
