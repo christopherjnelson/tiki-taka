@@ -15,6 +15,7 @@
 // Leave it as an empty string to hide the strip entirely (e.g. between
 // releases when there's nothing worth calling out).
 export const ANNOUNCEMENT_TEXT =
-  "0.4.5 is live! The soundtrack now streams in over the network instead " +
-  "of shipping inside the game — same music, a much smaller download. See " +
-  "the Changelog for details.";
+  "0.4.6 is live — scoring works differently now. The bonus zone drives your " +
+  "multiplier all the way to x10, Energy is a burst you spend rather than " +
+  "hold, and every court has new scores to clear and to star. Leaderboards " +
+  "start fresh from here. See the Changelog for the full picture.";
