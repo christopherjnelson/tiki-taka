@@ -547,6 +547,14 @@ await check('Boost and Shout work through remappable keyboard controls and analo
   assert.equal(await page.locator('#focus-button').getAttribute('aria-pressed'), 'false');
   assert.equal(await page.locator('#boost-button').getAttribute('aria-pressed'), 'false',
     'both controls should be off before the keyboard/gamepad Boost checks below');
+  // Give Boost something to spend. The Focus toggles above drain the meter,
+  // and since Energy became a burst resource (4.5/s, so a full Playmaker bar
+  // is about two seconds) they can empty it outright - after which Boost has
+  // nothing to consume, the drain below never happens, and the wait times out
+  // for a reason that has nothing to do with Boost. The trigger case further
+  // down already seeds Focus for exactly this reason; the keyboard case was
+  // relying on leftovers.
+  await page.evaluate(() => window.__observedGame.game.focus = 2);
   const focusBeforeKeyboardBoost = await focusSeconds(page);
   await page.keyboard.down('KeyR');
   await page.waitForFunction(() => window.__observedGame.input?.boost === true);
