@@ -56,7 +56,10 @@ export function createMusic({
   trim = 1,
 } = {}) {
   const base = volume;
-  const playlist = tracks.filter((track) => track && track.file);
+  // Reassigned by setTracks() when the runtime manifest resolves after
+  // startup (or when the selected court's tracks change), so this starts
+  // `let` rather than `const` even though most callers only ever set it once.
+  let playlist = tracks.filter((track) => track && track.file);
   let level = base * clampTrim(trim, 1),
     context = null,
     gain = null,
@@ -433,6 +436,40 @@ export function createMusic({
       if (!playlist.length) return;
       goto(index + (Number(step) || 1));
       void apply();
+    },
+    // Replaces the playlist — the manifest arriving after startup, or a
+    // court change once per-court manifests exist. A no-op when the new list
+    // is the same set of files in the same order (true of every call today,
+    // since every track is tagged "home" and court selection always lands on
+    // the identical full list) so it never interrupts music already playing.
+    // A genuine change stops the current source before adopting the new
+    // list, the same way goto() does for a track skip.
+    setTracks(nextTracks) {
+      const next = (Array.isArray(nextTracks) ? nextTracks : []).filter(
+        (track) => track && track.file,
+      );
+      const same =
+        next.length === playlist.length &&
+        next.every(
+          (track, i) =>
+            track.file === playlist[i].file && track.title === playlist[i].title,
+        );
+      if (same) return Promise.resolve();
+      if (source) stopSource({ keepPosition: false });
+      playlist = next;
+      dead = new Set();
+      failed = false;
+      index = 0;
+      buffer = null;
+      loaded = -1;
+      loading = null;
+      offset = 0;
+      // Returned (rather than fired-and-forgotten) so a caller — the manifest
+      // fetch resolving after startup, or a court change — can resync any UI
+      // it mirrors state onto once loading/decoding actually finishes,
+      // instead of that UI reading the pre-fetch snapshot forever.
+      if (playlist.length && enabled && unlocked) return apply();
+      return Promise.resolve();
     },
     // "playing" is what the shell mirrors onto <body data-music> so the state
     // is observable without reaching into Web Audio internals.

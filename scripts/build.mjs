@@ -2,7 +2,6 @@ import { build } from "vite";
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { TRACK_FILES } from "../apps/desktop/src/playlist.js";
 import { SAMPLE_FILES } from "../apps/desktop/src/samples.js";
 import { shouldPrecacheAsset } from "./precache-policy.mjs";
 
@@ -15,16 +14,13 @@ for (const asset of [
   "icon-512.png",
 ])
   await cp(path.join("public", asset), path.join("dist/desktop", asset));
-// The soundtrack lives in a subdirectory, so it needs the folder made first.
-// The list comes from apps/desktop/src/playlist.js rather than being repeated
-// here: a duplicated list drifted from it once and shipped a build with no
-// audio at all.
-await mkdir("dist/desktop/audio", { recursive: true });
-for (const track of TRACK_FILES)
-  await cp(
-    path.join("public/audio", track),
-    path.join("dist/desktop/audio", track),
-  );
+// The soundtrack itself is no longer copied into the build: tracks are
+// fetched at runtime from a manifest served outside the release (see
+// apps/desktop/src/manifest.js and public/audio/manifest.json for the local
+// dev copy). Only the sampled effects below — small, few, and needed for the
+// build's own sound design — still ship as build assets. dist/desktop/audio/
+// only exists at all if there are effects to put in it: the mkdir below is
+// recursive and makes both levels.
 // Sampled effects, from the same kind of list for the same reason
 // (apps/desktop/src/samples.js). The list is normally empty; a file named
 // there but missing from public/audio/effects is reported and skipped rather

@@ -1,8 +1,9 @@
-// The one list of soundtrack files.
-//
-// music.js plays it and scripts/build.mjs copies from it. A hardcoded second
-// list drifted from this one once and shipped a build with no audio at all, so
-// the build reads this array and adding a track stays a one-line change.
+// A fixture list of the soundtrack files public/audio/ ships locally for
+// development — see public/audio/manifest.json, which is the runtime source
+// of truth music.js actually reads (apps/desktop/src/manifest.js fetches it).
+// This array is no longer baked into the app or the build; only the test
+// suites use it now, to avoid repeating these six filenames in every test
+// that needs a real, decodable track.
 //
 // `file` is deliberately URL-safe. The delivered names carried spaces and an
 // "é", which survive a fetch() only once encoded and are a standing trap for

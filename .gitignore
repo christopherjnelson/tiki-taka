@@ -46,3 +46,9 @@ Thumbs.db
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+
+# Soundtrack .ogg files: fetched at runtime from a manifest instead of being
+# built and shipped (apps/desktop/src/manifest.js, public/audio/manifest.json).
+# Anchored to public/audio/ itself, not public/audio/**, so it does not catch
+# public/audio/effects/*.ogg — sound effects stay part of the build.
+/public/audio/*.ogg
