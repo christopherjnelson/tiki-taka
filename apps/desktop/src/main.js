@@ -51,6 +51,7 @@ import {
   zoneContaining,
   resolveHomeMove,
 } from "./pad-zones.mjs";
+import { ANNOUNCEMENT_TEXT } from "./announcement.js";
 const $ = (id) => document.getElementById(id);
 // A native <dialog>'s backdrop click closes it on some platforms already,
 // but not reliably, and never with the dismiss-vs-drag distinction below, so
@@ -827,8 +828,23 @@ function bestStarsForCourt(courtIndexValue) {
 function totalStarsForCourt(courtIndexValue) {
   return DIFFICULTIES.reduce((sum, tier) => sum + starsForTier(courtIndexValue, tier.id), 0);
 }
+// Renders the static release-announcement strip from ANNOUNCEMENT_TEXT (see
+// src/announcement.js — that's the file to edit, not this function). Blank
+// text hides the element outright rather than leaving an empty box. The
+// optional `text` param exists so tests can exercise the empty case through
+// the real render path (see window.__renderHomeAnnouncement below) without
+// editing announcement.js.
+function renderHomeAnnouncement(text = ANNOUNCEMENT_TEXT) {
+  const el = $("home-announcement");
+  if (!el) return;
+  const trimmed = (text || "").trim();
+  el.hidden = !trimmed;
+  el.textContent = trimmed;
+}
+window.__renderHomeAnnouncement = renderHomeAnnouncement;
 function syncHome() {
   if ($("home-view")) syncTitle();
+  renderHomeAnnouncement();
   $("home-stars").textContent = String(
     COURTS.reduce((total, _court, i) => total + totalStarsForCourt(i), 0),
   );

@@ -4604,6 +4604,26 @@ body:has(.noscript) .boot-sync {
     background: #080414;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
+  /* ── Home Announcement Strip ───────────────────────────────────────── */
+  /* Small and calm on purpose: it sits above the leaderboard, not a modal,
+     nothing to dismiss. flex-shrink: 0 so the leaderboard below it (flex: 1
+     1 auto) is the one that gives up height if the panel gets short. [hidden]
+     is enough to collapse it to nothing when ANNOUNCEMENT_TEXT is blank —
+     see renderHomeAnnouncement() in main.js. */
+  .home-announcement {
+    flex: 0 0 auto;
+    margin: 0 0 10px;
+    padding: 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--line), var(--accent) 30%);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--panel), #000 24%);
+    color: var(--muted);
+    font: 600 12px/1.4 var(--sign);
+    letter-spacing: 0.2px;
+  }
+  .home-announcement[hidden] {
+    display: none;
+  }
   /* ── Home Leaderboard Deck ─────────────────────────────────────────── */
   .home-leaderboard {
     display: flex;
