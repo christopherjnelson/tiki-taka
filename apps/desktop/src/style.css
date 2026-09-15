@@ -1130,6 +1130,61 @@ kbd {
   opacity: 0.4;
   cursor: not-allowed;
 }
+/* ── Segmented mode toggle ────────────────────────────────────────────────
+   Same family as .hl-difficulty-toggle just above (identical frame/segment
+   rules) so the two read as one idiom, but its segments are icon-only,
+   cloned at runtime from the home mode buttons' own SVGs rather than drawn
+   again here — see renderHomeLeaderboardModeToggle(). */
+.hl-mode-toggle {
+  display: flex;
+  gap: 3px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--surface), #000 45%);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  flex: none;
+}
+.hl-mode-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.hl-mode-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.hl-mode-btn:hover {
+  color: var(--ink);
+}
+.hl-mode-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.hl-mode-btn.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent), transparent 85%);
+  border-color: color-mix(in srgb, var(--accent), transparent 45%);
+}
+/* A mode with no court axis or no difficulty axis hides that control
+   outright rather than showing it disabled/dead — see
+   syncHomeLeaderboardControlsVisibility() and the mobileWallMode note in
+   CLAUDE.md. The [hidden] attribute selector here deliberately outranks the
+   plain-class display rules each control gets inside the width tiers below,
+   so hiding always wins regardless of viewport. */
+.hl-tabs[hidden],
+.hl-difficulty-toggle[hidden],
+.hl-mode-toggle[hidden] {
+  display: none;
+}
 /* ── Pre-round invitation card's difficulty block ───────────────────────
    This is the one difficulty control a player actually sees before a round
    starts: the below-court .difficulty-card sits in the same permanently

@@ -786,10 +786,93 @@ const DIFFICULTY_SHORT_LABELS = { relaxed: "REL", standard: "STD", ruthless: "RU
 function shortTierLabel(id) {
   return DIFFICULTY_SHORT_LABELS[id] || String(id).slice(0, 3).toUpperCase();
 }
+// The three modes the leaderboard can be filtered to. Practice never
+// records a score (see recordRound() callers), so it has no place here —
+// this deliberately does not mirror the four-button home mode roster.
+// Icons are cloned at runtime from the matching [data-home-mode] button
+// rather than drawn again here, so the board and the mode buttons can never
+// disagree visually.
+const LEADERBOARD_MODES = [
+  { id: "career", label: "World tour" },
+  { id: "kotc", label: "King of the Court" },
+  { id: "endless", label: "Endless flow" },
+];
+const LEADERBOARD_MODE_IDS = LEADERBOARD_MODES.map((m) => m.id);
+// Only World tour has courts and a difficulty tier in the same sense: it is
+// scored on possession/flow across six fixed venues at three tiers. Endless
+// has no venue choice (a single fixed court) and King of the Court is not
+// scored on flow at all, so neither has a comparable tier axis yet. Both
+// show up here so a player can see the board is waiting on them, but their
+// court tabs and difficulty toggle stay hidden rather than offering a
+// control that does nothing — the mobileWallMode lesson (CLAUDE.md).
+function leaderboardModeHasCourts(modeId) {
+  return modeId === "career";
+}
+function leaderboardModeHasDifficulty(modeId) {
+  return modeId === "career";
+}
+// More than the bare top 10 the board used to show, without turning the
+// panel into an unbounded scroll: 25 is enough to place most players who
+// show up at all (a court's real leaderboard is a few dozen entries deep at
+// most, this early), and it still fits the panel's existing internal
+// scroll (.hl-table already scrolls; see style.css) instead of pushing the
+// page's own height around like an unbounded list would on a phone.
+const LEADERBOARD_LIMIT = 25;
+let homeLeaderboardMode = "career";
 let homeLeaderboardCourt = 0;
 // Scores are not comparable across tiers, so the deck always shows exactly
 // one tier at a time rather than an "all" blend. Defaults to standard.
 let homeLeaderboardDifficulty = "standard";
+
+function renderHomeLeaderboardModeToggle() {
+  const host = $("hl-mode-toggle");
+  if (!host) return;
+  host.replaceChildren(
+    ...LEADERBOARD_MODES.map((modeInfo) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "hl-mode-btn";
+      btn.dataset.mode = modeInfo.id;
+      const sourceIcon = document.querySelector(
+        `[data-home-mode="${modeInfo.id}"] .mode-icon`,
+      );
+      if (sourceIcon) btn.appendChild(sourceIcon.cloneNode(true));
+      btn.setAttribute("aria-pressed", "false");
+      btn.setAttribute("aria-label", modeInfo.label);
+      btn.title = modeInfo.label;
+      btn.addEventListener("click", () => selectHomeLeaderboardMode(modeInfo.id));
+      return btn;
+    }),
+  );
+  syncHomeLeaderboardModeButtons();
+}
+
+function syncHomeLeaderboardModeButtons() {
+  document.querySelectorAll("#hl-mode-toggle .hl-mode-btn").forEach((btn) => {
+    const isActive = btn.dataset.mode === homeLeaderboardMode;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+// Hides (rather than disables) the court tabs and difficulty toggle for a
+// mode that does not have that axis, so the board never shows a live-looking
+// control that is actually inert.
+function syncHomeLeaderboardControlsVisibility() {
+  const tabs = $("hl-tabs");
+  const difficulty = $("hl-difficulty-toggle");
+  if (tabs) tabs.hidden = !leaderboardModeHasCourts(homeLeaderboardMode);
+  if (difficulty) difficulty.hidden = !leaderboardModeHasDifficulty(homeLeaderboardMode);
+}
+
+function selectHomeLeaderboardMode(modeId) {
+  const next = LEADERBOARD_MODE_IDS.includes(modeId) ? modeId : "career";
+  if (next === homeLeaderboardMode) return;
+  homeLeaderboardMode = next;
+  syncHomeLeaderboardModeButtons();
+  syncHomeLeaderboardControlsVisibility();
+  void syncHomeLeaderboard(homeLeaderboardCourt, homeLeaderboardDifficulty);
+}
 
 // Built once from DIFFICULTIES — never hardcoded — so the toggle always
 // matches whatever tiers the engine defines. Labels are abbreviated (REL /
@@ -857,6 +940,10 @@ const LEADERBOARD_REQUEST_TIMEOUT_MS =
 async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeLeaderboardDifficulty, { manual = false } = {}) {
   const list = $("home-leaderboard-list");
   if (!list) return;
+  // Captured once up front: homeLeaderboardMode can change while this
+  // request is in flight (another click), and every "is this response still
+  // relevant" check below has to agree with what was actually asked for.
+  const modeAtRequest = homeLeaderboardMode;
   const statusEl = $("home-leaderboard-status");
   const table = document.querySelector("#home-leaderboard .hl-table");
   const refreshButton = $("home-leaderboard-refresh");
@@ -864,8 +951,18 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
   leaderboardRequestController?.abort();
   const controller = new AbortController();
   leaderboardRequestController = controller;
-  const isCurrentFilter = courtIdx === homeLeaderboardCourt && tier === homeLeaderboardDifficulty;
-  const preserveRows = manual && isCurrentFilter && list.children.length > 0;
+  // Re-evaluated fresh each time it's called (not captured once) because the
+  // player can change mode/court/tier again while a request is still in
+  // flight, and every "is this response still relevant" check must agree
+  // with whatever selection is current *now*, not at call time.
+  function isCurrentFilter() {
+    return (
+      modeAtRequest === homeLeaderboardMode &&
+      courtIdx === homeLeaderboardCourt &&
+      tier === homeLeaderboardDifficulty
+    );
+  }
+  const preserveRows = manual && isCurrentFilter() && list.children.length > 0;
 
   function setLoadingState(message) {
     table?.setAttribute("aria-busy", "true");
@@ -896,13 +993,23 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
     return cell;
   }
 
+  function emptyStateMessage() {
+    // World tour's empty state names the court, since that's what's being
+    // filtered. Kotc and endless aren't playable yet at all (switchMode()
+    // refuses both), so their empty state says so plainly rather than
+    // implying a court came up empty.
+    if (modeAtRequest === "career") return "No scores recorded yet for this court.";
+    const modeLabel = LEADERBOARD_MODES.find((m) => m.id === modeAtRequest)?.label || "This mode";
+    return `${modeLabel} is coming soon — no scores yet.`;
+  }
+
   function renderEntries(entries) {
     if (statusEl) {
-      statusEl.textContent = entries.length ? "" : "No scores recorded yet for this court.";
+      statusEl.textContent = entries.length ? "" : emptyStateMessage();
       statusEl.classList.remove("is-error");
     }
     list.replaceChildren(
-      ...entries.slice(0, 10).map((entry, idx) => {
+      ...entries.slice(0, LEADERBOARD_LIMIT).map((entry, idx) => {
         const li = document.createElement("li");
         const rankNum = entry.rank ?? idx + 1;
         const isTop3 = rankNum <= 3;
@@ -947,7 +1054,9 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
     let userBestSplits = 0;
     let userBestZones = 0;
 
-    if (progress?.records) {
+    // progress.records only ever holds World tour's court-and-tier keys;
+    // kotc/endless have no such record to look up yet.
+    if (modeAtRequest === "career" && progress?.records) {
       const directScore = progress.records[`court-${courtIdx}-${tier}`];
       if (typeof directScore === "number" && directScore > 0) {
         userBestScore = directScore;
@@ -1025,10 +1134,10 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
   try {
     const board = await Promise.race([
       dataAdapter.getLeaderboard({
-        mode: "career",
-        court: courtIdx,
-        difficulty: tier,
-        limit: 10,
+        mode: modeAtRequest,
+        court: leaderboardModeHasCourts(modeAtRequest) ? courtIdx : undefined,
+        difficulty: leaderboardModeHasDifficulty(modeAtRequest) ? tier : undefined,
+        limit: LEADERBOARD_LIMIT,
         signal: controller.signal,
       }),
       new Promise((_, reject) => {
@@ -1049,11 +1158,7 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
     clearTimeout(timeoutId);
     if (fetchId !== leaderboardFetchId) return;
 
-    if (
-      board?.entries?.length &&
-      courtIdx === homeLeaderboardCourt &&
-      tier === homeLeaderboardDifficulty
-    ) {
+    if (board?.entries?.length && isCurrentFilter()) {
       const loadedEntries = board.entries.map((e, idx) => ({
         rank: idx + 1,
         name: e.username,
@@ -1068,7 +1173,7 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
       }));
       renderEntries(loadedEntries);
       syncUserBest(loadedEntries);
-    } else if (courtIdx === homeLeaderboardCourt && tier === homeLeaderboardDifficulty) {
+    } else if (isCurrentFilter()) {
       renderEntries([]);
       syncUserBest([]);
     }
@@ -5101,6 +5206,8 @@ syncFullscreen();
 syncAccountDialog();
 renderDifficultyOptions();
 renderHomeLeaderboardDifficultyToggle();
+renderHomeLeaderboardModeToggle();
+syncHomeLeaderboardControlsVisibility();
 prepare();
 syncPauseMenu();
 // Drop a stale #play or #courts so the address bar agrees with the home screen

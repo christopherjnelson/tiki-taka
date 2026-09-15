@@ -343,10 +343,23 @@
                     <path d="M9.5 4h2.75V1.25" />
                   </svg>
                 </button>
+                <!-- Mode icons are cloned at runtime from the home mode
+                buttons' own [data-home-mode] SVGs by
+                renderHomeLeaderboardModeToggle(), so the board and the mode
+                buttons can never disagree visually. -->
+                <div
+                  id="hl-mode-toggle"
+                  class="hl-mode-toggle"
+                  role="group"
+                  aria-label="Filter leaderboard by mode"
+                >
+                  <!-- dynamic buttons generated from LEADERBOARD_MODES by renderHomeLeaderboardModeToggle() -->
+                </div>
                 <!-- The selected segment below is the one place the active
                 tier is shown here — a separate badge used to repeat the same
                 name right next to it, which read as a duplicate rather than
-                emphasis. -->
+                emphasis. World tour only: hidden for modes with no
+                difficulty axis. -->
                 <div
                   id="hl-difficulty-toggle"
                   class="hl-difficulty-toggle"
@@ -356,7 +369,7 @@
                   <!-- dynamic buttons generated from DIFFICULTIES by renderHomeLeaderboardDifficulty() -->
                 </div>
               </header>
-              <nav class="hl-tabs" role="tablist" aria-label="Court Leaderboard Selection">
+              <nav id="hl-tabs" class="hl-tabs" role="tablist" aria-label="Court Leaderboard Selection">
                 <button type="button" class="hl-tab active" role="tab" aria-selected="true" data-court="0" id="hl-tab-0" tabindex="0">
                   <span class="hl-tab-num">01</span> LISBON
                 </button>

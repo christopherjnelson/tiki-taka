@@ -1369,6 +1369,116 @@ await check(
 );
 
 await check(
+  "the home leaderboard switches by mode, hides court/difficulty controls that don't apply, and shows a calm empty state for a mode with no scores",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+      serviceWorkers: "block",
+    });
+    await context.addInitScript(() => {
+      const bindings = {
+        moveUp: ["KeyW", "ArrowUp"], moveDown: ["KeyS", "ArrowDown"],
+        moveLeft: ["KeyA", "ArrowLeft"], moveRight: ["KeyD", "ArrowRight"],
+        smartPass: ["Space"], direct1: ["Digit1"], direct2: ["Digit2"],
+        direct3: ["Digit3"], direct4: ["Digit4"], wallToggle: ["KeyB"],
+        wallHold: ["ShiftLeft"], focusHold: ["KeyE"], boostHold: ["KeyR"],
+        shout: ["KeyF"], pause: ["Escape"], skipTrack: ["KeyN"],
+      };
+      window.__leaderboardCalls = [];
+      window.__TIKI_TAKA_TEST_DATA_ADAPTER_FACTORY__ = () => ({
+        kind: "local",
+        async getSession() { return null; },
+        async loadUserData() {
+          return {
+            progress: {
+              version: 1, xp: 0, unlocked: 5, courts: {}, records: {},
+              sound: true, tactic: "balanced", difficulty: "standard", lastCourt: 0,
+            },
+            settings: {
+              theme: "dark", effectsOn: false, effectsVolume: 0, musicOn: false,
+              musicVolume: 0, audioMigrated: true, preset: "wasd", bindings,
+            },
+            stats: { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 },
+            preferences: { scoreSaveChoice: "ask" },
+          };
+        },
+        async saveUserData() { return {}; },
+        async recordRound() { return { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 }; },
+        // Only "career" has any scores recorded — kotc and endless are not
+        // playable modes yet (see switchMode()'s refusal in main.js), so a
+        // real backend would never have rows for them either.
+        async getLeaderboard(args) {
+          window.__leaderboardCalls.push(args);
+          if (args.mode !== "career") return { entries: [] };
+          return { entries: [{ username: "tour-player", score: 4200, passes: 40 }] };
+        },
+        onAuthStateChange() { return () => {}; },
+      });
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(`${baseURL}/`);
+    await page.locator("#home-view").waitFor({ state: "visible" });
+    await page.locator("#home-leaderboard").waitFor({ state: "visible" });
+
+    // World tour is the default: court tabs and the difficulty toggle are
+    // visible, and the mocked score renders.
+    await page.locator("#home-leaderboard-list .hl-row").first().waitFor({ state: "visible" });
+    assert.equal(await page.locator("#hl-tabs").isHidden(), false);
+    assert.equal(await page.locator("#hl-difficulty-toggle").isHidden(), false);
+    assert.equal(
+      await page.locator("#home-leaderboard-list .hl-row .hl-cell-player").first().textContent(),
+      "tour-player",
+    );
+    const careerCall = await page.evaluate(() => window.__leaderboardCalls.at(-1));
+    assert.equal(careerCall.mode, "career");
+    assert.equal(careerCall.court, 0);
+    assert.equal(careerCall.difficulty, "standard");
+
+    // Switching to King of the Court hides the World-tour-only controls,
+    // queries by the new mode, and shows a calm empty state rather than an
+    // error or a spinner that never resolves.
+    const kotcButton = page.locator('#hl-mode-toggle .hl-mode-btn[data-mode="kotc"]');
+    await kotcButton.click();
+    await page.waitForFunction(() => window.__leaderboardCalls.at(-1)?.mode === "kotc");
+    const kotcCall = await page.evaluate(() => window.__leaderboardCalls.at(-1));
+    assert.equal(kotcCall.court, undefined);
+    assert.equal(kotcCall.difficulty, undefined);
+    assert.equal(await page.locator("#hl-tabs").isHidden(), true);
+    assert.equal(await page.locator("#hl-difficulty-toggle").isHidden(), true);
+    await page.waitForFunction(
+      () => document.querySelectorAll("#home-leaderboard-list .hl-row").length === 0,
+    );
+    const status = page.locator("#home-leaderboard-status");
+    await page.waitForFunction(
+      () => !/unable to load|offline|error/i.test(document.querySelector("#home-leaderboard-status")?.textContent || ""),
+    );
+    assert.match(await status.textContent(), /coming soon/i);
+    assert.equal(await status.evaluate((el) => el.classList.contains("is-error")), false);
+
+    // Endless behaves the same way, and switching back to World tour
+    // restores the court tabs, the difficulty toggle, and the real score.
+    const endlessButton = page.locator('#hl-mode-toggle .hl-mode-btn[data-mode="endless"]');
+    await endlessButton.click();
+    await page.waitForFunction(() => window.__leaderboardCalls.at(-1)?.mode === "endless");
+    assert.equal(await page.locator("#hl-tabs").isHidden(), true);
+    assert.match(await status.textContent(), /coming soon/i);
+
+    const careerButton = page.locator('#hl-mode-toggle .hl-mode-btn[data-mode="career"]');
+    await careerButton.click();
+    await page.waitForFunction(() => window.__leaderboardCalls.at(-1)?.mode === "career");
+    assert.equal(await page.locator("#hl-tabs").isHidden(), false);
+    assert.equal(await page.locator("#hl-difficulty-toggle").isHidden(), false);
+    await page.waitForFunction(
+      () => document.querySelector("#home-leaderboard-list .hl-row .hl-cell-player")?.textContent === "tour-player",
+    );
+
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
+await check(
   "a delayed saved-game restore acknowledges syncing until controls are ready",
   async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, serviceWorkers: "block" });
@@ -1466,7 +1576,7 @@ await check(
     assert.deepEqual(await page.evaluate(() => {
       const { mode, court, difficulty, limit } = window.__leaderboardCalls.at(-1);
       return { mode, court, difficulty, limit };
-    }), { mode: "career", court: 0, difficulty: "standard", limit: 10 });
+    }), { mode: "career", court: 0, difficulty: "standard", limit: 25 });
     assert.equal(await table.getAttribute("aria-busy"), "true");
     assert.match(await status.textContent(), /refreshing/i);
     assert.equal(await page.locator("#home-leaderboard-list .hl-cell-player").first().textContent(), "before-refresh");
