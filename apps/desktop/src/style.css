@@ -4589,6 +4589,23 @@ body:has(.noscript) .boot-sync {
     0 100%
   );
 }
+/* The leaderboard heading's icon slot holds a mode SVG cloned from the home
+   mode buttons, not the glyph it used to hold, so it has to size artwork.
+   It lives outside the width tiers because both the phone and desktop
+   leaderboards render this header. */
+.hl-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+.hl-icon-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 @media (min-width: 980px) and (min-height: 620px) {
   .home-view {
     /* Roughly the mockup's 26% / 47% / 27% split — the centre column is

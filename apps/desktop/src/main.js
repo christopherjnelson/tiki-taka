@@ -915,6 +915,35 @@ const LEADERBOARD_MODE_IDS = LEADERBOARD_MODES.map((m) => m.id);
 // show up here so a player can see the board is waiting on them, but their
 // court tabs and difficulty toggle stay hidden rather than offering a
 // control that does nothing — the mobileWallMode lesson (CLAUDE.md).
+// What the board calls itself, per mode. "Circuit leaderboards" was written
+// when World tour was the only board there was, and it kept saying so after
+// the mode toggle arrived — so switching to King of the Court left a heading
+// describing something else entirely. The icon had the same problem: a
+// generic trophy for every mode, including the one whose own button on this
+// same screen carries a distinct mark.
+//
+// The icons are cloned from the home mode buttons (see
+// renderHomeLeaderboardModeToggle) for exactly the reason the toggle's are:
+// the board and the buttons must not drift apart, and the wording comes from
+// LEADERBOARD_MODES for the same reason.
+function syncHomeLeaderboardHeading() {
+  const mode = LEADERBOARD_MODES.find((m) => m.id === homeLeaderboardMode);
+  const label = mode ? mode.label : "Leaderboard";
+  const heading = $("hl-title");
+  if (heading) heading.textContent = `${label.toUpperCase()} LEADERBOARD`;
+  const section = $("home-leaderboard");
+  if (section) section.setAttribute("aria-label", `${label} leaderboard`);
+  const icon = $("hl-mode-icon");
+  const source = document.querySelector(
+    `[data-home-mode="${homeLeaderboardMode}"] .mode-icon`,
+  );
+  if (!icon || !source) return;
+  const clone = source.cloneNode(true);
+  clone.removeAttribute("class");
+  clone.classList.add("hl-icon-art");
+  clone.setAttribute("aria-hidden", "true");
+  icon.replaceChildren(clone);
+}
 function leaderboardModeHasCourts(modeId) {
   return modeId === "career";
 }
@@ -981,6 +1010,7 @@ function selectHomeLeaderboardMode(modeId) {
   homeLeaderboardMode = next;
   syncHomeLeaderboardModeButtons();
   syncHomeLeaderboardControlsVisibility();
+  syncHomeLeaderboardHeading();
   void syncHomeLeaderboard(homeLeaderboardCourt, homeLeaderboardDifficulty);
 }
 
@@ -5421,6 +5451,7 @@ renderDifficultyOptions();
 renderHomeLeaderboardDifficultyToggle();
 renderHomeLeaderboardModeToggle();
 syncHomeLeaderboardControlsVisibility();
+syncHomeLeaderboardHeading();
 prepare();
 syncPauseMenu();
 // Drop a stale #play or #courts so the address bar agrees with the home screen

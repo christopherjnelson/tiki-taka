@@ -1468,6 +1468,13 @@ await check(
       await page.locator("#home-leaderboard-list .hl-row .hl-cell-player").first().textContent(),
       "tour-player",
     );
+    // The heading names the mode on screen. It used to read "CIRCUIT
+    // LEADERBOARDS" under a fixed trophy no matter which mode was selected,
+    // which is wrong for two of the three and matches none of their buttons.
+    const heading = page.locator("#hl-title");
+    const headingIcon = page.locator("#hl-mode-icon .hl-icon-art");
+    assert.equal(await heading.textContent(), "WORLD TOUR LEADERBOARD");
+    assert.equal(await headingIcon.evaluate((el) => el.tagName.toLowerCase()), "svg");
     const careerCall = await page.evaluate(() => window.__leaderboardCalls.at(-1));
     assert.equal(careerCall.mode, "career");
     assert.equal(careerCall.court, 0);
@@ -1484,6 +1491,7 @@ await check(
     assert.equal(kotcCall.difficulty, undefined);
     assert.equal(await page.locator("#hl-tabs").isHidden(), true);
     assert.equal(await page.locator("#hl-difficulty-toggle").isHidden(), true);
+    assert.equal(await heading.textContent(), "KING OF THE COURT LEADERBOARD");
     await page.waitForFunction(
       () => document.querySelectorAll("#home-leaderboard-list .hl-row").length === 0,
     );
@@ -1500,6 +1508,7 @@ await check(
     await endlessButton.click();
     await page.waitForFunction(() => window.__leaderboardCalls.at(-1)?.mode === "endless");
     assert.equal(await page.locator("#hl-tabs").isHidden(), true);
+    assert.equal(await heading.textContent(), "ENDLESS FLOW LEADERBOARD");
     assert.match(await status.textContent(), /coming soon/i);
 
     const careerButton = page.locator('#hl-mode-toggle .hl-mode-btn[data-mode="career"]');
@@ -1507,6 +1516,7 @@ await check(
     await page.waitForFunction(() => window.__leaderboardCalls.at(-1)?.mode === "career");
     assert.equal(await page.locator("#hl-tabs").isHidden(), false);
     assert.equal(await page.locator("#hl-difficulty-toggle").isHidden(), false);
+    assert.equal(await heading.textContent(), "WORLD TOUR LEADERBOARD");
     await page.waitForFunction(
       () => document.querySelector("#home-leaderboard-list .hl-row .hl-cell-player")?.textContent === "tour-player",
     );
