@@ -247,10 +247,35 @@ export function bankPoint(a, b) {
 }
 // Tier multipliers layered on top of each court's own ramp (COURTS above).
 // Standard is exactly today's numbers - it must never change these values.
+//
+// The tier turns possessions and the target; the COURT turns speed and
+// defender count. Ruthless used to turn all four, which double-dipped the
+// two dials the courts already ramp (76->123 speed, 2->4 defenders) and made
+// Ruthless on a court feel like a court you had not played rather than a
+// harder version of the one named on the card - The Cage says "Four
+// defenders" and Ruthless quietly made it five. It was also nearly out of
+// road: MAX_DEFENDERS is 5 and courts 5-6 already sat at 4, so the bonus
+// stopped differing exactly where it should have bitten hardest.
+//
+// Ruthless's targetMultiplier is 1, not something above it, and that is
+// deliberate. `zoneStreak` resets only on a turnover, so a round with no
+// turnover rides the multiplier to its ceiling and scores far more than one
+// with several. A single possession means every Ruthless round that reaches
+// the final whistle had no turnover at all - so Ruthless already produces
+// the highest-scoring rounds in the game. Raising its target on top of that
+// counts the same difficulty twice, and because stars are fixed ratios of
+// the target (1x / 1.5x / 2.2x-with-no-turnovers, see progress.js), a
+// multiplier above 1 pushes Ruthless's 2- and 3-star thresholds above the
+// highest score the tier can physically produce. Ruthless is paid for by
+// FIRST_CLEAR_TIER instead, which already values it at 1.5x the XP.
+//
+// Relaxed keeps its gentler press. Halving the target only helps a player
+// who can already hold the ball; the speed ease is what lets them hold it,
+// and it is the one accessibility lever the tier has on the late courts.
 const DIFFICULTY_TIERS = {
-  relaxed: { targetMultiplier: 0.7, possessions: 5, speedMultiplier: 0.9, defenderBonus: 0 },
+  relaxed: { targetMultiplier: 0.5, possessions: 5, speedMultiplier: 0.9, defenderBonus: 0 },
   standard: { targetMultiplier: 1, possessions: 3, speedMultiplier: 1, defenderBonus: 0 },
-  ruthless: { targetMultiplier: 1.3, possessions: 1, speedMultiplier: 1.12, defenderBonus: 1 },
+  ruthless: { targetMultiplier: 1, possessions: 1, speedMultiplier: 1, defenderBonus: 0 },
 };
 // Each tier's own copy plus the concrete numbers behind it, read straight off
 // DIFFICULTY_TIERS above so presentation code never re-states (and risks
@@ -274,7 +299,7 @@ export const DIFFICULTIES = [
   {
     id: "ruthless",
     name: "Ruthless",
-    label: "Tighter targets, a quicker press, only one life.",
+    label: "The same court and the same target, with only one possession.",
     facts: { ...DIFFICULTY_TIERS.ruthless },
   },
 ];
