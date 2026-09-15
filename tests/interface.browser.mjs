@@ -1259,6 +1259,58 @@ await check(
   },
 );
 
+await check(
+  "a modal dialog's backdrop click closes it, but a click inside or a drag out of it does not",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1200, height: 850 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await gotoArena(page, baseURL);
+    await openSettings(page);
+    const dialogOpen = () =>
+      page.locator("#settings-dialog").evaluate((el) => el.open);
+    const box = await page.locator("#settings-dialog").evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    });
+    // A click on the dialog's own content must not close it.
+    await page.locator("#settings-title").click();
+    assert.equal(
+      await dialogOpen(),
+      true,
+      "a click on dialog content must not close it",
+    );
+    // A click on the dialog element's own padding - inside its box, but on
+    // no child element - must not close it either.
+    await page.mouse.click(box.left + 6, box.top + 6);
+    assert.equal(
+      await dialogOpen(),
+      true,
+      "a click on the dialog's padding must not close it",
+    );
+    // A drag that starts inside the dialog (selecting changelog text, say)
+    // and is released past its edge is a drag, not a backdrop dismissal.
+    await page.mouse.move((box.left + box.right) / 2, box.top + 10);
+    await page.mouse.down();
+    await page.mouse.move(20, 20, { steps: 5 });
+    await page.mouse.up();
+    assert.equal(
+      await dialogOpen(),
+      true,
+      "a drag started inside and released on the backdrop must not close the dialog",
+    );
+    // A genuine backdrop click - pressed and released outside the dialog's
+    // box - closes it, the same way its own × does.
+    await page.mouse.click(20, 20);
+    assert.equal(await dialogOpen(), false, "a backdrop click must close the dialog");
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
 await browser.close();
 if (server) server.kill();
 if (failures) process.exitCode = 1;

@@ -52,6 +52,42 @@ import {
   resolveHomeMove,
 } from "./pad-zones.mjs";
 const $ = (id) => document.getElementById(id);
+// A native <dialog>'s backdrop click closes it on some platforms already,
+// but not reliably, and never with the dismiss-vs-drag distinction below, so
+// every modal dialog wires this up itself. `event.target === dialog` alone
+// is not enough to detect a backdrop click: the dialog element itself is
+// also the target for a click landing on the dialog's own padding (inside
+// its box, no descendant there to hit), and - worse - the browser fires
+// "click" on the nearest common ancestor of the mousedown and mouseup
+// targets, so selecting text inside the dialog and releasing past its edge
+// would land a click on the dialog too. Tracking where the press *started*,
+// separately from where it ends, is what tells a backdrop dismissal apart
+// from a drag that happens to end outside.
+function isOutsideDialogBox(dialog, event) {
+  const box = dialog.getBoundingClientRect();
+  return (
+    event.clientX < box.left ||
+    event.clientX > box.right ||
+    event.clientY < box.top ||
+    event.clientY > box.bottom
+  );
+}
+function closeOnBackdropClick(dialog, dismiss = () => dialog.close()) {
+  let pressStartedOnBackdrop = false;
+  dialog.addEventListener("mousedown", (event) => {
+    pressStartedOnBackdrop =
+      event.target === dialog && isOutsideDialogBox(dialog, event);
+  });
+  dialog.addEventListener("mouseup", (event) => {
+    if (
+      pressStartedOnBackdrop &&
+      event.target === dialog &&
+      isOutsideDialogBox(dialog, event)
+    )
+      dismiss();
+    pressStartedOnBackdrop = false;
+  });
+}
 // Vite replaces this allowlisted object during a build. The fallback keeps
 // source-served development and browser tests identifiable without exposing
 // process environment values to the client.
@@ -4251,6 +4287,23 @@ $("settings-dialog").addEventListener("close", () => {
   capture = null;
   clearInput();
 });
+// A backdrop click dismisses a modal dialog the same way its own × does -
+// every one of these five close buttons is a bare `dialog.close()` (the
+// score-save dialog's "ask me after my next game" is simply the absence of
+// a saved preference, which is what plain close() already leaves behind),
+// so closeOnBackdropClick's default dismiss action reuses it exactly rather
+// than taking a shortcut that would skip a future side effect. The
+// username prompt is included deliberately: a player who dismisses it ends
+// up authenticated with no public name, and that state is already handled
+// elsewhere (the prompt just reopens next visit), so treating it like every
+// other dialog here is the least surprising choice.
+[
+  $("account-dialog"),
+  $("username-dialog"),
+  $("score-save-dialog"),
+  $("settings-dialog"),
+  $("help-dialog"),
+].forEach((dialog) => closeOnBackdropClick(dialog));
 $("preset-select").addEventListener("change", (event) => {
   capture = null;
   clearInput();
@@ -4420,18 +4473,6 @@ $("help-button").addEventListener("click", () => {
   $("help-dialog").showModal();
 });
 $("close-help").addEventListener("click", () => $("help-dialog").close());
-$("help-dialog").addEventListener("click", (e) => {
-  if (e.target === $("help-dialog")) {
-    const r = e.target.getBoundingClientRect();
-    if (
-      e.clientX < r.left ||
-      e.clientX > r.right ||
-      e.clientY < r.top ||
-      e.clientY > r.bottom
-    )
-      e.target.close();
-  }
-});
 // Any keyboard or pointer activity switches the toolbar chips back off
 // gamepad glyphs, however the player got there — capturing a new binding,
 // clicking a menu, or just typing, not only in-round play.
