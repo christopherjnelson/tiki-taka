@@ -37,11 +37,26 @@ const compressed = (names, algorithm) =>
     (total, name) => total + algorithm(sizes.get(name)).byteLength,
     0,
   );
+// "Shell" means what a cold load actually fetches, not everything the build
+// emits. Counting every .js made the budget punish code splitting: moving the
+// Supabase client behind a dynamic import - so a guest who never signs in
+// never downloads it - showed up as no saving at all, because the chunk still
+// existed on disk. A budget that cannot tell the difference between shipped
+// and loaded is measuring the wrong thing.
+//
+// index.html is the authority: Vite references the entry and its static graph
+// there (script src and modulepreload), and leaves deferred chunks out. Those
+// are reported separately below so they stay visible without gating.
+const entryHtml = sizes.get("index.html")?.toString("utf8") ?? "";
+const referencedByEntry = (file) => entryHtml.includes(file);
 const shell = files.filter(
   (file) =>
     file === "index.html" ||
-    file.endsWith(".js") ||
-    file.endsWith(".css"),
+    file.endsWith(".css") ||
+    (file.endsWith(".js") && referencedByEntry(file)),
+);
+const deferred = files.filter(
+  (file) => file.endsWith(".js") && file !== "sw.js" && !referencedByEntry(file),
 );
 const tracks = files.filter(
   (file) => file.startsWith("audio/") && !file.startsWith("audio/effects/"),
@@ -65,6 +80,7 @@ console.log("Production asset measurement (dist/desktop)");
 console.table([
   { metric: "HTML/CSS/JS raw", value: format(bytes(shell)) },
   { metric: "HTML/CSS/JS gzip", value: format(shellGzip) },
+  { metric: "deferred JS gzip (not on first load)", value: format(compressed(deferred, gzipSync)) },
   { metric: "HTML/CSS/JS Brotli", value: format(shellBrotli) },
   { metric: "font assets (raw)", value: format(bytes(fonts)) },
   { metric: "service-worker precache (raw)", value: format(precacheBytes) },

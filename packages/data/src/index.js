@@ -5,7 +5,7 @@ import {
   normalizeSettings,
   readProgress,
 } from "../../engine/src/index.js";
-import { createConfiguredSupabaseDataAdapter } from "./supabase.js";
+import { createConfiguredSupabaseDataAdapter, fetchPublicLeaderboard } from "./supabase.js";
 export { createSupabaseDataAdapter, createConfiguredSupabaseDataAdapter } from "./supabase.js";
 
 const PREFIX = "tiki-taka.local-data.v1";
@@ -168,24 +168,133 @@ export const LOCAL_DATA_KEYS = {
   guest: GUEST_KEY,
 };
 
+// Wraps the real Supabase adapter behind the exact same shape ("supabase"
+// kind, every method the real one has) without paying for it: constructing
+// the real adapter dynamically imports @supabase/supabase-js (see
+// createConfiguredSupabaseDataAdapter), a ~56 KiB gzipped vendor chunk that a
+// guest who never signs in has no reason to fetch. main.js decides whether
+// this browser is *worth* checking eagerly (a stored session, or an OAuth
+// provider redirecting back - see selectDataAdapter's `eager`) and only
+// bypasses this wrapper in that case; everywhere else, the import happens
+// the moment something actually needs the library - register(), login(),
+// signInWithDiscord(), completeProfile() - and never before.
+//
+// Every other call degrades to something correct without it:
+//   - getSession()/getProfile() report signed-out rather than importing the
+//     library just to confirm what main.js's own storage check already
+//     suggested.
+//   - loadUserData()/saveUserData()/recordRound() run against the same local
+//     guest adapter the no-Supabase-configured build uses, so a guest's
+//     progress, settings and local stats work exactly as before - and the
+//     moment a real sign-in happens, later calls flow through the real
+//     adapter instead, picking up the account's data the normal way (main.js
+//     already reloads the data context after every sign-in).
+//   - getLeaderboard() never needs the client at all: it is a public,
+//     read-only table, so it goes straight to PostgREST (see
+//     fetchPublicLeaderboard in supabase.js) whether or not the real adapter
+//     has loaded. Routing it through the client would force the chunk to
+//     load for every guest the instant the home screen's leaderboard
+//     refreshes, which would defeat this entire change.
+//   - onAuthStateChange() queues the listener instead of subscribing; wiring
+//     up a listener for changes that, by definition, cannot happen without
+//     the library already being loaded must not itself trigger the load.
+function createDeferredSupabaseDataAdapter({ url, publishableKey, storage, crypto = globalThis.crypto } = {}) {
+  const guest = createLocalDataAdapter({ storage, crypto });
+  let real = null;
+  let loading = null;
+  let queuedListeners = [];
+  function ensureReal() {
+    if (real) return Promise.resolve(real);
+    if (!loading)
+      loading = createConfiguredSupabaseDataAdapter({ url, publishableKey, storage, crypto }).then((adapter) => {
+        real = adapter;
+        for (const listener of queuedListeners) real.onAuthStateChange(listener);
+        queuedListeners = [];
+        return adapter;
+      });
+    return loading;
+  }
+  return {
+    kind: "supabase",
+    async register(...args) {
+      return (await ensureReal()).register(...args);
+    },
+    async login(...args) {
+      return (await ensureReal()).login(...args);
+    },
+    async logout() {
+      // Never loaded this session means never signed in this session -
+      // nothing to sign out of, and nothing worth importing the library for.
+      if (!real) return;
+      return real.logout();
+    },
+    async getSession() {
+      return real ? real.getSession() : null;
+    },
+    async getProfile() {
+      return real ? real.getProfile() : null;
+    },
+    async signInWithDiscord(...args) {
+      return (await ensureReal()).signInWithDiscord(...args);
+    },
+    async completeProfile(...args) {
+      return (await ensureReal()).completeProfile(...args);
+    },
+    onAuthStateChange(listener) {
+      if (real) return real.onAuthStateChange(listener);
+      queuedListeners.push(listener);
+      return () => {
+        queuedListeners = queuedListeners.filter((entry) => entry !== listener);
+      };
+    },
+    async loadUserData() {
+      return real ? real.loadUserData() : guest.loadUserData();
+    },
+    async saveUserData(update = {}) {
+      return real ? real.saveUserData(update) : guest.saveUserData(update);
+    },
+    async recordRound(round = {}) {
+      return real ? real.recordRound(round) : guest.recordRound(round);
+    },
+    async getLeaderboard(options = {}) {
+      return fetchPublicLeaderboard({ url, publishableKey, ...options });
+    },
+  };
+}
+
 // Runtime adapter selection: with no Supabase configuration present, a player
 // sees no difference from a plain local-storage game — there is no accounts
 // service to offer, so the result is the guest-only adapter above. Call this
 // once at boot instead of constructing an adapter directly.
+//
+// `eager`, set by main.js from a cheap local check (a stored Supabase session
+// key, or the URL showing an OAuth provider redirecting back), decides
+// whether to construct the real adapter now - so a returning signed-in
+// player's session restores without an extra round trip - or hand back the
+// deferred wrapper above, which behaves identically but never imports the
+// Supabase client library until something actually needs it.
 export async function selectDataAdapter({
   supabaseUrl,
   supabasePublishableKey,
   supabaseClient,
   storage,
   crypto = globalThis.crypto,
+  eager = false,
 } = {}) {
   if (supabaseUrl || supabasePublishableKey || supabaseClient) {
     if (!supabaseClient && (!supabaseUrl || !supabasePublishableKey))
       return createLocalDataAdapter({ storage });
-    return createConfiguredSupabaseDataAdapter({
+    if (supabaseClient || eager)
+      return createConfiguredSupabaseDataAdapter({
+        url: supabaseUrl,
+        publishableKey: supabasePublishableKey,
+        client: supabaseClient,
+        storage,
+        crypto,
+      });
+    return createDeferredSupabaseDataAdapter({
       url: supabaseUrl,
       publishableKey: supabasePublishableKey,
-      client: supabaseClient,
       storage,
       crypto,
     });

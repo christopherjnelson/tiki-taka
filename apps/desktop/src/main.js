@@ -179,6 +179,37 @@ const dataStorage = storage || {
 // offline, with no sign-in UI offered (see accountsAvailable below).
 const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL?.trim();
 const supabasePublishableKey = import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
+// selectDataAdapter loads the Supabase client on demand rather than at
+// startup (see createDeferredSupabaseDataAdapter in packages/data/src/
+// index.js) - a guest who never signs in never fetches it. `eager` is the
+// one thing only this module can decide: whether *this* page load looks
+// worth the real client's cost up front, so a returning signed-in player is
+// restored without an extra click, and never flashes signed-out only to
+// correct itself a moment later.
+//
+// Two cheap, local checks, both false for an ordinary guest:
+//   - a stored Supabase session. supabase-js persists it under a
+//     `sb-<project-ref>-auth-token` key; scanning for that pattern (rather
+//     than recomputing the exact key) does not depend on this build's
+//     Supabase URL matching how a *different* build that signed this player
+//     in derived its project ref, and survives a future client version
+//     changing that derivation.
+//   - an OAuth provider (Discord) redirecting back. supabase-js's
+//     detectSessionInUrl needs the real client to parse and clear these
+//     params from the URL - see createConfiguredSupabaseDataAdapter in
+//     packages/data/src/supabase.js - so this session must load eagerly too.
+function hasStoredSupabaseSession() {
+  if (!storage || typeof storage.length !== "number" || typeof storage.key !== "function") return false;
+  for (let index = 0; index < storage.length; index++) {
+    const key = storage.key(index);
+    if (key && /^sb-.*-auth-token$/.test(key)) return true;
+  }
+  return false;
+}
+const oauthReturnPending =
+  Boolean(oauthReturnError) ||
+  /(?:^|[&#])(?:access_token|refresh_token|provider_token)=/.test(location.hash) ||
+  (/(?:^|[?&])code=/.test(location.search) && /(?:^|[?&])state=/.test(location.search));
 // Browser tests can supply an in-memory adapter before this module evaluates.
 // It is intentionally not a deployment setting and is ignored unless the
 // exact test-only factory global is present.
@@ -189,6 +220,7 @@ let dataAdapter = testDataAdapterFactory
       supabaseUrl,
       supabasePublishableKey,
       storage: dataStorage,
+      eager: hasStoredSupabaseSession() || oauthReturnPending,
     });
 let initialData;
 let storageFallback = false;
