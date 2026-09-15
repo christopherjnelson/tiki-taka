@@ -141,7 +141,6 @@ export function defaultSettings() {
     theme: "dark",
     playView: false,
     sidebarCollapsed: false,
-    mobileWallMode: "armed",
     abilityMode: DEFAULT_ABILITY_MODE,
     ...DEFAULT_AUDIO,
     // Cleared once the shell has folded a pre-split `progress.sound` into the
@@ -189,7 +188,6 @@ export function normalizeSettings(value) {
     theme: "dark",
     playView: value.playView === true,
     sidebarCollapsed: value.sidebarCollapsed === true,
-    mobileWallMode: value.mobileWallMode === "instant" ? "instant" : "armed",
     abilityMode: value.abilityMode === "hold" ? "hold" : "toggle",
     effectsOn: value.effectsOn !== false,
     effectsVolume: normalizeVolume(value.effectsVolume, DEFAULT_AUDIO.effectsVolume),

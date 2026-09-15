@@ -21,7 +21,6 @@ import {
 test("defaults retain WASD and arrows and define every playable action", () => {
   const settings = defaultSettings();
   assert.equal(settings.sidebarCollapsed, false);
-  assert.equal(settings.mobileWallMode, "armed");
   assert.deepEqual(settings.bindings.moveUp, ["KeyW", "ArrowUp"]);
   assert.deepEqual(Object.keys(settings.bindings), Object.keys(ACTIONS));
   assert.deepEqual(Object.keys(PRESETS), ["wasd", "arrows", "left-hand"]);
@@ -44,7 +43,6 @@ test("settings save and load round trip independently under their versioned key"
     ...defaultSettings(),
     playView: true,
     sidebarCollapsed: true,
-    mobileWallMode: "instant",
   };
   assert.equal(saveSettings(storage, settings), true);
   assert.equal(values.has(SETTINGS_KEY), true);
@@ -60,11 +58,15 @@ test("invalid or legacy stored values normalize themes, booleans, actions, lengt
       moveUp: ["KeyQ", "KeyQ", 4, "KeyZ"],
       moveDown: ["KeyQ", "KeyX"],
     },
+    // A retired setting key (mobileWallMode, removed once nothing read it)
+    // left over in a player's saved blob. Unknown keys must be dropped
+    // silently, the way junk always has been, never break normalization.
+    mobileWallMode: "instant",
   });
   assert.equal(normalized.theme, "dark");
   assert.equal(normalized.playView, false);
   assert.equal(normalized.sidebarCollapsed, false);
-  assert.equal(normalized.mobileWallMode, "armed");
+  assert.equal("mobileWallMode" in normalized, false);
   assert.equal(normalized.preset, "custom");
   assert.deepEqual(normalized.bindings.moveUp, ["KeyQ", "KeyZ"]);
   assert.deepEqual(normalized.bindings.moveDown, ["KeyX"]);
