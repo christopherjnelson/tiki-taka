@@ -143,6 +143,22 @@ test('every rung is reachable: clear below two stars below three, and three at o
   }
 });
 
+// Free practice states a gentle pacing target and Endless states 0 to mean
+// "not scored against one". Deriving a target from the reference over the top
+// of either is what broke them: practice rounds stopped clearing, and Endless
+// grew a clear line it is not graded on.
+test('a config that states its own target keeps it, for every tier', () => {
+  for (const tier of DIFFICULTIES) {
+    const endless = applyDifficulty({ ...COURTS[1], target: 0, reference: 0, endless: true }, tier.id);
+    assert.equal(endless.target, 0, `${tier.id}: Endless must have no target`);
+    assert.equal(endless.reference, 0, `${tier.id}: Endless must have no reference`);
+    const practice = applyDifficulty({ ...COURTS[0], target: 120, reference: 0, practice: true }, tier.id);
+    assert.equal(practice.target, 120, `${tier.id}: practice keeps its pacing target`);
+  }
+  // And a court that states no target still derives one.
+  assert.ok(applyDifficulty(COURTS[0], 'standard').target > 0);
+});
+
 test('applyDifficulty caps total defenders and falls back to standard on an unknown tier', () => {
   // No tier adds defenders any more, so the clamp now guards authored court
   // data rather than a tier bonus: a court written above the cap is still

@@ -384,10 +384,17 @@ export function applyDifficulty(config, tier) {
   const clearRatio = Number.isFinite(config.clearRatio)
     ? config.clearRatio
     : CLEAR_RATIO.first;
+  // A caller that states its own target keeps it. Free practice sets a gentle
+  // pacing number and Endless sets 0 to mean "no target at all"; deriving over
+  // the top of either silently handed both a real clear line - practice rounds
+  // stopped clearing, and Endless grew a denominator it is not scored on.
+  const target = Number.isFinite(config.target)
+    ? config.target
+    : Math.round((reference * clearRatio) / 50) * 50;
   return {
     ...config,
     reference,
-    target: Math.round((reference * clearRatio) / 50) * 50,
+    target,
     possessions: scale.possessions,
     speed: (config.speed || 0) * scale.speedMultiplier,
     defenders: Math.min(MAX_DEFENDERS, (config.defenders || 0) + scale.defenderBonus),
