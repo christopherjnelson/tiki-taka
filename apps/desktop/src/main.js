@@ -41,7 +41,7 @@ import {
 } from "../../../packages/engine/src/settings.js";
 import { createLocalDataAdapter, selectDataAdapter, LocalDataError } from "../../../packages/data/src/index.js";
 import { createMusic } from "./music.js";
-import { TRACKS } from "./playlist.js";
+import { fetchManifest, selectCourtTracks } from "./manifest.js";
 import { SAMPLES } from "./samples.js";
 import {
   HOME_ZONE_ORDER,
@@ -274,16 +274,48 @@ sound.useSamples(
   })),
 );
 const music = createMusic({
-  tracks: TRACKS,
-  // A build copies the tracks next to index.html (scripts/build.mjs) and the
-  // dev server serves public/ at that same place, so this one relative URL is
-  // correct in both. It used to branch on PROD and reach for /public/ in
-  // development, which the dev server answers with index.html rather than a
-  // 404 — the decode then fails silently and the music simply never plays.
+  // Empty until the runtime manifest resolves (see refreshMusicTracks below):
+  // tracks are no longer baked into the build, so there is nothing to play
+  // until a fetch completes. An empty playlist is exactly the "no music, no
+  // crash" state music.js already handles for a dead/unreachable manifest.
+  tracks: [],
+  // Same relative URL in dev and production: the dev server serves public/
+  // at this same path, and the manifest lists filenames the same way the
+  // build's public/audio/ directory always did. It used to branch on PROD
+  // and reach for /public/ in development, which the dev server answers with
+  // index.html rather than a 404 — the decode then fails silently and the
+  // music simply never plays.
   resolve: (track) => new URL(`./audio/${track.file}`, document.baseURI).href,
   trim: settings.musicVolume,
 });
 music.setEnabled(settings.musicOn);
+// Which court's tracks are currently loaded, so a manifest fetch that lands
+// mid-round (or a manifest with no tracks at all) can still be applied the
+// next time the selected court is known, and so refreshMusicTracks itself
+// need not care whether it is called before or after the fetch resolves.
+let manifestTracks = [];
+// Called once the manifest resolves, and again whenever the playing court is
+// known to have changed (prepare(), below). Per-court soundtracks are out of
+// scope for now — every track today is tagged "home" — but the lookup runs
+// for real so the later split is a manifest edit, not a code change.
+// Returns the promise setTracks() resolves once it has actually finished
+// applying — not just selecting — the new list, so a caller can resync
+// whatever UI mirrors music.state once that settles. unlockAudio() is the
+// only other place that mirror gets written, and it can easily have already
+// run (and snapshotted "unavailable") before this ever resolves.
+function refreshMusicTracks(court) {
+  return music.setTracks(selectCourtTracks(manifestTracks, court));
+}
+// Fetches in the background; startup never waits on it. A missing,
+// unreachable, empty or malformed manifest resolves to [] (fetchManifest
+// swallows every failure) and simply leaves the playlist empty — the music
+// rail already renders sensibly with zero tracks.
+void fetchManifest()
+  .then((tracks) => {
+    manifestTracks = tracks;
+    return refreshMusicTracks(getVenue(COURTS[courtIndex] || COURTS[0]).id);
+  })
+  .then(() => syncMusicState());
 const renderer = new Renderer($("court"));
 // Court thumbnails are decorative—the full-size selected-court preview is
 // still rendered synchronously—so their six PNG conversions do not belong in
@@ -1988,6 +2020,7 @@ function prepare() {
   game = new Game(config(), progress.tactic);
   window.__game = game;
   const venue = getVenue(game.config);
+  void refreshMusicTracks(venue.id).then(() => syncMusicState());
   document.documentElement.dataset.venue = venue.id;
   document.documentElement.style.setProperty("--venue-accent", venue.accent);
   document.documentElement.style.setProperty(
