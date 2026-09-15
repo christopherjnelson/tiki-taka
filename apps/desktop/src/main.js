@@ -19,6 +19,7 @@ import {
   readProgress,
   saveProgress,
   awardMatch,
+  roundCounts,
   rank,
 } from "../../../packages/engine/src/progress.js";
 import { Sound } from "../../../packages/presentation/src/audio.js";
@@ -3495,17 +3496,24 @@ function finish() {
     // never off progress.difficulty, which could have changed since kickoff.
     difficulty: game.config.difficulty,
   };
-  if (dataAdapter.kind !== "supabase") {
-    void recordRound(completedRound).then((saved) => {
-      if (!saved) toast("Round stats could not be stored.");
-    });
-  } else if (profile && preferences.scoreSaveChoice === "always") {
-    queuePendingScore(completedRound, profile.id);
-    void savePendingScores().then((saved) => {
-      if (!saved) toast("Score could not be saved. It will retry after your next completed game.");
-    });
-  } else if (preferences.scoreSaveChoice === "ask") {
-    queuePendingScore(completedRound);
+  // An attempt is not a result: only a round that counts in its mode (see
+  // roundCounts in progress.js — career only when cleared, practice never,
+  // Endless/King of the Court not yet) writes a round_scores row, queues for
+  // the leaderboard, or offers the "save this score?" prompt below.
+  const roundSaves = roundCounts(mode, result.cleared);
+  if (roundSaves) {
+    if (dataAdapter.kind !== "supabase") {
+      void recordRound(completedRound).then((saved) => {
+        if (!saved) toast("Round stats could not be stored.");
+      });
+    } else if (profile && preferences.scoreSaveChoice === "always") {
+      queuePendingScore(completedRound, profile.id);
+      void savePendingScores().then((saved) => {
+        if (!saved) toast("Score could not be saved. It will retry after your next completed game.");
+      });
+    } else if (preferences.scoreSaveChoice === "ask") {
+      queuePendingScore(completedRound);
+    }
   }
   persist();
   syncProgress();
@@ -3578,6 +3586,15 @@ if (testDataAdapterFactory) {
       preferences = { ...preferences, scoreSaveChoice: choice };
     },
     recoverRemote: recoverRemoteDataContext,
+    // Only a cleared round saves/prompts now (see roundCounts in
+    // progress.js), and a fresh game is never cleared on its own — its
+    // clock hasn't run and its score is 0. Tests that exercise the
+    // save/consent flow via finishRound() without actually playing a round
+    // call this first to force the win finish() requires.
+    forceClearedRound: () => {
+      game.time = 0;
+      game.score = Math.max(game.score, game.config.target);
+    },
   };
 }
 $("start-button").addEventListener("click", () => {

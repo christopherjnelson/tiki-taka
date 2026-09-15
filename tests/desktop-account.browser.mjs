@@ -138,7 +138,7 @@ try {
   });
   await accountPage.goto(baseURL);
   await accountPage.waitForFunction(() => window.__TIKI_TAKA_TEST_HOOKS__);
-  await accountPage.evaluate(() => window.__TIKI_TAKA_TEST_HOOKS__.finishRound());
+  await accountPage.evaluate(() => { window.__TIKI_TAKA_TEST_HOOKS__.forceClearedRound(); window.__TIKI_TAKA_TEST_HOOKS__.finishRound(); });
   await accountPage.waitForFunction(() => document.querySelector("#score-save-dialog").open);
   assert.equal(await accountPage.locator("#score-save-always").isVisible(), true);
   await accountPage.locator("#score-save-always").click();
@@ -150,7 +150,7 @@ try {
   await accountPage.waitForFunction(() => window.__scoreAdapter.rounds.length === 1);
   assert.equal(await accountPage.evaluate(() => window.__scoreAdapter.preference), "always");
   const firstId = await accountPage.evaluate(() => window.__scoreAdapter.rounds[0].id);
-  await accountPage.evaluate(() => window.__TIKI_TAKA_TEST_HOOKS__.finishRound());
+  await accountPage.evaluate(() => { window.__TIKI_TAKA_TEST_HOOKS__.forceClearedRound(); window.__TIKI_TAKA_TEST_HOOKS__.finishRound(); });
   await accountPage.waitForFunction(() => window.__scoreAdapter.rounds.length === 2);
   assert.notEqual(await accountPage.evaluate(() => window.__scoreAdapter.rounds[1].id), firstId);
   assert.equal(await accountPage.locator("#score-save-dialog").evaluate((el) => el.open), false);
@@ -158,14 +158,14 @@ try {
     window.__scoreAdapter.preference = "ask";
     window.__TIKI_TAKA_TEST_HOOKS__.setScoreSaveChoice("ask");
     window.__TIKI_TAKA_TEST_HOOKS__.prepareRound();
-    window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
+    window.__TIKI_TAKA_TEST_HOOKS__.forceClearedRound(); window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
   });
   await accountPage.waitForFunction(() => document.querySelector("#score-save-dialog").open);
   await accountPage.locator("#score-save-later").click();
   assert.equal(await accountPage.evaluate(() => window.__scoreAdapter.preference), "ask");
   await accountPage.evaluate(() => {
     window.__TIKI_TAKA_TEST_HOOKS__.prepareRound();
-    window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
+    window.__TIKI_TAKA_TEST_HOOKS__.forceClearedRound(); window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
   });
   await accountPage.waitForFunction(() => document.querySelector("#score-save-dialog").open);
   await accountPage.locator("#score-save-never").click();
@@ -175,7 +175,7 @@ try {
     window.__TIKI_TAKA_TEST_HOOKS__.setScoreSaveChoice("ask");
     window.__scoreAdapter.failNextRound = true;
     window.__TIKI_TAKA_TEST_HOOKS__.prepareRound();
-    window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
+    window.__TIKI_TAKA_TEST_HOOKS__.forceClearedRound(); window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
   });
   await accountPage.waitForFunction(() => document.querySelector("#score-save-dialog").open);
   await accountPage.locator("#score-save-always").click();
@@ -188,13 +188,13 @@ try {
   await accountPage.evaluate(() => {
     window.__scoreAdapter.failNextRound = true;
     window.__TIKI_TAKA_TEST_HOOKS__.prepareRound();
-    window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
+    window.__TIKI_TAKA_TEST_HOOKS__.forceClearedRound(); window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
   });
   await accountPage.waitForFunction(() => document.querySelector("#toast").textContent.includes("retry"));
   const autoRetryId = await accountPage.evaluate(() => window.__scoreAdapter.failedId);
   await accountPage.evaluate(() => {
     window.__TIKI_TAKA_TEST_HOOKS__.prepareRound();
-    window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
+    window.__TIKI_TAKA_TEST_HOOKS__.forceClearedRound(); window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
   });
   await accountPage.waitForFunction(() => window.__scoreAdapter.rounds.some((round) => round.id === window.__scoreAdapter.failedId));
   assert.equal(await accountPage.evaluate((id) => window.__scoreAdapter.rounds.filter((round) => round.id === id).length, autoRetryId), 1);
@@ -211,6 +211,26 @@ try {
     window.__scoreAdapter.loadResolvers[0]();
   });
   await accountPage.waitForFunction(() => document.querySelector("#profile-chip-name").textContent === "Newer");
+
+  // An attempt is not a result: a round that never cleared must not prompt
+  // to save and must not write anywhere, even with an account signed in and
+  // scoreSaveChoice set to "ask". prepareRound() alone (no forceClearedRound)
+  // leaves the fresh game exactly as uncleared as kickoff — time still full,
+  // score still 0 — which is the same shape as a real defeat for this check.
+  const roundsBeforeFailure = await accountPage.evaluate(() => window.__scoreAdapter.rounds.length);
+  await accountPage.evaluate(() => {
+    window.__scoreAdapter.preference = "ask";
+    window.__TIKI_TAKA_TEST_HOOKS__.setScoreSaveChoice("ask");
+    window.__TIKI_TAKA_TEST_HOOKS__.prepareRound();
+    window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
+  });
+  await accountPage.waitForFunction(
+    () => document.querySelector("#overlay-kicker").textContent.includes("DEFEAT"),
+  );
+  assert.equal(await accountPage.locator("#score-save-dialog").evaluate((el) => el.open), false);
+  assert.equal(await accountPage.evaluate(() => window.__scoreAdapter.rounds.length), roundsBeforeFailure);
+  console.log("✓ an uncleared round does not prompt to save and writes nothing");
+
   const offlinePage = await browser.newPage({ serviceWorkers: "block" });
   await offlinePage.addInitScript(() => {
     const bindings = Object.fromEntries(["moveUp", "moveDown", "moveLeft", "moveRight", "smartPass", "direct1", "direct2", "direct3", "direct4", "wallToggle", "wallHold", "focusHold", "boostHold", "shout", "pause", "skipTrack"].map((key) => [key, []]));
@@ -234,7 +254,7 @@ try {
   await offlinePage.locator("#account-dialog").evaluate((dialog) => dialog.close());
   await offlinePage.evaluate(() => {
     window.__TIKI_TAKA_TEST_HOOKS__.setScoreSaveChoice("always");
-    window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
+    window.__TIKI_TAKA_TEST_HOOKS__.forceClearedRound(); window.__TIKI_TAKA_TEST_HOOKS__.finishRound();
   });
   await offlinePage.waitForFunction(() => document.querySelector("#toast").textContent.includes("retry"));
   await offlinePage.evaluate(() => { window.__offlineAdapter.online = true; window.dispatchEvent(new Event("online")); });
