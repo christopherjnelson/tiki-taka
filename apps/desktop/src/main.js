@@ -12,6 +12,7 @@ import {
   TRIANGLE_WINDOW,
   PLAYER_RADIUS,
   ONE_TOUCH,
+  zoneMultiplier,
 } from "../../../packages/engine/src/game.js";
 import { Renderer } from "../../../packages/presentation/src/renderer.js";
 import {
@@ -2207,7 +2208,7 @@ function showRoundResults({
     $(`result-${key}`).textContent = String(value);
     $(`result-${key}-cell`).classList.toggle("is-zero", value === 0);
   }
-  const flowPeak = 1 + Math.min(4, Math.floor((game.bestCombo || 0) / 4));
+  const flowPeak = zoneMultiplier(game.bestZoneStreak || 0);
   $("result-combo").textContent = `x${flowPeak}`;
   $("result-burst").hidden = false;
   $("result-stats").hidden = false;
@@ -3333,7 +3334,7 @@ function syncHud() {
     hudCache.timeUrgent = isUrgent;
   }
 
-  const comboTier = 1 + Math.min(4, Math.floor(game.combo / 4));
+  const comboTier = zoneMultiplier(game.zoneStreak);
   if (comboTier !== hudCache.combo) {
     $("combo-value").textContent = `×${comboTier}`;
     hudCache.combo = comboTier;

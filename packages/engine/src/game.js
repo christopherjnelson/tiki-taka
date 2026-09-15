@@ -5,6 +5,29 @@ export const FOCUS_REWARDS = { split: 4, triangle: 3, zone: 2, ole: 4, wall: 0 }
 export const TRIANGLE_WINDOW = 3.5;
 export const TRIANGLE_MAX_HOLD = 1.2;
 export const MAX_HOLD = 6;
+// Zone hits are the multiplier's only input, counted since the last turnover.
+// The first four hits step the multiplier by one each; past that, every two
+// hits earns a step, up to a ceiling. Table: hits 1/2/3/4/6/8/10/12/14 ->
+// multiplier 2/3/4/5/6/7/8/9/10.
+export const ZONE_MULTIPLIER_CEILING = 10;
+export function zoneMultiplier(hits) {
+  if (!Number.isFinite(hits) || hits <= 0) return 1;
+  if (hits <= 4) return hits + 1;
+  return Math.min(ZONE_MULTIPLIER_CEILING, 5 + Math.floor((hits - 4) / 2));
+}
+export const ZONE_POINTS = 18;
+export const ZONE_LIFETIME = 7;
+// After a zone ends or is taken, it goes dark for a random beat before the
+// next one appears. The gap is what stops a skilled player chaining zones
+// faster than intended; it is not visible as the zone "breaking" because the
+// renderer telegraphs the next spot fading in across the same window.
+export const ZONE_BLIND_GAP = { min: 1, max: 1.5 };
+const ZONE_SPOTS = [
+  { x: 260, y: 185 },
+  { x: 735, y: 430 },
+  { x: 730, y: 170 },
+  { x: 265, y: 445 },
+];
 // Shared with the Canvas renderer so zone overlap exactly matches the visible
 // player disc.
 export const PLAYER_RADIUS = 24;
@@ -284,8 +307,8 @@ export class Game {
     this.elapsed = 0;
     this.passes = 0;
     this.turnovers = 0;
-    this.combo = 0;
-    this.bestCombo = 0;
+    this.zoneStreak = 0;
+    this.bestZoneStreak = 0;
     this.oneTouchStreak = 0;
     this.bestOneTouch = 0;
     this.oneTouchAge = 0;
@@ -311,7 +334,10 @@ export class Game {
     this.historyTimes = [0];
     this.events = [];
     this.zoneIndex = 0;
-    this.zoneTimer = 12;
+    this.zoneTimer = ZONE_LIFETIME;
+    this.zoneBlindTimer = 0;
+    this.zoneBlindDuration = 0;
+    this.nextZone = null;
     this.motionTime = 0;
     this.zone = { x: 735, y: 400, r: 92 };
     this.resetPositions();
@@ -474,15 +500,21 @@ export class Game {
     this.grace = 0.55;
     this.passCooldown = 0.12;
     this.passes++;
-    this.combo++;
-    this.bestCombo = Math.max(this.bestCombo, this.combo);
-    const multiplier = 1 + Math.min(4, Math.floor(this.combo / 4));
+    const p = this.players[this.carrier];
+    // The zone hit for this pass (if any) counts toward this same pass's
+    // multiplier: landing in the zone is the reward, not just future passes.
+    const zoneHit =
+      this.zone && distance(p, this.zone) <= this.zone.r + PLAYER_RADIUS;
+    if (zoneHit) {
+      this.zoneStreak++;
+      this.bestZoneStreak = Math.max(this.bestZoneStreak, this.zoneStreak);
+    }
+    const multiplier = zoneMultiplier(this.zoneStreak);
     const repeat = this.history.at(-2) === this.carrier;
     const distanceMultiplier = passDistanceMultiplier(ball.passDistance);
     let points =
       Math.round((repeat ? 6 : 12) * distanceMultiplier) * multiplier;
     const bonuses = [];
-    const p = this.players[this.carrier];
     let focusReward = 0;
     if (ball.bank) {
       this.banks++;
@@ -541,15 +573,12 @@ export class Game {
       this.history = [this.carrier];
       this.historyTimes = [this.elapsed];
     }
-    if (
-      this.zone &&
-      distance(p, this.zone) <= this.zone.r + PLAYER_RADIUS
-    ) {
-      points += 25 * multiplier;
+    if (zoneHit) {
+      points += ZONE_POINTS * multiplier;
       this.zones++;
       bonuses.push("zone");
       focusReward += FOCUS_REWARDS.zone;
-      this.rotateZone();
+      this.beginZoneBlindGap();
     }
     let oneTouchBonus = 0;
     let milestone = false;
@@ -558,7 +587,8 @@ export class Game {
       this.bestOneTouch = Math.max(this.bestOneTouch, this.oneTouchStreak);
       milestone = this.oneTouchStreak % ONE_TOUCH.milestoneEvery === 0;
       oneTouchBonus =
-        ONE_TOUCH.passBonus + (milestone ? ONE_TOUCH.milestoneBonus : 0);
+        (ONE_TOUCH.passBonus + (milestone ? ONE_TOUCH.milestoneBonus : 0)) *
+        multiplier;
       points += oneTouchBonus;
       bonuses.push("one-touch");
       if (milestone) {
@@ -604,21 +634,28 @@ export class Game {
       this.pass(queued.id, queued.bank);
     }
   }
-  rotateZone() {
-    const zones = [
-      { x: 260, y: 185 },
-      { x: 735, y: 430 },
-      { x: 730, y: 170 },
-      { x: 265, y: 445 },
-    ];
+  // Ends the current zone (hit or timed out) and goes dark for a random
+  // beat before the next spot activates. `nextZone` is set immediately so
+  // the renderer can telegraph where it is coming, not just that it left.
+  beginZoneBlindGap() {
+    this.zone = null;
     this.zoneIndex =
-      (this.zoneIndex + 1 + Math.floor(this.rng() * 2)) % zones.length;
-    this.zone = { ...zones[this.zoneIndex], r: 92 };
-    this.zoneTimer = 12;
+      (this.zoneIndex + 1 + Math.floor(this.rng() * 2)) % ZONE_SPOTS.length;
+    this.nextZone = { ...ZONE_SPOTS[this.zoneIndex] };
+    this.zoneBlindDuration =
+      ZONE_BLIND_GAP.min + this.rng() * (ZONE_BLIND_GAP.max - ZONE_BLIND_GAP.min);
+    this.zoneBlindTimer = this.zoneBlindDuration;
+  }
+  activatePendingZone() {
+    this.zone = { ...ZONE_SPOTS[this.zoneIndex], r: 92 };
+    this.zoneTimer = ZONE_LIFETIME;
+    this.nextZone = null;
+    this.zoneBlindTimer = 0;
+    this.zoneBlindDuration = 0;
   }
   turnover(reason) {
     this.turnovers++;
-    this.combo = 0;
+    this.zoneStreak = 0;
     this.oneTouchStreak = 0;
     this.oneTouchAge = 0;
     this.oneTouchDistance = 0;
@@ -697,12 +734,18 @@ export class Game {
     }
     this.elapsed += delta;
     this.motionTime += delta;
-    this.zoneTimer -= delta;
+    if (this.zone) {
+      this.zoneTimer -= delta;
+    } else if (this.zoneBlindTimer > 0) {
+      this.zoneBlindTimer -= delta;
+    }
     if (!this.config.practice && this.time <= 0) {
       this.finish();
       return;
     }
-    if (this.zoneTimer <= 0) this.rotateZone();
+    if (this.zone && this.zoneTimer <= 0) this.beginZoneBlindGap();
+    else if (!this.zone && this.zoneBlindTimer <= 0)
+      this.activatePendingZone();
     this.grace = Math.max(0, this.grace - delta);
     this.passCooldown = Math.max(0, this.passCooldown - delta);
     const p = this.players[this.carrier];
