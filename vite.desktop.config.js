@@ -14,6 +14,17 @@ const packageInfo = JSON.parse(readFileSync(path.resolve("package.json"), "utf8"
 // history to date - there is no separate "unreleased" entry to fake.
 const changelog = parseChangelog(readFileSync(path.resolve("CHANGELOG.md"), "utf8"));
 
+// Keep the source shell annotated for maintainers, but do not ship those
+// developer-only notes in the production app shell.
+const stripDeveloperHtmlComments = {
+  name: "strip-developer-html-comments",
+  apply: "build",
+  transformIndexHtml: {
+    order: "post",
+    handler: (html) => html.replace(/<!--[\s\S]*?-->/g, ""),
+  },
+};
+
 function git(...args) {
   try {
     return execFileSync("git", args, { encoding: "utf8" }).trim();
@@ -46,6 +57,7 @@ const buildIdentity = {
 };
 
 export default defineConfig({
+  plugins: [stripDeveloperHtmlComments],
   root: path.resolve("apps/desktop"),
   // envDir follows `root` by default, which would look for .env inside
   // apps/desktop. The tracked .env.example, .gitignore and the setup docs all

@@ -7,6 +7,15 @@ this file is not touched by ordinary pull requests. Parsed at build time by
 in Settings by `apps/desktop/src/main.js` - never fetched at runtime, so it
 works offline behind the service worker like everything else.
 
+## 0.4.4 - 2026-09-14
+
+### Release packaging recovery
+
+0.4.3 was not deployed because its app shell exceeded the release size budget.
+Production builds now omit developer-only HTML comments, reducing the payload
+without changing gameplay, UI, or the release notes in Settings. 0.4.4 carries
+all of the 0.4.3 features.
+
 ## 0.4.3 - 2026-09-14
 
 ### More ways to make the game yours
