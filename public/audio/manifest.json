@@ -1,11 +1,1 @@
-{
-  "version": 1,
-  "tracks": [
-    { "file": "beach-bounce.ogg", "title": "Beach Bounce", "court": "home" },
-    { "file": "brick-dust-london.ogg", "title": "Brick Dust London", "court": "home" },
-    { "file": "mare-dourada.ogg", "title": "Maré Dourada", "court": "home" },
-    { "file": "neon-biscayne.ogg", "title": "Neon Biscayne", "court": "home" },
-    { "file": "suba-na-baixa.ogg", "title": "Suba Na Baixa", "court": "home" },
-    { "file": "sunset-crate.ogg", "title": "Sunset Crate", "court": "home" }
-  ]
-}
+{"version":1,"tracks":[]}

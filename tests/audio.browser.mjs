@@ -99,6 +99,27 @@ const audioState = page => page.evaluate(() => ({
   effects: window.__audio.oscillators,
 }));
 
+// The committed public/audio/manifest.json is empty on purpose - the .ogg
+// tracks are gitignored, so a checkout that listed them would 404 on every
+// page load and the browser's own console errors would fail the console
+// assertions all over this suite. Checks that need the REAL app to have a
+// playlist supply one here, pointing at audio/effects/crowd-cheer.ogg: a
+// committed, decodable .ogg, because effects still ship with the build.
+async function routeManifest(page, count = 3) {
+  await page.route('**/audio/manifest.json', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      version: 1,
+      tracks: Array.from({ length: count }, (_, index) => ({
+        file: 'effects/crowd-cheer.ogg',
+        title: `Test Track ${index + 1}`,
+        court: 'home',
+      })),
+    }),
+  }));
+}
+
 const errorsFor = page => {
   const errors = [];
   page.on('pageerror', error => errors.push(`pageerror: ${error.message}`));
@@ -114,6 +135,7 @@ await check('a browser that blocks audio gets a hint, and one keypress clears bo
   await context.addInitScript(installPad);
   const page = await context.newPage();
   const errors = errorsFor(page);
+  await routeManifest(page);
   await page.goto(`${baseURL}/`);
   // Wait for the app to have actually built its audio contexts before
   // reading them, rather than guessing how long boot takes.
@@ -166,6 +188,7 @@ await check('a relaxed autoplay policy never shows the hint', async () => {
   await context.addInitScript(countEffects);
   const page = await context.newPage();
   const errors = errorsFor(page);
+  await routeManifest(page);
   await page.goto(`${baseURL}/`);
   await page.waitForFunction(() => document.body.dataset.music === 'playing', null, { timeout: 10_000 });
   const state = await audioState(page);
@@ -182,6 +205,7 @@ await check('each switch silences its own bus and leaves the other playing', asy
   await context.addInitScript(countEffects);
   const page = await context.newPage();
   const errors = errorsFor(page);
+  await routeManifest(page);
   await page.goto(`${baseURL}/`);
   // Opening settings by mouse is itself the gesture the browser wanted.
   await page.locator('#settings-button').click();
@@ -380,6 +404,7 @@ await check('skip track: the bound key and the bound pad button both advance it,
   await context.addInitScript(installPad);
   const page = await context.newPage();
   const errors = errorsFor(page);
+  await routeManifest(page);
   await page.goto(`${baseURL}/`);
   await page.locator('#home-view').waitFor({ state: 'visible' });
   // The rail has nothing to show until the runtime manifest fetch resolves
@@ -632,7 +657,9 @@ await check('the music bus reports its energy while playing and null when there 
   await page.goto(`${baseURL}/`);
   const result = await page.evaluate(async () => {
     const { createMusic } = await import('/apps/desktop/src/music.js');
-    const { TRACKS } = await import('/apps/desktop/src/playlist.js');
+    // Not playlist.js: those six .ogg files are gitignored, so a fresh clone
+    // and CI do not have them. This one is committed with the build.
+    const TRACKS = [{ file: 'effects/crowd-cheer.ogg', title: 'Crowd Cheer' }];
     const music = createMusic({
       tracks: TRACKS.slice(0, 1),
       resolve: track => new URL(`/public/audio/${track.file}`, location.origin).href,
@@ -672,7 +699,9 @@ await check('holding Focus slows the source and dulls the filter, releasing rest
   await page.goto(`${baseURL}/`);
   const result = await page.evaluate(async () => {
     const { createMusic } = await import('/apps/desktop/src/music.js');
-    const { TRACKS } = await import('/apps/desktop/src/playlist.js');
+    // Not playlist.js: those six .ogg files are gitignored, so a fresh clone
+    // and CI do not have them. This one is committed with the build.
+    const TRACKS = [{ file: 'effects/crowd-cheer.ogg', title: 'Crowd Cheer' }];
 
     // Capture the real BiquadFilterNode/BufferSourceNode music.js creates, so
     // the assertions below read actual Web Audio param values rather than a
@@ -774,7 +803,9 @@ await check('with the Focus slowdown setting off, holding Focus leaves playbackR
   await page.goto(`${baseURL}/`);
   const result = await page.evaluate(async () => {
     const { createMusic } = await import('/apps/desktop/src/music.js');
-    const { TRACKS } = await import('/apps/desktop/src/playlist.js');
+    // Not playlist.js: those six .ogg files are gitignored, so a fresh clone
+    // and CI do not have them. This one is committed with the build.
+    const TRACKS = [{ file: 'effects/crowd-cheer.ogg', title: 'Crowd Cheer' }];
 
     window.__musicGraph2 = { filters: [], sources: [] };
     const makeFilter = AudioContext.prototype.createBiquadFilter;
@@ -874,7 +905,9 @@ await check('toggling the Focus slowdown setting off mid-hold ramps the soundtra
   await page.goto(`${baseURL}/`);
   const result = await page.evaluate(async () => {
     const { createMusic } = await import('/apps/desktop/src/music.js');
-    const { TRACKS } = await import('/apps/desktop/src/playlist.js');
+    // Not playlist.js: those six .ogg files are gitignored, so a fresh clone
+    // and CI do not have them. This one is committed with the build.
+    const TRACKS = [{ file: 'effects/crowd-cheer.ogg', title: 'Crowd Cheer' }];
 
     window.__musicGraph3 = { filters: [], sources: [] };
     const makeFilter = AudioContext.prototype.createBiquadFilter;
@@ -946,19 +979,41 @@ await check('toggling the Focus slowdown setting off mid-hold ramps the soundtra
 
 // Runtime manifest coverage: apps/desktop/src/manifest.js is what replaced
 // the build-time TRACKS array (apps/desktop/src/playlist.js is now test-only
-// fixture data — see its header comment). This server has no SERVE_DIR set,
-// so it answers from the repository root and public/audio/manifest.json —
-// the real local-dev manifest, listing the same six real .ogg files
-// playlist.js names — is reachable exactly the way the dev server serves it.
+// fixture data — see its header comment).
+//
+// The manifest here is supplied by the check itself rather than read off
+// disk. The committed public/audio/manifest.json is deliberately EMPTY,
+// because the .ogg tracks are gitignored: a checkout listing six tracks it
+// does not have would 404 six times on every page load, and the browser's
+// own "Failed to load resource" console messages would fail the console
+// assertions in this and several unrelated suites. That is exactly what
+// broke CI when this first landed.
+//
+// The track it plays is audio/effects/crowd-cheer.ogg — a real, decodable
+// .ogg that IS committed, since sound effects still ship with the build. So
+// playback is genuinely exercised without depending on media the repository
+// does not carry.
 await check('the runtime manifest drives real playback when tracks are listed', async () => {
   const context = await relaxedBrowser.newContext({ viewport: { width: 1200, height: 850 }, serviceWorkers: 'block' });
   const page = await context.newPage();
   const errors = errorsFor(page);
+  // Two entries, both tagged "home", pointing at the one committed .ogg.
+  await page.route('**/manifest-fixture.json', route => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      version: 1,
+      tracks: [
+        { file: 'effects/crowd-cheer.ogg', title: 'Crowd Cheer', court: 'home' },
+        { file: 'effects/crowd-cheer.ogg', title: 'Crowd Cheer Again', court: 'home' },
+      ],
+    }),
+  }));
   await page.goto(`${baseURL}/`);
   const result = await page.evaluate(async () => {
     const { fetchManifest, selectCourtTracks } = await import('/apps/desktop/src/manifest.js');
     const { createMusic } = await import('/apps/desktop/src/music.js');
-    const tracks = await fetchManifest('/public/audio/manifest.json');
+    const tracks = await fetchManifest('/manifest-fixture.json');
     // No court in the local manifest is tagged anything but "home", so a
     // court that has none of its own — every real venue id, today — must
     // fall back to the full home list rather than playing nothing.
@@ -979,7 +1034,7 @@ await check('the runtime manifest drives real playback when tracks are listed', 
     music.setEnabled(false);
     return { manifestCount: tracks.length, courtTrackCount: courtTracks.length, state, trackCount, trackTitle };
   });
-  assert.ok(result.manifestCount >= 6, `expected the local dev manifest's tracks, got ${result.manifestCount}`);
+  assert.equal(result.manifestCount, 2, `expected the fixture manifest's tracks, got ${result.manifestCount}`);
   assert.equal(result.courtTrackCount, result.manifestCount,
     "a court with no tracks of its own should fall back to every 'home' track");
   assert.equal(result.state, 'playing', `music should be playing once the manifest resolves, got ${result.state}`);
