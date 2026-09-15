@@ -2,6 +2,8 @@ import {
   WIDTH,
   HEIGHT,
   PLAYER_RADIUS,
+  ZONE_LIFETIME,
+  ZONE_POINTS,
   bankPoint,
   segmentDistance,
 } from "../../engine/src/game.js";
@@ -732,7 +734,7 @@ export class Renderer {
         label(c, "FOCUS ACTIVE", 500, 79, 13, "#fff", "center", 800);
       });
     }
-    this.drawZone(game.zone, game.zoneTimer);
+    this.drawZone(game);
     const carrier = game.players[game.carrier],
       selected = Number.isInteger(target)
         ? target
@@ -910,10 +912,31 @@ export class Renderer {
     c.globalAlpha = 1;
     c.setLineDash([]);
   }
-  drawZone(z, t) {
-    if (!z) return;
+  // The zone can be active, or dark and about to arrive (blind gap between
+  // rotations). Both states share the portrait upright() wrap; only the
+  // active state draws the countdown ring and label, so a player never reads
+  // the gap as the zone breaking rather than one about to appear.
+  drawZone(game) {
+    const z = game.zone;
+    if (z) {
+      if (this.ctx._tikiPortrait)
+        return this.upright(z.x, z.y, () =>
+          this.drawActiveZone(z, game.zoneTimer),
+        );
+      return this.drawActiveZone(z, game.zoneTimer);
+    }
+    const next = game.nextZone;
+    if (!next || !game.zoneBlindDuration) return;
+    const alpha =
+      1 -
+      Math.max(0, Math.min(1, game.zoneBlindTimer / game.zoneBlindDuration));
     if (this.ctx._tikiPortrait)
-      return this.upright(z.x, z.y, () => this.drawZone(z, t));
+      return this.upright(next.x, next.y, () =>
+        this.drawPendingZone(next, alpha),
+      );
+    return this.drawPendingZone(next, alpha);
+  }
+  drawActiveZone(z, t) {
     const c = this.ctx,
       p = this.reducedMotion ? 0 : Math.sin(this.clock * 2) * 2;
     c.strokeStyle = BONUS_GOLD;
@@ -929,13 +952,28 @@ export class Renderer {
       z.y,
       z.r,
       -Math.PI / 2,
-      -Math.PI / 2 + Math.PI * 2 * Math.max(0, Math.min(1, t / 12)),
+      -Math.PI / 2 + Math.PI * 2 * Math.max(0, Math.min(1, t / ZONE_LIFETIME)),
     );
     c.stroke();
     rounded(c, z.x - 46, z.y + z.r * 0.55 - 12, 92, 24, 12);
     c.fillStyle = "rgba(8,18,31,.9)";
     c.fill();
-    label(c, "ZONE +25", z.x, z.y + z.r * 0.55, 11, "#ffe66b");
+    label(c, `ZONE +${ZONE_POINTS}`, z.x, z.y + z.r * 0.55, 11, "#ffe66b");
+  }
+  // Ghost ring that grows from faint to solid across the blind gap, at the
+  // exact spot the next zone will activate — legible as "coming", not as a
+  // zone that broke.
+  drawPendingZone(next, alpha) {
+    const c = this.ctx;
+    c.save();
+    c.globalAlpha = Math.max(0, Math.min(1, alpha)) * 0.65;
+    c.strokeStyle = BONUS_GOLD;
+    c.lineWidth = 2;
+    c.setLineDash([3, 10]);
+    circle(c, next.x, next.y, 92);
+    c.stroke();
+    c.setLineDash([]);
+    c.restore();
   }
   drawLane(a, b, ds, active, bank, preview) {
     const c = this.ctx,
