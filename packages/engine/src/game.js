@@ -229,21 +229,30 @@ const DIFFICULTY_TIERS = {
   standard: { targetMultiplier: 1, possessions: 3, speedMultiplier: 1, defenderBonus: 0 },
   ruthless: { targetMultiplier: 1.3, possessions: 1, speedMultiplier: 1.12, defenderBonus: 1 },
 };
+// Each tier's own copy plus the concrete numbers behind it, read straight off
+// DIFFICULTY_TIERS above so presentation code never re-states (and risks
+// disagreeing with) the values actually applied by applyDifficulty(). `label`
+// stays plain prose - it also lands verbatim in title/aria-label attributes,
+// which render literal text - so any richer, emphasis-worthy copy is built by
+// the caller from `facts`, not baked in here.
 export const DIFFICULTIES = [
   {
     id: "relaxed",
     name: "Relaxed",
     label: "Softer targets and extra lives. Find your rhythm first.",
+    facts: { ...DIFFICULTY_TIERS.relaxed },
   },
   {
     id: "standard",
     name: "Standard",
     label: "The intended challenge, exactly as built.",
+    facts: { ...DIFFICULTY_TIERS.standard },
   },
   {
     id: "ruthless",
     name: "Ruthless",
     label: "Tighter targets, a quicker press, only one life.",
+    facts: { ...DIFFICULTY_TIERS.ruthless },
   },
 ];
 export const MAX_DEFENDERS = 5;
