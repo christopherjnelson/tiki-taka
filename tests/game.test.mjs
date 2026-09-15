@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOST_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS, zoneMultiplier, ZONE_MULTIPLIER_CEILING, ZONE_POINTS, ZONE_LIFETIME, ZONE_BLIND_GAP } from '../src/game.js';
+import { BOOST_DRAIN_RATE, FOCUS_DRAIN_RATE, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS, zoneMultiplier, ZONE_MULTIPLIER_CEILING, ZONE_POINTS, ZONE_LIFETIME, ZONE_BLIND_GAP } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -372,7 +372,7 @@ test('one-touch milestone adds its flat bonus exactly once every ten passes', ()
   assert.equal(events.at(-1).bonus, ONE_TOUCH.passBonus + ONE_TOUCH.milestoneBonus);
   assert.equal(events.at(-1).text, 'ONE TOUCH ×20 +55');
   assert.equal(game.focus, ONE_TOUCH.milestoneFocus * 2);
-  assert.ok(game.events.some(event => event.type === 'focus' && event.text.includes('+4 ENERGY')));
+  assert.ok(game.events.some(event => event.type === 'focus' && event.text.includes(`+${ONE_TOUCH.milestoneFocus} ENERGY`)));
 });
 
 test('one-touch and the olé milestone scale with the zone multiplier like every other reward', () => {
@@ -502,7 +502,7 @@ test('return passes score less, and ordinary passing alone never grows the multi
   assert.equal(game.triangles, 0);
 });
 
-test('three-player triangles earn 3 energy without exceeding capacity', () => {
+test('three-player triangles earn their energy without exceeding capacity', () => {
   const game = openGame();
   game.focus = 0;
   completePass(game, 1);
@@ -512,7 +512,7 @@ test('three-player triangles earn 3 energy without exceeding capacity', () => {
   assert.equal(game.triangles, 1);
   assert.ok(game.score - before > 12);
   assert.equal(game.focus, focusBefore + FOCUS_REWARDS.triangle);
-  assert.ok(game.events.some(event => event.type === 'focus' && event.text === '+3 ENERGY' && event.x === game.players[0].x));
+  assert.ok(game.events.some(event => event.type === 'focus' && event.text === `+${FOCUS_REWARDS.triangle} ENERGY` && event.x === game.players[0].x));
   assert.deepEqual(game.history, [0], 'a rewarded triangle starts a fresh sequence');
   game.focus = game.tactic.focus;
   completePass(game, 1);
@@ -762,7 +762,7 @@ test('focus slows clock, player movement, and ball movement and drains real time
   advance(focused, 1, { x: 1, focus: true });
   assert.ok(Math.abs(focused.elapsed / normal.elapsed - 0.32) < 1e-8);
   assert.ok(Math.abs(distance(initial, focused.players[0]) / distance(initial, normal.players[0]) - 0.32) < 1e-8);
-  assert.ok(Math.abs(focused.focus - (focused.tactic.focus - 1)) < 1e-8);
+  assert.ok(Math.abs(focused.focus - (focused.tactic.focus - FOCUS_DRAIN_RATE)) < 1e-8, 'a second of Focus costs a second of drain');
   const normalBall = openGame(), focusedBall = openGame();
   focusedBall.focus = focusedBall.tactic.focus;
   normalBall.pass(2); focusedBall.pass(2);
@@ -796,7 +796,11 @@ test('boost spends Focus to increase only the carrier movement at normal game sp
     'Boost applies its multiplier to the controlled player only',
   );
   assert.ok(Math.abs(boosted.focus - (boosted.tactic.focus - BOOST_DRAIN_RATE)) < 1e-8);
-  assert.equal(BOOST_DRAIN_RATE, 3, 'Boost spends Energy three times as fast as Focus');
+  assert.equal(
+    BOOST_DRAIN_RATE,
+    FOCUS_DRAIN_RATE,
+    'one shared meter, one price: Boost and Focus cost the same per second',
+  );
   assert.deepEqual(boosted.players.slice(1), normal.players.slice(1), 'Boost does not change teammate AI movement');
 });
 
@@ -855,14 +859,22 @@ test('boost does not alter a pass, its clock, or its Focus reward eligibility', 
 test('plain passes earn no focus and combined skill rewards stack at tactic capacity', () => {
   const game = openGame({}, 'runner');
   completePass(game, 1);
-  assert.equal(game.focus, 0);
+  assert.equal(game.focus, 0, 'a plain pass pays nothing');
   game.zone = { ...game.players[2], r: 92 };
   completePass(game, 2, true);
   assert.equal(game.focus, FOCUS_REWARDS.zone);
   game.zone = { ...game.players[0], r: 92 };
   completePass(game, 0, true);
-  assert.equal(game.focus, game.tactic.focus);
-  assert.ok(game.events.some(event => event.type === 'focus' && event.text === '+4 ENERGY'));
+  // Energy accumulates across passes rather than the latest one replacing it.
+  // (The old expectation here was game.tactic.focus, which only looked like a
+  // cap assertion because 2 + 4 happened to equal Mover's capacity of 6.)
+  assert.equal(game.focus, FOCUS_REWARDS.zone + FOCUS_REWARDS.split);
+  assert.ok(game.events.some(event => event.type === 'focus' && event.text === `+${FOCUS_REWARDS.split} ENERGY`));
+  // And the meter is still hard-capped at the tactic's capacity.
+  game.focus = game.tactic.focus - 1;
+  game.zone = { ...game.players[1], r: 92 };
+  completePass(game, 1, true);
+  assert.equal(game.focus, game.tactic.focus, 'a reward can never overfill the meter');
 });
 
 test('skill passes completed with focus active keep bonuses but earn no focus', () => {
@@ -896,7 +908,7 @@ test('empty or exhausted focus must be released before earned charge can activat
   game.focusNeedsRelease = false;
   const beforePartial = game.elapsed;
   game.update(0.05, { focus: true });
-  assert.ok(Math.abs(game.elapsed - beforePartial - (0.05 - 0.02 * 0.68)) < 1e-8);
+  assert.ok(Math.abs(game.elapsed - beforePartial - (0.05 - (0.02 / FOCUS_DRAIN_RATE) * 0.68)) < 1e-8, 'the last partial frame of Focus is bought at the drain rate');
   assert.equal(game.focusNeedsRelease, true);
 });
 

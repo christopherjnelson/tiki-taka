@@ -1,7 +1,20 @@
 export const WIDTH = 1000,
   HEIGHT = 620;
 export const LIMITS = { left: 50, right: 950, top: 50, bottom: 570 };
-export const FOCUS_REWARDS = { split: 4, triangle: 3, zone: 2, ole: 4, wall: 0 };
+// Energy paid for a bonus pass, and only for a pass made WITHOUT Focus (see
+// the `!ball.focusUsed` gate in arrive) so the ability can never finance
+// itself. These were halved when Energy became a burst resource: at the old
+// values roughly three bonus passes refilled the entire meter, so a round
+// with any flow in it topped you up faster than you could reasonably spend,
+// and the drain rate barely mattered.
+//
+// These stay whole numbers because the floating readout prints the figure
+// ("+2 ENERGY"); a 1.5 would either render a decimal or round itself into a
+// lie about what was granted. Halving therefore collapses the triangle and
+// the zone onto the same payout. Splitting the press still pays the most,
+// which is the relationship worth keeping, and the triangle keeps its real
+// reward in points (35x the multiplier) either way.
+export const FOCUS_REWARDS = { split: 2, triangle: 1, zone: 1, ole: 2, wall: 0 };
 export const TRIANGLE_WINDOW = 3.5;
 export const TRIANGLE_MAX_HOLD = 1.2;
 export const MAX_HOLD = 6;
@@ -60,12 +73,20 @@ export const ONE_TOUCH = {
   passBonus: 5,
   milestoneEvery: 10,
   milestoneBonus: 50,
-  milestoneFocus: 4,
+  milestoneFocus: 2,
 };
 // Boost spends the same earned Focus reserve as slow motion, but consumes energy
 // three times as fast while applying only to the carrier's movement.
 export const BOOST_SPEED_MULTIPLIER = 1.75;
-export const BOOST_DRAIN_RATE = 3;
+// Energy per second while an ability is held. Focus and Boost cost the same
+// now: one shared meter, one price. Before this, Focus drained at 1/s
+// against a Playmaker's capacity of 10 - ten full seconds of slow motion per
+// bar, refilled by a handful of bonus passes - which made it something you
+// rode rather than something you spent. At 4.5 a full bar is about two
+// seconds of either ability, so Energy is banked for the moment that needs
+// it instead of held down through the round.
+export const FOCUS_DRAIN_RATE = 4.5;
+export const BOOST_DRAIN_RATE = 4.5;
 export const TACTICS = {
   balanced: {
     name: "Playmaker",
@@ -734,7 +755,7 @@ export class Game {
     const boostRequested = input.boost && !this.boostNeedsRelease;
     const focusedTime =
       !boostRequested && input.focus && !this.focusNeedsRelease
-        ? Math.min(dt, this.focus)
+        ? Math.min(dt, this.focus / FOCUS_DRAIN_RATE)
         : 0;
     const boostedTime =
       boostRequested &&
@@ -744,7 +765,7 @@ export class Game {
     this.focusActive = focusedTime > 0;
     this.boostActive = boostedTime > 0;
     this.focus = clamp(
-      this.focus - focusedTime - boostedTime * BOOST_DRAIN_RATE,
+      this.focus - focusedTime * FOCUS_DRAIN_RATE - boostedTime * BOOST_DRAIN_RATE,
       0,
       this.tactic.focus,
     );

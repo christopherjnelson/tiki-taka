@@ -2,18 +2,18 @@
 
 ## Scoring
 
-Move the ball carrier while three teammates find supporting positions. An intercepted pass or tackle costs a life and resets the formation. The third turnover ends the round; reaching a score target early does not end it.
+Move the ball carrier while three teammates find supporting positions. An intercepted pass or tackle costs a possession and resets the formation. Running out of possessions ends the round; reaching a score target early does not end it. How many you get is set by the difficulty tier: five on Relaxed, three on Standard, one on Ruthless.
 
 - **Pass:** 12 points, or 6 when immediately returning to the previous carrier.
-- **Flow:** rises every four consecutive passes, up to x5, and resets after a turnover.
-- **One touch:** queue while the ball travels or release within 0.35 seconds without dribbling. Each completed one-touch pass adds 5 points; every ten adds another 50 points and 4 units of Energy (Olé milestone). Holding, dribbling, or losing possession breaks the streak.
-- **Triangle:** complete A → B → C → A with distinct players within 3.5 seconds (and without any player holding the ball longer than 1.2 seconds) for 35 points and 3 units of Energy.
+- **Multiplier:** raised only by receiving in the bonus zone — one step per zone up to x5, then one step per two zones to a x10 ceiling. It never decays; a turnover resets it to x1.
+- **One touch:** queue while the ball travels or release within 0.35 seconds without dribbling. Each completed one-touch pass adds 5 points; every ten adds another 50 points and 2 units of Energy (Olé milestone). Holding, dribbling, or losing possession breaks the streak.
+- **Triangle:** complete A → B → C → A with distinct players within 3.5 seconds (and without any player holding the ball longer than 1.2 seconds) for 35 points and 1 unit of Energy.
 - **Wall pass:** bank off the boundary for 18 points. It does not earn Energy.
-- **Bonus zone:** receive inside the orange ring for 25 points and 2 units of Energy. It moves after a bonus or 12 seconds.
-- **Split the press:** thread a pass between two closing defenders for high bonus points and 4 units of Energy.
-- **Energy (Focus & Boost):** a shared tactical meter holding up to 10 units. Focus slows the court and clock (draining 1 unit/sec). Boost sprints the carrier (draining 2 units/sec, twice as fast as Focus). Successful normal-speed triangles, bonus-zone receptions, press splits, and Olé milestones refill Energy. Rewards cannot be earned while Focus or Boost is active.
+- **Bonus zone:** receive inside the ring for 18 points and 1 unit of Energy. It moves after a bonus or 7 seconds, then goes dark for a short gap before the next one appears.
+- **Split the press:** thread a pass between two closing defenders for high bonus points and 2 units of Energy.
+- **Energy (Focus & Boost):** a shared tactical meter holding up to 10 units. Focus slows the court and clock; Boost sprints the carrier. Both cost the same 4.5 units per second, so a full meter is roughly two seconds of either — Energy is banked for the moment that needs it rather than held down. Triangles, bonus-zone receptions, press splits, and Olé milestones refill it, but only on a pass made without Focus or Boost active.
 
-The flow multiplier applies to pass, triangle, wall, and zone points. One-touch bonuses are flat additions. The possession ring warns when the carrier has held the ball too long. Light dotted lanes indicate clearer passes; coral lanes indicate interception risk.
+The multiplier applies to every scoring event: passes, triangles, wall passes, zones, splits and one-touch bonuses alike. The possession ring warns when the carrier has held the ball too long. Light dotted lanes indicate clearer passes; coral lanes indicate interception risk.
 
 ## Controls
 
@@ -46,9 +46,7 @@ Difficulty rises from two to four defenders, base defender speed from 76 to 123 
 
 - **Free practice:** gentler press, unlimited recoveries, 90 seconds.
 - **Endless:** starts at 60 seconds; triangles add five seconds, the press intensifies, and three turnovers end the run.
-- **Daily Circuit:** the UTC date generates the challenge. Records remain local; there is no online leaderboard.
-
-Finished rounds grant XP, with a new level and rank title every 300 XP.
+Finished rounds grant XP on a 50-level curve that widens as it climbs; Free practice grants none.
 
 | Tactic | Strength | Tradeoff |
 | --- | --- | --- |
