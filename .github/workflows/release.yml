@@ -215,6 +215,25 @@ jobs:
         with:
           ref: ${{ needs.build.outputs.release_tag }}
           fetch-depth: 0
+      # Two audiences, two channels. The step below this one is the
+      # engineering summary - commits, SHAs, a workflow link - for the private
+      # team channel. This one posts the player-facing notes, straight from
+      # CHANGELOG.md, to the public releases channel.
+      #
+      # continue-on-error on purpose: the release is already deployed and
+      # verified by the time either of these runs, so a Discord outage or a
+      # rotated webhook must not colour a successful deployment red. A failure
+      # here is visible in the job's annotations.
+      - name: Post player-facing release notes to the public channel
+        continue-on-error: true
+        env:
+          DISCORD_RELEASE_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
+          RELEASE_TAG: ${{ needs.build.outputs.release_tag }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          PRODUCTION_URL: https://tiki-taka.chris.guru
+          DEPLOYED_AT: ${{ github.event.release.published_at }}
+        run: node scripts/notify-discord-player-release.mjs
+
       - name: Send rich Discord deployment announcement
         env:
           DISCORD_DEPLOY_WEBHOOK_URL: ${{ secrets.DISCORD_DEPLOY_WEBHOOK_URL }}
