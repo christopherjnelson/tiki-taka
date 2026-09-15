@@ -345,9 +345,7 @@ input:focus-visible {
   text-transform: uppercase;
   font: 700 14px var(--sign);
 }
-.court-meta,
-.court-subtitle,
-.court-short {
+.court-meta {
   display: block;
   margin-top: 3px;
   color: var(--muted);
@@ -872,12 +870,6 @@ dialog h2 {
     transform: scale(0.94);
   }
 }
-@keyframes result-actions-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-}
 @keyframes result-cheer {
   to {
     box-shadow: 0 0 18px 5px var(--venue-accent);
@@ -947,12 +939,6 @@ dialog h2 {
   color: var(--muted);
   font-size: 10px;
 }
-.target-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--venue-accent);
-  box-shadow: 0 0 10px var(--venue-accent);
-}
 .play-actions {
   display: flex;
   gap: 6px;
@@ -1003,10 +989,6 @@ kbd {
 }
 /* Mirrors .energy-label/.energy-value on the toolbar's opposite panel — same
    treatment, its own pink so the two readouts stay easy to tell apart. */
-.clock-label {
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
 .clock-value {
   color: var(--pink);
   font-variant-numeric: tabular-nums;
@@ -2026,12 +2008,6 @@ body.play-view .ambience {
   max-width: 160px;
   object-fit: contain;
 }
-.top-brand-sub {
-  color: var(--muted);
-  white-space: nowrap;
-  font: 700 8px var(--sign);
-  letter-spacing: 3px;
-}
 .top-bar-right {
   grid-column: 3;
   justify-self: end;
@@ -2251,7 +2227,6 @@ body.play-view .top-settings {
     gap: 10px;
     padding: 0 8px;
   }
-  .top-brand-sub,
   .music-player-heading,
   .profile-chip-kind {
     display: none;
@@ -2589,9 +2564,6 @@ body.play-view #bank-button {
   .hud-group {
     gap: 10px;
     padding: 6px 10px;
-  }
-  .hud-group-score-foot {
-    gap: 10px;
   }
   .hud-group-match {
     margin-left: 0;
@@ -3049,10 +3021,6 @@ body.play-view #bank-button {
     display: none;
   }
 }
-:root {
-  --accent-text: var(--cyan);
-}
-
 .energy-value {
   font: italic 800 22px/1 var(--display);
   text-align: right;
@@ -4452,8 +4420,7 @@ body:has(.noscript) .boot-sync {
   .hl-row:nth-child(even) {
     background: color-mix(in srgb, var(--panel), transparent 60%);
   }
-  .hl-cell-player,
-  .hl-cell-pilot {
+  .hl-cell-player {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -4819,8 +4786,7 @@ body:has(.noscript) .boot-sync {
     color: #cd7f32;
     font-size: 16px;
   }
-  .hl-cell-player,
-  .hl-cell-pilot {
+  .hl-cell-player {
     font-size: 14.5px;
     font-weight: 700;
     letter-spacing: 0.5px;
@@ -4878,17 +4844,13 @@ body:has(.noscript) .boot-sync {
     letter-spacing: 0.8px;
     white-space: nowrap;
   }
-  .hl-head .hl-cell-bonus.hl-cell-tri {
+  .hl-head .hl-cell-bonus.hl-cell-tri,
+  .hl-head .hl-cell-bonus.hl-cell-split,
+  .hl-head .hl-cell-bonus.hl-cell-zone {
     color: #ffd043;
   }
   .hl-head .hl-cell-bonus.hl-cell-ole {
     color: var(--pink);
-  }
-  .hl-head .hl-cell-bonus.hl-cell-split {
-    color: #ffd043;
-  }
-  .hl-head .hl-cell-bonus.hl-cell-zone {
-    color: #ffd043;
   }
   /* ── User Best Footer ──────────────────────────────────────────────── */
   /* The tag ("YOUR BEST") is a decorative label, not a data column, so it
@@ -4958,122 +4920,6 @@ body:has(.noscript) .boot-sync {
     text-align: right;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
-  }
-  /* ── Court panel bands ─────────────────────────────────────────────────
-     Header band: LIVE DEMO / BOTS IN POSSESSION pinned left, the venue name
-     centred and largest, TIKI-TAKA WORLD TOUR pinned right — three flex
-     children sharing the fixed --band-top height, so all three have to stay
-     within a tight line-height budget. */
-  .stage-band {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-    overflow: hidden;
-    padding: 0 4px;
-  }
-  /* Dark panel fill rather than a bright pink/gold wash: the wash read fine
-     on the dark theme but put near-white text on a pale gradient in light
-     theme, which was close to unreadable. --panel/--ink/--muted already
-     carry the right contrast in both themes, so the band uses those
-     instead of colour baked in for one theme only. */
-  .stage-band-top {
-    flex: 0 0 var(--band-top);
-    justify-content: space-between;
-    background: linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--panel), #000 12%),
-      var(--panel)
-    );
-  }
-  .stage-band-side {
-    flex: none;
-    margin: 0;
-    max-width: 30%;
-    color: var(--muted);
-    font: 700 8px/1.4 var(--sign);
-    letter-spacing: 1px;
-    text-align: left;
-  }
-  .stage-band-side-right {
-    text-align: right;
-  }
-  .stage-band-title {
-    flex: 1 1 auto;
-    min-width: 0;
-    text-align: center;
-  }
-  .stage-venue {
-    margin: 0;
-    overflow: hidden;
-    color: var(--ink);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font: italic 800 clamp(13px, 1.6cqw, 20px) var(--display);
-  }
-  .stage-vibe {
-    margin: 2px 0 0;
-    color: var(--muted);
-    font: 700 8px var(--sign);
-    letter-spacing: 2px;
-  }
-  /* Hint bar: the smart-pass hint in a chamfered dark slab on the left, the
-     team/defender legend on the right — drawn with two small CSS shapes,
-     no images. */
-  .stage-band-bottom {
-    flex: 0 0 var(--band-bottom);
-    justify-content: space-between;
-  }
-  .stage-hint {
-    flex: 1 1 auto;
-    min-width: 0;
-    margin: 0;
-    padding: 0 12px;
-    overflow: hidden;
-    color: var(--muted);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font: 700 8px var(--sign);
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    background: var(--panel);
-    border: 1px solid var(--line);
-    /* A single top-right notch, not a symmetric parallelogram: a percentage
-       cut on the left edge scales with the box's width, and at this box's
-       ~34px height a wide hint bar was chewing into the first letter of the
-       text at its vertical centre. A fixed-px cut confined to one corner
-       leaves the left edge — and the padding text sits in — untouched. */
-    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 100%, 0 100%);
-  }
-  .stage-legend {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 12px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    color: var(--muted);
-    font: 700 8px var(--sign);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-  }
-  .stage-legend li {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-  .stage-legend-mark {
-    width: 9px;
-    height: 9px;
-  }
-  .stage-legend-team {
-    border-radius: 50%;
-    background: var(--cyan);
-  }
-  .stage-legend-defenders {
-    background: var(--pink);
-    transform: rotate(45deg);
   }
 }
 /* The wordmark is in the top bar on every screen now, so home's copy of it no
