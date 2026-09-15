@@ -52,3 +52,45 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+  # Reports the result of `web` either way. It is a separate job so a red run
+  # still gets announced (`if: always()`), and so a Discord outage can never
+  # turn a green run red - the notifier's own failure is not the repository's
+  # test result, and `continue-on-error` keeps it out of the required check.
+  #
+  # The subject line comes from the event payload, not from git: a pull
+  # request checkout is a shallow merge commit that does not even contain the
+  # head SHA being reported, so `git log` there would quietly report nothing.
+  notify:
+    name: Report the result to Discord
+    needs: web
+    if: always() && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 1
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+      - name: Post the CI result
+        env:
+          DISCORD_CI_WEBHOOK_URL: ${{ secrets.DISCORD_CI_WEBHOOK_URL }}
+          CI_CONCLUSION: ${{ needs.web.result }}
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
+          # For a pull request the checked-out tip is the merge commit, whose
+          # subject is "Merge ... into ...". Report the head commit a person
+          # actually pushed instead.
+          CI_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CI_ACTOR: ${{ github.actor }}
+          CI_EVENT: ${{ github.event_name }}
+          CI_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          CI_PR_NUMBER: ${{ github.event.pull_request.number }}
+          CI_SUBJECT: ${{ github.event.pull_request.title || github.event.head_commit.message }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node scripts/notify-discord-ci.mjs
