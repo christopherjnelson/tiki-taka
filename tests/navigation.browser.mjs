@@ -1927,6 +1927,93 @@ await check(
   },
 );
 
+await check(
+  "help and the changelog read as back navigation from Settings, and Escape/backdrop match",
+  async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage(),
+      errors = errorsFor(page);
+    await page.goto(`${baseURL}/`);
+    // Nothing has opened help yet - its markup default is a plain close,
+    // which is what a future direct entry point (help reached with no
+    // Settings open beneath it) would keep, since setDialogBackChrome() in
+    // main.js only switches this to a back arrow when it is opened *from*
+    // Settings (see the help-button handler).
+    assert.equal(
+      await page.locator("#close-help").evaluate((el) => el.textContent.trim()),
+      "×",
+    );
+    assert.equal(
+      await page.locator("#close-help").getAttribute("aria-label"),
+      "Close instructions",
+    );
+
+    await page.locator("#settings-button").click();
+    await page.locator("#settings-dialog").waitFor({ state: "visible" });
+
+    // Help opened from Settings: the dismiss control reads as "back", and
+    // Settings was never closed underneath it - dialog.close() is the whole
+    // mechanism, so closing help simply reveals Settings again.
+    await page.locator("#help-button").click();
+    await page.locator("#help-dialog").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#close-help").textContent(), "‹");
+    assert.match(
+      await page.locator("#close-help").getAttribute("aria-label"),
+      /back to settings/i,
+    );
+    assert.equal(
+      await page.locator("#settings-dialog").evaluate((d) => d.open),
+      true,
+      "settings-dialog must stay open underneath help",
+    );
+    await page.locator("#close-help").click();
+    await page.locator("#help-dialog").waitFor({ state: "hidden" });
+    assert.equal(
+      await page.locator("#settings-dialog").evaluate((d) => d.open),
+      true,
+      "closing help returns to settings, already open",
+    );
+
+    // The changelog gets its own page, reached from Settings, with the same
+    // back affordance and the same build-time-sourced content.
+    await page.locator("#changelog-button").click();
+    await page.locator("#changelog-dialog").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#close-changelog").textContent(), "‹");
+    await page.locator("#close-changelog").click();
+    await page.locator("#changelog-dialog").waitFor({ state: "hidden" });
+    assert.equal(
+      await page.locator("#settings-dialog").evaluate((d) => d.open),
+      true,
+      "closing the changelog returns to settings, already open",
+    );
+
+    // A backdrop click on a sub-page does the same thing as its back button
+    // - it never skips past settings to close everything.
+    await page.locator("#help-button").click();
+    await page.locator("#help-dialog").waitFor({ state: "visible" });
+    // Land the press+release well clear of the dialog's own box, in its
+    // ::backdrop - the corner of the viewport is always outside it at this
+    // viewport size.
+    await page.mouse.move(8, 8);
+    await page.mouse.down();
+    await page.mouse.up();
+    await page.locator("#help-dialog").waitFor({ state: "hidden" });
+    assert.equal(
+      await page.locator("#settings-dialog").evaluate((d) => d.open),
+      true,
+      "a backdrop click on help must not close settings underneath it",
+    );
+    await page.locator("#close-settings").click();
+    await page.locator("#settings-dialog").waitFor({ state: "hidden" });
+
+    assert.deepEqual(errors, []);
+    await context.close();
+  },
+);
+
 await browser.close();
 if (server) server.kill();
 if (failures) process.exitCode = 1;
