@@ -1892,7 +1892,12 @@ function config() {
         ...COURTS[1],
         name: "The infinite rondo",
         place: "STAY IN THE FLOW",
+        // No target and no reference: Endless is not scored against a court's
+        // ceiling, so progress.js falls back to ENDLESS_REFERENCE for the
+        // performance XP rather than grading a 60-second run against a
+        // 90-second court's clean round.
         target: 0,
+        reference: 0,
         time: 60,
         speed: 85,
         endless: true,
@@ -1907,7 +1912,11 @@ function config() {
     return applyDifficulty(
       {
         ...court,
+        // A pacing number for the objective card, not a pass/fail line - and
+        // no reference, because a sandbox with no clock and no possession
+        // limit has no clean round to be measured against.
         target: 120,
+        reference: 0,
         time: Infinity,
         speed: Math.min(court.speed, 65),
         practice: true,
@@ -3597,7 +3606,12 @@ function finish() {
               : "Play this court again",
     secondary: "Change difficulty",
     tertiary: "Home",
-    stars: result.stars,
+    // Only career records stars (awardMatch writes them under
+    // progress.courts). Practice cannot be failed, so every practice round
+    // "cleared" and printed a full three stars for wandering around a
+    // sandbox - a rank the court card will never show, against a target that
+    // is only there to pace the objective card.
+    stars: mode === "career" ? result.stars : 0,
     xp: result.xp,
   });
   sound.play(result.cleared ? "victory" : "defeat");

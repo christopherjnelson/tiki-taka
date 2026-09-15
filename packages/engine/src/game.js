@@ -110,12 +110,12 @@ export const TACTICS = {
     focus: 8,
   },
 };
-export const COURTS = [
+const COURT_DEFS = [
   {
     name: "The Courtyard",
     place: "LISBON, PORTUGAL",
     short: "Find your rhythm",
-    target: 600,
+    reference: 20000,
     time: 90,
     speed: 76,
     defenders: 2,
@@ -126,7 +126,7 @@ export const COURTS = [
     name: "Concrete Club",
     place: "LONDON, ENGLAND",
     short: "Beat the press",
-    target: 900,
+    reference: 20000,
     time: 90,
     speed: 91,
     defenders: 3,
@@ -138,7 +138,7 @@ export const COURTS = [
     name: "El Patio",
     place: "BARCELONA, SPAIN",
     short: "Think in triangles",
-    target: 1200,
+    reference: 20000,
     time: 90,
     speed: 100,
     defenders: 3,
@@ -149,7 +149,7 @@ export const COURTS = [
     name: "After Hours",
     place: "TOKYO, JAPAN",
     short: "Work the walls",
-    target: 1600,
+    reference: 20000,
     time: 90,
     speed: 110,
     defenders: 3,
@@ -161,7 +161,7 @@ export const COURTS = [
     name: "The Cage",
     place: "SÃO PAULO, BRAZIL",
     short: "Make your own space",
-    target: 2000,
+    reference: 20000,
     time: 90,
     speed: 115,
     defenders: 4,
@@ -173,7 +173,7 @@ export const COURTS = [
     name: "Total Football",
     place: "AMSTERDAM, NETHERLANDS",
     short: "Own the rhythm",
-    target: 2400,
+    reference: 20000,
     time: 90,
     speed: 123,
     defenders: 4,
@@ -182,6 +182,43 @@ export const COURTS = [
       "Your final test. Turn pressure into beautiful, continuous possession.",
   },
 ];
+
+// One measured number per court: `reference` is what a clean round - no
+// turnover, so the multiplier rides its ceiling - actually scores there. Every
+// other threshold is a ratio of it, which is the point of the rewrite: the
+// clear line and the star ladder used to be the same number wearing two hats,
+// so making the clear line generous dragged the stars down with it and tuning
+// the stars made the court unclearable. They are separate dials now.
+//
+// 20000 is measured on Total Football: Ruthless rounds there land between
+// 10k and 17k, and a round that holds a full multiplier throughout reaches
+// about 20k. Three stars sits exactly there on purpose - it is the round the
+// court is capable of, not a round beyond it.
+//
+// PROVISIONAL for courts 1-5, which carry Amsterdam's number until they are
+// measured too. The earlier sweep found clean-round scores flat across all
+// six, so a flat reference is the honest placeholder rather than an invented
+// curve; the progression comes from the clear ratio instead.
+export const STAR_RATIOS = { two: 0.75, three: 1 };
+// What fraction of the reference a round must score to clear, walked across
+// the roster so the entry bar climbs even though every court's reference is
+// its own ceiling. Interpolated by position rather than hardcoded per court,
+// so a 10-court roster re-spreads the same curve instead of needing new
+// numbers - and courts 7-10 cannot simply be bolted past the end of a table.
+//
+// The star ratios deliberately do NOT ramp: "three stars" should mean "you
+// played this court near-perfectly" identically everywhere. The courts get
+// harder to survive, not harder to be graded on.
+export const CLEAR_RATIO = { first: 0.35, last: 0.5 };
+export function clearRatioFor(index, count = COURT_DEFS.length) {
+  if (!(count > 1)) return CLEAR_RATIO.first;
+  const t = Math.min(1, Math.max(0, index / (count - 1)));
+  return CLEAR_RATIO.first + (CLEAR_RATIO.last - CLEAR_RATIO.first) * t;
+}
+export const COURTS = COURT_DEFS.map((court, index) => ({
+  ...court,
+  clearRatio: clearRatioFor(index),
+}));
 export function seeded(seed) {
   let a = seed >>> 0;
   return () => {
@@ -278,25 +315,33 @@ export function bankPoint(a, b) {
 // road: MAX_DEFENDERS is 5 and courts 5-6 already sat at 4, so the bonus
 // stopped differing exactly where it should have bitten hardest.
 //
-// Ruthless's targetMultiplier is 1, not something above it, and that is
-// deliberate. `zoneStreak` resets only on a turnover, so a round with no
-// turnover rides the multiplier to its ceiling and scores far more than one
-// with several. A single possession means every Ruthless round that reaches
-// the final whistle had no turnover at all - so Ruthless already produces
-// the highest-scoring rounds in the game. Raising its target on top of that
-// counts the same difficulty twice, and because stars are fixed ratios of
-// the target (1x / 1.5x / 2.2x-with-no-turnovers, see progress.js), a
-// multiplier above 1 pushes Ruthless's 2- and 3-star thresholds above the
-// highest score the tier can physically produce. Ruthless is paid for by
-// FIRST_CLEAR_TIER instead, which already values it at 1.5x the XP.
+// scoreMultiplier is not a difficulty knob - it is how much of the court's
+// reference this tier's rounds can actually produce. `zoneStreak` resets
+// only on a turnover, so the number of possessions a tier grants IS the
+// number of times the multiplier is knocked back to x1, and that dominates
+// the final score far more than press speed does. Ruthless grants one
+// possession, so every Ruthless round that reaches the whistle had no
+// turnover at all and rode the multiplier the whole way: it produces the
+// reference, by definition, which is why it sits at 1. Standard's three
+// possessions mean two resets, Relaxed's five mean four, and they score
+// proportionally less.
+//
+// Reading them as difficulty would invert the design: Ruthless asks for the
+// most points and is still the hardest tier, because the hard part is
+// surviving to score them at all. Ruthless's extra pay comes from
+// FIRST_CLEAR_TIER, which already values it at 1.5x the XP.
+//
+// PROVISIONAL: 1 is measured (Ruthless on Total Football). 0.7 and 0.5 are
+// estimates - one Standard round and one Relaxed round on the same court
+// settle them.
 //
 // Relaxed keeps its gentler press. Halving the target only helps a player
 // who can already hold the ball; the speed ease is what lets them hold it,
 // and it is the one accessibility lever the tier has on the late courts.
 const DIFFICULTY_TIERS = {
-  relaxed: { targetMultiplier: 0.5, possessions: 5, speedMultiplier: 0.9, defenderBonus: 0 },
-  standard: { targetMultiplier: 1, possessions: 3, speedMultiplier: 1, defenderBonus: 0 },
-  ruthless: { targetMultiplier: 1, possessions: 1, speedMultiplier: 1, defenderBonus: 0 },
+  relaxed: { scoreMultiplier: 0.5, possessions: 5, speedMultiplier: 0.9, defenderBonus: 0 },
+  standard: { scoreMultiplier: 0.7, possessions: 3, speedMultiplier: 1, defenderBonus: 0 },
+  ruthless: { scoreMultiplier: 1, possessions: 1, speedMultiplier: 1, defenderBonus: 0 },
 };
 // Each tier's own copy plus the concrete numbers behind it, read straight off
 // DIFFICULTY_TIERS above so presentation code never re-states (and risks
@@ -330,9 +375,26 @@ export const MAX_DEFENDERS = 5;
 export function applyDifficulty(config, tier) {
   const id = Object.hasOwn(DIFFICULTY_TIERS, tier) ? tier : "standard";
   const scale = DIFFICULTY_TIERS[id];
+  // The tier scales the REFERENCE, and the clear line and star rungs are
+  // taken from that - so a tier never changes what a star means relative to
+  // what its own rounds can score. Relaxed's five possessions reset the
+  // multiplier four times, so its rounds top out near half of Standard's;
+  // 0.5 keeps three stars as reachable on Relaxed as it is on Standard.
+  const reference = Math.round((config.reference || 0) * scale.scoreMultiplier);
+  const clearRatio = Number.isFinite(config.clearRatio)
+    ? config.clearRatio
+    : CLEAR_RATIO.first;
+  // A caller that states its own target keeps it. Free practice sets a gentle
+  // pacing number and Endless sets 0 to mean "no target at all"; deriving over
+  // the top of either silently handed both a real clear line - practice rounds
+  // stopped clearing, and Endless grew a denominator it is not scored on.
+  const target = Number.isFinite(config.target)
+    ? config.target
+    : Math.round((reference * clearRatio) / 50) * 50;
   return {
     ...config,
-    target: Math.round(((config.target || 0) * scale.targetMultiplier) / 50) * 50,
+    reference,
+    target,
     possessions: scale.possessions,
     speed: (config.speed || 0) * scale.speedMultiplier,
     defenders: Math.min(MAX_DEFENDERS, (config.defenders || 0) + scale.defenderBonus),

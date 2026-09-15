@@ -7,6 +7,56 @@ this file is not touched by ordinary pull requests. Parsed at build time by
 in Settings by `apps/desktop/src/main.js` - never fetched at runtime, so it
 works offline behind the service worker like everything else.
 
+## 0.4.6 - 2026-09-15
+
+### Scoring rebuilt around the bonus zone
+
+The multiplier is now driven by the bonus zone alone, and it climbs further
+than it used to — to a ceiling of x10 — but it takes longer to get there and
+a turnover still knocks it back to the start. Passing well no longer raises
+it on its own; moving into the zone does. Zones live for a shorter time and
+go dark for a beat before the next one appears.
+
+### Energy is something you spend, not something you ride
+
+Focus and Boost now cost the same amount per second, and that cost is much
+higher: a full meter is about two seconds of either, where Focus alone used
+to be worth ten. The rewards for triangles, zones, splits and olés are
+halved to match. Energy is banked for the moment that needs it rather than
+held down through a round.
+
+### Targets, stars and difficulty all mean something different
+
+Every court is now tuned against one number: what a clean round — no
+turnovers at all — actually scores there. The score you need to clear a
+court, the two-star score and the three-star score are each set from it
+independently, so clearing a court can be generous without making three
+stars unreachable. Three stars now means you scored what the court is
+capable of producing.
+
+Difficulty changed shape too. A tier no longer alters the court you are
+playing: the press speed and the number of defenders belong to the court,
+and Ruthless no longer quietly adds a fifth defender to a court whose own
+description says four. What a tier changes is how many possessions you get,
+and what you are graded against. Relaxed keeps its gentler press.
+
+Because a single-possession round never loses its multiplier, Ruthless asks
+for the most points of any tier and is still the hardest — the difficulty is
+surviving long enough to score them.
+
+### Leaderboards have been reset
+
+Scores set under the old scoring cannot be compared to scores set under this
+one, so the boards start again from here.
+
+### Fixes
+
+- The home leaderboard names the mode you are looking at and shows its icon,
+  instead of always reading "Circuit Leaderboards" under a trophy.
+- Free practice is a sandbox again. It had started demanding a real clearing
+  score, and awarding three stars for wandering around one.
+- Only a round you actually cleared is saved as a score or a personal best.
+
 ## 0.4.5 - 2026-09-15
 
 ### The soundtrack lives outside the app now
