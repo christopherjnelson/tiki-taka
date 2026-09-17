@@ -15,7 +15,7 @@
 // Leave it as an empty string to hide the strip entirely (e.g. between
 // releases when there's nothing worth calling out).
 export const ANNOUNCEMENT_TEXT =
-  "0.4.6 is live — scoring works differently now. The bonus zone drives your " +
-  "multiplier all the way to x10, Energy is a burst you spend rather than " +
-  "hold, and every court has new scores to clear and to star. Leaderboards " +
-  "start fresh from here. See the Changelog for the full picture.";
+  "0.4.7 is live — Endless is playable. Survive on Still Water, a court of " +
+  "its own: the clock counts up, bonuses pay Energy instead of points, and " +
+  "the press grows to five defenders and never stops quickening. One mistake " +
+  "ends the run. See the Changelog for the full picture.";
