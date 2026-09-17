@@ -32,7 +32,7 @@ This document outlines the core physics, scoring, timing, and deterministic simu
    - Resets to x1 immediately on a turnover.
 3. **Triangles (A → B → C → A)**:
    - Completing a pass cycle across 3 distinct teammates within **3.5 seconds** (and without any player holding the ball longer than **1.2 seconds**) awards **35 points** (scaled by flow) and **1.5 seconds of Focus**.
-   - In Endless mode, triangles also grant +5 bonus seconds on the match clock.
+   - Endless has no clock to extend, and pays no points at all: triangles there pay Energy only (see **Endless** below).
 4. **Wall Pass**:
    - Banking a pass off an arena boundary awards **18 points** (scaled by flow). It does not award Focus.
 5. **Bonus Zones**:
@@ -60,3 +60,23 @@ Three tactics provide different tradeoffs:
 - **`balanced` (Playmaker)**: 155 move speed, 690 ball speed, 5s focus reserve.
 - **`runner` (Mover)**: 195 move speed, 640 ball speed, 3s focus reserve.
 - **`maestro` (Conductor)**: 135 move speed, 840 ball speed, 4s focus reserve.
+
+---
+
+## Endless
+
+Endless is the survival mode, and it is scored on nothing but time:
+
+- The clock **counts up** from zero and never runs out. The score is the
+  whole seconds survived, which is what the leaderboard and the personal
+  best both hold.
+- **No points.** Every bonus above still fires, still feeds the streaks and
+  still pays Energy, but adds no score - so the popups carry a name and a
+  colour and no number.
+- **One possession.** The first turnover ends the run.
+- **Its own court**: Still Water (`ENDLESS_COURT` in game.js, venue `still-water`), which is deliberately not a member of `COURTS` - it has no target, no stars and no place in the circuit.
+- **One difficulty**, turned by the clock rather than a tier: two defenders
+  at kickoff, three at 0:45, four at 1:45, five at 3:15, and a press speed
+  that rises continuously with no ceiling (`ENDLESS_DEFENDER_STEPS` and
+  `ENDLESS_PRESS` in `packages/engine/src/game.js`). The speed ramp is
+  deliberately uncapped: a cap would let a good enough run last forever.

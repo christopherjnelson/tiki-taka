@@ -209,10 +209,27 @@ test('first-clear XP scales with tier and with court index', () => {
 
 test('endless pays performance XP only - no star bonus, no clear bonus', () => {
   const progress = freshProgress();
-  const result = awardMatch(progress, finishedGame({ score: 900, reference: 0, target: 0, endless: true }), 'endless', 0);
-  assert.equal(result.stars, 3); // trivially true with no target, but must not be paid for
-  // Performance only, against ENDLESS_REFERENCE (600) and capped at 20.
+  // An endless run's "score" is the seconds it lasted, and its clock counts
+  // up, so time is never <= 0 and the round is never "cleared".
+  const result = awardMatch(progress, finishedGame({ score: 200, reference: 0, target: 0, time: 200, endless: true }), 'endless', 0);
+  assert.equal(result.cleared, false);
+  assert.equal(result.stars, 0, 'there is nothing to be graded on');
+  // Performance only, against ENDLESS_REFERENCE (180 seconds) and capped at 20.
   assert.equal(result.xp, 20);
+  const short = awardMatch(freshProgress(), finishedGame({ score: 45, reference: 0, target: 0, time: 45, endless: true }), 'endless', 0);
+  assert.equal(short.xp, 5, 'a 45-second run pays a quarter of the cap');
+});
+
+test('every finished endless run records a personal best in seconds', () => {
+  const progress = freshProgress();
+  const run = (seconds) => awardMatch(progress, finishedGame({ score: seconds, reference: 0, target: 0, time: seconds, endless: true }), 'endless', 0);
+  const first = run(96);
+  assert.equal(first.newBest, true);
+  assert.equal(progress.records.endless, 96, 'the best is the longest run, in seconds');
+  assert.equal(run(40).newBest, false, 'a shorter run does not overwrite it');
+  assert.equal(progress.records.endless, 96);
+  assert.equal(run(150).newBest, true);
+  assert.equal(progress.records.endless, 150);
 });
 
 test('a non-practice mode that fails to clear still gets the 3 XP floor', () => {

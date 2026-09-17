@@ -7,6 +7,31 @@ this file is not touched by ordinary pull requests. Parsed at build time by
 in Settings by `apps/desktop/src/main.js` - never fetched at runtime, so it
 works offline behind the service worker like everything else.
 
+## 0.4.7 - 2026-09-16
+
+### Endless is playable
+
+One fixed rondo, one difficulty, and a clock that counts up instead of down.
+Nothing is scored but the seconds you last, so the leaderboard, your personal
+best and the results screen all read as a time rather than a total. Bonuses
+still fire, still feed your streaks and still pay Energy - they just pay no
+points, so a zone reads as a zone and promises nothing it cannot give.
+
+Endless is played on a court of its own - Still Water, the one venue that is
+not a stop on the world tour. No city, no crowd, no signage: ink and jade,
+raked sand around a quiet pool, and nothing in the border that could cheer.
+The court list on Home says plainly that Endless plays there rather than
+implying a pick applies to it.
+
+The press is the difficulty, and the clock turns it: two defenders at
+kickoff, a third at 0:45, a fourth at 1:45, a fifth at 3:15, and they keep
+getting quicker after that with no ceiling. There is nothing to extend and
+nothing to buy - triangles no longer add seconds. The first mistake ends the
+run.
+
+The HUD says what matters in a run: how many defenders are on the court, how
+long until the next one arrives, and how long you have lasted.
+
 ## 0.4.6 - 2026-09-15
 
 ### Scoring rebuilt around the bonus zone

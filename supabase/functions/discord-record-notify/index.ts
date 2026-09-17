@@ -35,6 +35,12 @@ const COLORS: Record<string, number> = {
   standard: 0x35d7c3,
   ruthless: 0xff9f43,
 };
+// Endless is scored on seconds survived, not points, and has no court: it is
+// one global ladder played on its own rondo. Everything below that differs
+// between the two kinds of record hangs off this one check.
+const isEndless = (mode: unknown) => mode === "endless";
+// Its own colour, matching the court's jade rather than the tour's teal.
+const ENDLESS_COLOR = 0x8fe6cf;
 
 async function config(): Promise<Record<string, string>> {
   const response = await fetch(
@@ -57,6 +63,10 @@ function title(difficulty: string): string {
 }
 
 const count = (value: unknown) => Number(value ?? 0).toLocaleString("en-US");
+const clock = (value: unknown) => {
+  const whole = Math.max(0, Math.floor(Number(value ?? 0)));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
@@ -86,25 +96,48 @@ Deno.serve(async (req: Request) => {
   const previousBest = Number(payload?.previous_best ?? 0);
   const previousHolder = payload?.previous_holder ?? null;
   const margin = Number(record.score) - previousBest;
+  const endless = isEndless(record.mode);
+  // A run is read as a duration everywhere it appears, including the margin:
+  // "by 0:14" is the sentence a player would say, "by 14" is not.
+  const amount = endless ? clock : count;
 
-  const beaten = previousHolder
-    ? `Beat **${previousHolder}**'s ${count(previousBest)} by ${count(margin)}.`
-    : `Beat the old best of ${count(previousBest)} by ${count(margin)}.`;
+  // previous_best is 0 when the board was empty (the trigger sends it that
+  // way): there is nothing beaten, so the line is omitted rather than
+  // claiming a margin over nobody.
+  const beaten =
+    previousBest <= 0
+      ? ""
+      : previousHolder
+        ? `Beat **${previousHolder}**'s ${amount(previousBest)} by ${amount(margin)}.`
+        : `Beat the old best of ${amount(previousBest)} by ${amount(margin)}.`;
 
   const body = {
     username: "Tiki Taka Scores",
     allowed_mentions: { parse: [] },
     embeds: [{
-      title: "🏆 NEW COURT RECORD",
-      description: `**${username}** took **${courtName(record.court)}** on **${title(record.difficulty)}**.\n${beaten}`,
-      color: COLORS[record.difficulty] ?? 0x35d7c3,
+      title: endless ? "🌊 NEW ENDLESS RECORD" : "🏆 NEW COURT RECORD",
+      description: [
+        endless
+          ? `**${username}** lasted **${clock(record.score)}** on **STILL WATER**.`
+          : `**${username}** took **${courtName(record.court)}** on **${title(record.difficulty)}**.`,
+        beaten,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      color: endless ? ENDLESS_COLOR : COLORS[record.difficulty] ?? 0x35d7c3,
       fields: [
-        { name: "Score", value: count(record.score), inline: true },
+        endless
+          ? { name: "Survived", value: clock(record.score), inline: true }
+          : { name: "Score", value: count(record.score), inline: true },
         { name: "Passes", value: count(record.passes), inline: true },
         { name: "Zones", value: count(record.zones), inline: true },
         { name: "Best one-touch", value: count(record.best_one_touch), inline: true },
       ],
-      footer: { text: "Global best for this court and difficulty" },
+      footer: {
+        text: endless
+          ? "Longest run on the global Endless ladder"
+          : "Global best for this court and difficulty",
+      },
       timestamp: record.created_at ?? new Date().toISOString(),
     }],
   };
