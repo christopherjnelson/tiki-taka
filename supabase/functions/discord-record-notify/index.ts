@@ -101,18 +101,29 @@ Deno.serve(async (req: Request) => {
   // "by 0:14" is the sentence a player would say, "by 14" is not.
   const amount = endless ? clock : count;
 
-  const beaten = previousHolder
-    ? `Beat **${previousHolder}**'s ${amount(previousBest)} by ${amount(margin)}.`
-    : `Beat the old best of ${amount(previousBest)} by ${amount(margin)}.`;
+  // previous_best is 0 when the board was empty (the trigger sends it that
+  // way): there is nothing beaten, so the line is omitted rather than
+  // claiming a margin over nobody.
+  const beaten =
+    previousBest <= 0
+      ? ""
+      : previousHolder
+        ? `Beat **${previousHolder}**'s ${amount(previousBest)} by ${amount(margin)}.`
+        : `Beat the old best of ${amount(previousBest)} by ${amount(margin)}.`;
 
   const body = {
     username: "Tiki Taka Scores",
     allowed_mentions: { parse: [] },
     embeds: [{
       title: endless ? "🌊 NEW ENDLESS RECORD" : "🏆 NEW COURT RECORD",
-      description: endless
-        ? `**${username}** lasted **${clock(record.score)}** on **STILL WATER**.\n${beaten}`
-        : `**${username}** took **${courtName(record.court)}** on **${title(record.difficulty)}**.\n${beaten}`,
+      description: [
+        endless
+          ? `**${username}** lasted **${clock(record.score)}** on **STILL WATER**.`
+          : `**${username}** took **${courtName(record.court)}** on **${title(record.difficulty)}**.`,
+        beaten,
+      ]
+        .filter(Boolean)
+        .join("\n"),
       color: endless ? ENDLESS_COLOR : COLORS[record.difficulty] ?? 0x35d7c3,
       fields: [
         endless
