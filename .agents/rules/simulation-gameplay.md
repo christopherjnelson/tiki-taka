@@ -74,6 +74,7 @@ Endless is the survival mode, and it is scored on nothing but time:
   still pays Energy, but adds no score - so the popups carry a name and a
   colour and no number.
 - **One possession.** The first turnover ends the run.
+- **Its own court**: Still Water (`ENDLESS_COURT` in game.js, venue `still-water`), which is deliberately not a member of `COURTS` - it has no target, no stars and no place in the circuit.
 - **One difficulty**, turned by the clock rather than a tier: two defenders
   at kickoff, three at 0:45, four at 1:45, five at 3:15, and a press speed
   that rises continuously with no ceiling (`ENDLESS_DEFENDER_STEPS` and

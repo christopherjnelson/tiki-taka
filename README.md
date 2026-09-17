@@ -43,7 +43,7 @@ Build a flow multiplier with consecutive passes and queue passes for one-touch c
 
 - **World tour** — six fixed venues, three difficulty tiers, stars and progression.
 - **King of the Court** — four players, one ball, scored on squares taken rather than flow. Not yet playable; shown on Home as coming soon.
-- **Endless** — one fixed rondo, one difficulty, and a clock that counts up. Nothing is scored but the seconds you last: a third defender joins at 0:45, a fourth at 1:45, a fifth at 3:15, and the press keeps quickening after that. The first mistake ends the run.
+- **Endless** — its own court (Still Water, the one venue that is not on the tour), one difficulty, and a clock that counts up. Nothing is scored but the seconds you last: a third defender joins at 0:45, a fourth at 1:45, a fifth at 3:15, and the press keeps quickening after that. The first mistake ends the run.
 - **Free practice** — no turnover limit, for learning the rhythm.
 
 (An earlier date-seeded Daily Circuit mode has been removed.)

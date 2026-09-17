@@ -170,6 +170,9 @@ const VENUE_LOOK = {
   tokyo: { surround: ["#0d0726", "#241148"], surface: ["#141338", "#0c0b24"], light: "#38f5e5", wash: 0.15 },
   "sao-paulo": { surround: ["#0c2a27", "#16453c"], surface: ["#0f3327", "#0a2419"], light: "#9bff8a", wash: 0.12 },
   amsterdam: { surround: ["#0b1f4c", "#123468"], surface: ["#0f2b52", "#0a1d3a"], light: "#8fd9ff", wash: 0.1 },
+  // Endless's court. Ink and jade rather than neon, and the quietest wash of
+  // the lot: nothing here should feel like a stadium.
+  "still-water": { surround: ["#0d1518", "#16262a"], surface: ["#122024", "#0a1418"], light: "#d9f5ec", wash: 0.09 },
 };
 // The pitch inset the engine's LIMITS agree on (packages/engine/src/game.js:
 // LIMITS = { left: 50, right: 950, top: 50, bottom: 570 }) - 50 in, on all
@@ -310,6 +313,47 @@ const BORDERS = {
     }
   },
   // Canal geometry: the gable line of a canal house, repeated.
+  // Still Water: raked sand around a quiet pool. Parallel ripples run the
+  // length of every edge and bend around a few sunk stones, the way a raked
+  // garden bends around what it is raked around. No crowd, no signage, no
+  // skyline - the only venue whose border has nothing in it that could cheer.
+  "still-water"(c, L, D, v) {
+    c.fillStyle = "#0b1316";
+    c.fillRect(0, 0, L, D);
+    const stones = [];
+    for (let x = D * 1.4; x < L; x += D * 3.1)
+      stones.push({ x, y: D * 0.52, r: D * 0.2 });
+    const lines = 7;
+    c.lineWidth = Math.max(1, D * 0.022);
+    for (let i = 0; i < lines; i++) {
+      const base = D * (0.12 + (i / (lines - 1)) * 0.76);
+      // Ripples closest to the pool are the brightest, so the band reads as
+      // sand drawn toward water rather than as flat stripes.
+      c.strokeStyle = withAlpha(v.accent, 0.1 + (i / lines) * 0.22);
+      c.beginPath();
+      for (let x = 0; x <= L; x += 6) {
+        // Each stone pushes the ripple outward, falling off with distance.
+        let y = base;
+        for (const stone of stones) {
+          const d = Math.abs(x - stone.x);
+          if (d < stone.r * 4.2)
+            y += (1 - d / (stone.r * 4.2)) * (base < stone.y ? -1 : 1) * stone.r * 0.85;
+        }
+        if (x === 0) c.moveTo(x, y);
+        else c.lineTo(x, y);
+      }
+      c.stroke();
+    }
+    for (const stone of stones) {
+      c.beginPath();
+      c.arc(stone.x, stone.y, stone.r, 0, Math.PI * 2);
+      c.fillStyle = withAlpha(v.secondary, 0.34);
+      c.fill();
+      c.strokeStyle = withAlpha(v.accent, 0.3);
+      c.lineWidth = Math.max(1, D * 0.018);
+      c.stroke();
+    }
+  },
   amsterdam(c, L, D, v) {
     c.fillStyle = "#0a1b40";
     c.fillRect(0, 0, L, D);
@@ -400,8 +444,8 @@ export class Renderer {
   // mirrors resize() exactly, rotation included, so a portrait canvas gets a
   // background baked already rotated — it is blitted back with no transform
   // at all, so the rotation has to already be in the pixels.
-  backgroundFor(v, t, w, h, portrait, footer = "TIKI TAKA WORLD TOUR") {
-    const key = `${v.id}:${t}:${portrait ? "p" : "l"}:${footer}`;
+  backgroundFor(v, t, w, h, portrait) {
+    const key = `${v.id}:${t}:${portrait ? "p" : "l"}`;
     const cached = this.backgrounds.get(key);
     if (cached && cached.w === w && cached.h === h) {
       // Refresh insertion order so the cap below behaves as a tiny LRU cache.
@@ -430,7 +474,7 @@ export class Renderer {
     const dw = portrait ? HEIGHT : WIDTH,
       dh = portrait ? WIDTH : HEIGHT;
     context.setTransform(w / dw, 0, 0, h / dh, 0, 0);
-    this.paintArena(context, v, THEMES[t] || THEMES.dark, dw, dh, footer);
+    this.paintArena(context, v, THEMES[t] || THEMES.dark, dw, dh);
     this.backgrounds.set(key, { canvas: el, w, h });
     return el;
   }
@@ -449,7 +493,7 @@ export class Renderer {
   // branch beyond "which axis is longer". The surface stays quiet - venue
   // identity is carried by colour, light and the border band (drawArchitecture
   // + drawPitchPattern below), not by pattern under the players' feet.
-  paintArena(c, v, p = THEMES.dark, W = WIDTH, H = HEIGHT, footer = "TIKI TAKA WORLD TOUR") {
+  paintArena(c, v, p = THEMES.dark, W = WIDTH, H = HEIGHT) {
     const look = VENUE_LOOK[v.id] || VENUE_LOOK.london,
       short = Math.min(W, H),
       horizontal = W >= H,
@@ -538,7 +582,10 @@ export class Renderer {
     c.font = `600 ${topSize}px ${FONT}`;
     signPlate(c, W / 2, margin / 2, c.measureText(topText).width + short * 0.09, margin * 0.66, v.accent);
     label(c, topText, W / 2, margin / 2, topSize, v.accent, "center", 600, 1.5);
-    const footText = footer,
+    // The hoarding names the competition, which is the COURT's, not the
+    // mode's: Still Water is not on the tour, so it says so in the home
+    // preview and in a live run alike.
+    const footText = v.competition || "TIKI TAKA WORLD TOUR",
       footSize = Math.max(9, Math.round(short * 0.017));
     c.font = `500 ${footSize}px ${FONT}`;
     signPlate(c, W / 2, H - margin / 2, c.measureText(footText).width + short * 0.1, margin * 0.6, p.muted);
@@ -689,13 +736,6 @@ export class Renderer {
     this.lastTime = n;
     if (!paused) this.clock += dt;
     this.venue = getVenue(game.config);
-    // The hoarding at the foot of the court names the competition being
-    // played, not the venue: Endless borrows a World tour court but is not
-    // on the tour. It is part of the baked background, so it is part of that
-    // bitmap's cache key below.
-    this.footer = game.config?.endless
-      ? "TIKI TAKA · ENDLESS"
-      : "TIKI TAKA WORLD TOUR";
     const tn = this.themeName(theme);
     c.globalAlpha = 1;
     // The background bitmap is now baked at this canvas's own backing-store
@@ -712,7 +752,6 @@ export class Renderer {
         this.canvas.width,
         this.canvas.height,
         this.orientation === "portrait",
-        this.footer,
       ),
       0,
       0,

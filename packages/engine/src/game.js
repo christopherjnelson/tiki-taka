@@ -394,6 +394,31 @@ export const ENDLESS_DEFENDER_STEPS = [
   { at: 195, defenders: MAX_DEFENDERS },
 ];
 export const ENDLESS_PRESS = { base: 75, perSecond: 0.28 };
+// Endless's own court. It is NOT a member of COURTS: the circuit is six
+// venues with targets, stars and a clear line, and this has none of those -
+// putting it in that array would give it a court card, a leaderboard tab and
+// a place in the progression it is not part of. The court contributes what a
+// court contributes (its look, its name, its seed); everything about the
+// difficulty comes from the ladder above, which is why it carries no target,
+// no reference and no clock.
+export const ENDLESS_COURT = {
+  name: "Still Water",
+  place: "STAY IN THE FLOW",
+  short: "Keep it moving",
+  venue: "still-water",
+  target: 0,
+  reference: 0,
+  time: 0,
+  speed: ENDLESS_PRESS.base,
+  defenders: ENDLESS_DEFENDER_STEPS[0].defenders,
+  possessions: 1,
+  // Every saved round carries a tier column; nothing in an Endless round
+  // reads it, because the clock is the only difficulty here.
+  difficulty: "standard",
+  endless: true,
+  description:
+    "One possession, and a press that never stops growing. A third defender at 0:45, a fourth at 1:45, a fifth at 3:15 — and they keep getting quicker after that. Last as long as you can.",
+};
 // Pure: the press the clock has earned at `elapsed` seconds. Exported so the
 // UI can telegraph the next rung without re-deriving the ladder.
 export function endlessStage(elapsed) {

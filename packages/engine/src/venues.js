@@ -47,6 +47,25 @@ export const VENUES = [
     secondary: "#ff4ba8",
     seeds: [1974],
   },
+  // Endless's own court, and the only venue that is not a place on the world
+  // tour - deliberately so. It has no city and no crowd: a still, quiet court
+  // where the only thing that matters is that the ball keeps moving. Its
+  // palette steps away from the tour's neon for the same reason, and it owns
+  // no seed, because Endless seeds every run from the clock (see
+  // ENDLESS_COURT in game.js) rather than replaying one court's rally.
+  {
+    id: "still-water",
+    name: "Still Water",
+    vibe: "No clock, no whistle",
+    accent: "#8fe6cf",
+    secondary: "#b6a8ff",
+    seeds: [],
+    // What the hoarding at the foot of the court says. Only this venue needs
+    // its own: it is the one court that is not on the tour, and the sign is
+    // the court's, so the home preview and a live run agree without either
+    // having to know which mode is running.
+    competition: "TIKI TAKA · ENDLESS",
+  },
 ];
 
 const bySeed = new Map(
@@ -61,7 +80,7 @@ export function getVenue(config = {}) {
   if (explicit) return explicit;
   if (bySeed.has(config.seed)) return bySeed.get(config.seed);
   if (config.practice) return VENUES[0];
-  if (config.endless) return VENUES[1];
+  if (config.endless) return VENUES.find((venue) => venue.id === "still-water");
   if (config.key)
     return VENUES[Math.abs(Number(config.seed) || 0) % VENUES.length];
   return VENUES[0];

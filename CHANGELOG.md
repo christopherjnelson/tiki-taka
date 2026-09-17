@@ -17,6 +17,12 @@ best and the results screen all read as a time rather than a total. Bonuses
 still fire, still feed your streaks and still pay Energy - they just pay no
 points, so a zone reads as a zone and promises nothing it cannot give.
 
+Endless is played on a court of its own - Still Water, the one venue that is
+not a stop on the world tour. No city, no crowd, no signage: ink and jade,
+raked sand around a quiet pool, and nothing in the border that could cheer.
+The court list on Home says plainly that Endless plays there rather than
+implying a pick applies to it.
+
 The press is the difficulty, and the clock turns it: two defenders at
 kickoff, a third at 0:45, a fourth at 1:45, a fifth at 3:15, and they keep
 getting quicker after that with no ceiling. There is nothing to extend and

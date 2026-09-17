@@ -14,7 +14,7 @@ import {
   ONE_TOUCH,
   zoneMultiplier,
   endlessStage,
-  ENDLESS_PRESS,
+  ENDLESS_COURT,
   ENDLESS_DEFENDER_STEPS,
 } from "../../../packages/engine/src/game.js";
 import { Renderer } from "../../../packages/presentation/src/renderer.js";
@@ -805,7 +805,7 @@ function syncTitle() {
     : selectedHomeMode === "practice"
       ? `${court.name} · Free Practice`
       : selectedHomeMode === "endless"
-        ? "The infinite rondo · Survive the rising press"
+        ? `${ENDLESS_COURT.name} · ${ENDLESS_COURT.short}`
         : `${court.name} · ${court.place}`;
 }
 function selectCourt(i) {
@@ -822,7 +822,8 @@ function selectCourt(i) {
     btn.setAttribute("aria-pressed", String(active));
   });
   syncTitle();
-  setAttractVenue(attractVenueForCourt(i));
+  syncCourtsHeading();
+  setAttractVenue(homeRestingVenue());
   selectHomeLeaderboardCourt(i);
   // A gamepad player's cursor was just sitting in the courts zone; follow the
   // flow into modes rather than leaving it stranded on the list. Mouse and
@@ -1471,6 +1472,27 @@ let attractGame = null,
 function attractVenueForCourt(i) {
   return getVenue(COURTS[i] || COURTS[0]).id;
 }
+// What the home demo shows when nothing is being hovered. Endless is not
+// played on a circuit court at all - it has its own (ENDLESS_COURT) - so with
+// that mode selected the demo shows Still Water rather than whichever court
+// happens to be highlighted in a list that does not apply to it.
+function homeRestingVenue() {
+  return selectedHomeMode === "endless"
+    ? ENDLESS_COURT.venue
+    : attractVenueForCourt(selectedCourtIndex);
+}
+// Says plainly who the court list is for. It stays live while Endless is
+// selected - a player browsing courts is choosing what to play NEXT, and
+// disabling the list would make picking a court mean pressing a dead button -
+// but the heading stops implying that the pick applies to the run.
+function syncCourtsHeading() {
+  const title = $("courts-title");
+  if (!title) return;
+  title.textContent =
+    selectedHomeMode === "endless"
+      ? `Endless plays ${ENDLESS_COURT.name}.`
+      : "Choose your court.";
+}
 // Re-skins the demo in place: background, accent and secondary colors only.
 // Never touches seed, defenders, speed or target, so the rally already in
 // progress keeps doing whatever it was doing — see Renderer.render(), which
@@ -1731,7 +1753,7 @@ function startAttract() {
   resetChoreography();
   // Skin the demo to whatever court is currently selected (or last selected)
   // rather than whatever COURTS[1]'s own seed would otherwise resolve to.
-  attractGame.config.venue = attractVenueForCourt(selectedCourtIndex);
+  attractGame.config.venue = homeRestingVenue();
   attractNeedsRepaint = true;
   // Same convention as window.__game for the player's round: a stable,
   // read-only hook for tests/debugging to confirm the demo keeps running the
@@ -1929,30 +1951,12 @@ function config() {
   if (mode === "endless")
     // Deliberately NOT run through applyDifficulty(): Endless has one
     // difficulty, and it is the clock. A tier picked on the home screen would
-    // hand it extra possessions (the run ends on the first mistake by
-    // design) and rescale a target it does not have. `difficulty` is stamped
-    // "standard" by hand only because every saved round carries a tier
-    // column; nothing in the round reads it.
-    return {
-      ...COURTS[1],
-      name: "The infinite rondo",
-      place: "STAY IN THE FLOW",
-      // No target and no reference: Endless is not scored on points at all.
-      // The score is the seconds survived (see Game#update), and progress.js
-      // grades that against ENDLESS_REFERENCE for performance XP.
-      target: 0,
-      reference: 0,
-      // The clock counts UP from here; nothing runs out.
-      time: 0,
-      speed: ENDLESS_PRESS.base,
-      defenders: ENDLESS_DEFENDER_STEPS[0].defenders,
-      possessions: 1,
-      difficulty: "standard",
-      endless: true,
-      seed: Date.now() >>> 0,
-      description:
-        "One possession, and a press that never stops growing. A third defender at 0:45, a fourth at 1:45, a fifth at 3:15 — and they keep getting quicker after that. Last as long as you can.",
-    };
+    // hand it extra possessions (the run ends on the first mistake by design)
+    // and rescale a target it does not have. The court itself is Endless's
+    // own (ENDLESS_COURT) rather than a borrowed circuit venue - see the note
+    // there - and only the seed is decided here, so every run opens somewhere
+    // new.
+    return { ...ENDLESS_COURT, seed: Date.now() >>> 0 };
   if (mode === "practice") {
     const court = COURTS[courtIndex] || COURTS[0];
     return applyDifficulty(
@@ -2225,9 +2229,9 @@ function syncProgress() {
       });
       syncTitle();
       // The pointer/focus left the list without selecting anything, so the
-      // demo falls back to whatever court is actually selected rather than
+      // demo falls back to whatever the home screen is resting on rather than
       // getting stuck showing the last one hovered.
-      setAttractVenue(attractVenueForCourt(selectedCourtIndex));
+      setAttractVenue(homeRestingVenue());
     };
     btn.addEventListener("mouseenter", previewHover);
     btn.addEventListener("focus", previewHover);
@@ -2250,7 +2254,7 @@ function syncProgress() {
         b.classList.remove("hover-preview");
       });
       syncTitle();
-      setAttractVenue(attractVenueForCourt(selectedCourtIndex));
+      setAttractVenue(homeRestingVenue());
     });
   }
   document.querySelectorAll("[data-home-mode]").forEach((btn) => {
@@ -3203,6 +3207,16 @@ function drawRoundedSegment(ctx, x, y, w, h, r) {
 }
 
 const VENUE_SPECTRUM_THEMES = {
+  // Endless's court: jade and lilac, no hot pink. The visualiser is the one
+  // piece of stadium energy on that screen, so it is kept as calm as the
+  // court it sits beside.
+  "still-water": {
+    low: "#8fe6cf",
+    mid: "#d9f5ec",
+    high: "#b6a8ff",
+    glow: "#8fe6cf",
+    unlit: "rgba(14, 26, 30, 0.42)",
+  },
   lisbon: {
     low: "#21f3df",
     mid: "#ffd64d",
@@ -4737,6 +4751,12 @@ document.querySelectorAll("[data-home-mode]").forEach((button) => {
       btn.setAttribute("aria-pressed", String(active));
     });
     syncTitle();
+    // The mode decides what the home screen is previewing: picking Endless
+    // shows its own court, picking anything else goes back to the selected
+    // one. Without this, Endless was announced next to a preview of a
+    // circuit court it does not play on.
+    syncCourtsHeading();
+    setAttractVenue(homeRestingVenue());
     // Mirrors the courts -> modes advance in selectCourt(): a gamepad player
     // who just picked a mode is handed straight to Play. Mouse/keyboard focus
     // is left alone.
@@ -5360,6 +5380,8 @@ function pollGamepad(dt) {
           btn.setAttribute("aria-pressed", String(active));
         });
         syncTitle();
+        syncCourtsHeading();
+        setAttractVenue(homeRestingVenue());
         padPrevious = pressed;
         return;
       }
