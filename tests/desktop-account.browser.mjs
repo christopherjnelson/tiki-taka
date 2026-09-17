@@ -84,7 +84,7 @@ try {
   );
   assert.equal(
     await page.locator("#discord-invite").getAttribute("href"),
-    "https://discord.gg/QgVR4YwnC",
+    "https://discord.gg/VTmtSdEdZ",
   );
   assert.equal(await page.locator("#discord-invite").getAttribute("target"), "_blank");
   assert.equal(await page.locator("#discord-invite").getAttribute("rel"), "noopener");
