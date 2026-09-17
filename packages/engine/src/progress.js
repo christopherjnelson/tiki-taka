@@ -10,8 +10,11 @@ const DIFFICULTY_IDS = DIFFICULTIES.map((tier) => tier.id);
 const STAR_XP = 6;
 const FIRST_CLEAR_TIER = { relaxed: 0.6, standard: 1, ruthless: 1.5 };
 // Stand-in "target" for endless and other modes with no real target, so
-// performance XP still has a reference point to scale against.
-const ENDLESS_REFERENCE = 600;
+// performance XP still has a reference point to scale against. In Endless the
+// "score" is seconds survived (see Game#update), so this is a run length, not
+// a point total: three minutes is a good run - it is past the fourth defender
+// and closing on the fifth - and pays the full performance cap.
+const ENDLESS_REFERENCE = 180;
 // XP is a progression reward, so it is only paid in progression modes: World
 // tour (career), Endless, and King of the Court ("kotc" - a disabled
 // placeholder today, with no gameplay of its own yet, so it is folded into
@@ -42,10 +45,11 @@ export function roundCounts(mode, cleared) {
       // personal best, no matter the score.
       return false;
     case "endless":
-      // TODO(endless-survival): replace with the elapsed-time survival rule
-      // once Endless ships its redesign. `cleared` is always false here (see
-      // above) - do not swap this for `cleared`.
-      return false;
+      // Every finished run is a result. Endless has no target to miss and no
+      // clock to beat: the run ends when the player is beaten, and how long
+      // they lasted is the whole score, so there is nothing to qualify. Do
+      // NOT "fix" this to `cleared` - see the note above.
+      return true;
     case "kotc":
       // TODO(kotc): King of the Court has no gameplay yet; give it its own
       // rule here when it ships.

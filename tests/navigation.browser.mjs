@@ -560,8 +560,8 @@ await check(
     );
     assert.equal(
       await page.locator('[data-home-mode="endless"]').isDisabled(),
-      true,
-      "endless mode should be disabled",
+      false,
+      "endless mode is playable",
     );
     await page.locator('[data-home-mode="practice"]').click();
     assert.match(await page.locator("#title-play").textContent(), /Practice/i);
@@ -1502,14 +1502,16 @@ await check(
     assert.match(await status.textContent(), /coming soon/i);
     assert.equal(await status.evaluate((el) => el.classList.contains("is-error")), false);
 
-    // Endless behaves the same way, and switching back to World tour
-    // restores the court tabs, the difficulty toggle, and the real score.
+    // Endless hides the same court/tier chrome, but it is playable now, so
+    // its empty board says the board is empty rather than that the mode is
+    // unbuilt - and it ranks on time survived, not points.
     const endlessButton = page.locator('#hl-mode-toggle .hl-mode-btn[data-mode="endless"]');
     await endlessButton.click();
     await page.waitForFunction(() => window.__leaderboardCalls.at(-1)?.mode === "endless");
     assert.equal(await page.locator("#hl-tabs").isHidden(), true);
     assert.equal(await heading.textContent(), "ENDLESS FLOW LEADERBOARD");
-    assert.match(await status.textContent(), /coming soon/i);
+    assert.match(await status.textContent(), /no runs recorded yet/i);
+    assert.equal(await page.locator("#hl-head-score").textContent(), "TIME");
 
     const careerButton = page.locator('#hl-mode-toggle .hl-mode-btn[data-mode="career"]');
     await careerButton.click();
@@ -1893,14 +1895,10 @@ await check(
     await page.locator("#home-view").waitFor({ state: "visible" });
     // The card that opens a round names the round it is about to open, so the
     // button is never just a generic "Play" the player has to interpret.
-    assert.equal(
-      await page.locator('[data-home-mode="endless"]').isDisabled(),
-      true,
-      "endless mode should be disabled",
-    );
     for (const [mode, primary] of [
       ["practice", /^Start the warm-up$/],
       ["career", /^Play the court$/],
+      ["endless", /^Start the run$/],
     ]) {
       await page.locator(`[data-home-mode="${mode}"]`).click();
       await page.locator("#title-play").click();

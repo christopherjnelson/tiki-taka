@@ -400,8 +400,8 @@ export class Renderer {
   // mirrors resize() exactly, rotation included, so a portrait canvas gets a
   // background baked already rotated — it is blitted back with no transform
   // at all, so the rotation has to already be in the pixels.
-  backgroundFor(v, t, w, h, portrait) {
-    const key = `${v.id}:${t}:${portrait ? "p" : "l"}`;
+  backgroundFor(v, t, w, h, portrait, footer = "TIKI TAKA WORLD TOUR") {
+    const key = `${v.id}:${t}:${portrait ? "p" : "l"}:${footer}`;
     const cached = this.backgrounds.get(key);
     if (cached && cached.w === w && cached.h === h) {
       // Refresh insertion order so the cap below behaves as a tiny LRU cache.
@@ -430,7 +430,7 @@ export class Renderer {
     const dw = portrait ? HEIGHT : WIDTH,
       dh = portrait ? WIDTH : HEIGHT;
     context.setTransform(w / dw, 0, 0, h / dh, 0, 0);
-    this.paintArena(context, v, THEMES[t] || THEMES.dark, dw, dh);
+    this.paintArena(context, v, THEMES[t] || THEMES.dark, dw, dh, footer);
     this.backgrounds.set(key, { canvas: el, w, h });
     return el;
   }
@@ -449,7 +449,7 @@ export class Renderer {
   // branch beyond "which axis is longer". The surface stays quiet - venue
   // identity is carried by colour, light and the border band (drawArchitecture
   // + drawPitchPattern below), not by pattern under the players' feet.
-  paintArena(c, v, p = THEMES.dark, W = WIDTH, H = HEIGHT) {
+  paintArena(c, v, p = THEMES.dark, W = WIDTH, H = HEIGHT, footer = "TIKI TAKA WORLD TOUR") {
     const look = VENUE_LOOK[v.id] || VENUE_LOOK.london,
       short = Math.min(W, H),
       horizontal = W >= H,
@@ -538,7 +538,7 @@ export class Renderer {
     c.font = `600 ${topSize}px ${FONT}`;
     signPlate(c, W / 2, margin / 2, c.measureText(topText).width + short * 0.09, margin * 0.66, v.accent);
     label(c, topText, W / 2, margin / 2, topSize, v.accent, "center", 600, 1.5);
-    const footText = "TIKI TAKA WORLD TOUR",
+    const footText = footer,
       footSize = Math.max(9, Math.round(short * 0.017));
     c.font = `500 ${footSize}px ${FONT}`;
     signPlate(c, W / 2, H - margin / 2, c.measureText(footText).width + short * 0.1, margin * 0.6, p.muted);
@@ -689,6 +689,13 @@ export class Renderer {
     this.lastTime = n;
     if (!paused) this.clock += dt;
     this.venue = getVenue(game.config);
+    // The hoarding at the foot of the court names the competition being
+    // played, not the venue: Endless borrows a World tour court but is not
+    // on the tour. It is part of the baked background, so it is part of that
+    // bitmap's cache key below.
+    this.footer = game.config?.endless
+      ? "TIKI TAKA · ENDLESS"
+      : "TIKI TAKA WORLD TOUR";
     const tn = this.themeName(theme);
     c.globalAlpha = 1;
     // The background bitmap is now baked at this canvas's own backing-store
@@ -705,6 +712,7 @@ export class Renderer {
         this.canvas.width,
         this.canvas.height,
         this.orientation === "portrait",
+        this.footer,
       ),
       0,
       0,
@@ -918,12 +926,16 @@ export class Renderer {
   // the gap as the zone breaking rather than one about to appear.
   drawZone(game) {
     const z = game.zone;
+    // Endless pays no points, so the zone cannot promise "+18" there. It
+    // still pays Energy and still feeds the streak, so it keeps its ring and
+    // its name - only the number goes.
+    const scored = !game.config?.endless;
     if (z) {
       if (this.ctx._tikiPortrait)
         return this.upright(z.x, z.y, () =>
-          this.drawActiveZone(z, game.zoneTimer),
+          this.drawActiveZone(z, game.zoneTimer, scored),
         );
-      return this.drawActiveZone(z, game.zoneTimer);
+      return this.drawActiveZone(z, game.zoneTimer, scored);
     }
     const next = game.nextZone;
     if (!next || !game.zoneBlindDuration) return;
@@ -936,7 +948,7 @@ export class Renderer {
       );
     return this.drawPendingZone(next, alpha);
   }
-  drawActiveZone(z, t) {
+  drawActiveZone(z, t, scored = true) {
     const c = this.ctx,
       p = this.reducedMotion ? 0 : Math.sin(this.clock * 2) * 2;
     c.strokeStyle = BONUS_GOLD;
@@ -955,10 +967,12 @@ export class Renderer {
       -Math.PI / 2 + Math.PI * 2 * Math.max(0, Math.min(1, t / ZONE_LIFETIME)),
     );
     c.stroke();
-    rounded(c, z.x - 46, z.y + z.r * 0.55 - 12, 92, 24, 12);
+    const text = scored ? `ZONE +${ZONE_POINTS}` : "ZONE";
+    const width = scored ? 92 : 62;
+    rounded(c, z.x - width / 2, z.y + z.r * 0.55 - 12, width, 24, 12);
     c.fillStyle = "rgba(8,18,31,.9)";
     c.fill();
-    label(c, `ZONE +${ZONE_POINTS}`, z.x, z.y + z.r * 0.55, 11, "#ffe66b");
+    label(c, text, z.x, z.y + z.r * 0.55, 11, "#ffe66b");
   }
   // Ghost ring that grows from faint to solid across the blind gap, at the
   // exact spot the next zone will activate — legible as "coming", not as a

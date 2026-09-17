@@ -403,7 +403,7 @@
                   <span class="hl-cell hl-cell-bonus hl-cell-split" title="Split the press" aria-label="Split the press">SPLIT THE PRESS</span>
                   <span class="hl-cell hl-cell-bonus hl-cell-zone" title="Zone passes" aria-label="Zone passes">ZONE PASS</span>
                   <span class="hl-cell hl-cell-passes">PASSES</span>
-                  <span class="hl-cell hl-cell-score">SCORE</span>
+                  <span id="hl-head-score" class="hl-cell hl-cell-score">SCORE</span>
                 </div>
                 <p id="home-leaderboard-status" class="hl-status" role="status" aria-live="polite"></p>
                 <ol id="home-leaderboard-list" class="hl-list">
@@ -485,7 +485,7 @@
                 ><span>Coming soon</span>
               </div>
             </button>
-            <button data-home-mode="endless" type="button" disabled aria-disabled="true">
+            <button data-home-mode="endless" type="button">
               <svg
                 class="mode-icon"
                 viewBox="0 0 48 48"
@@ -503,7 +503,7 @@
               </svg>
               <div class="mode-copy">
                 <strong>Endless flow</strong>
-                <span>Coming soon</span>
+                <span>Survive the rising press</span>
               </div>
             </button>
             <button data-home-mode="practice" type="button">
@@ -587,8 +587,12 @@
                   <span class="stat-label">TIME</span>
                   <strong id="time-value" class="clock-value">1:15</strong>
                 </div>
+                <!-- The multiplier pill is re-labelled in Endless, which
+                scores no points and so has no multiplier: it shows the
+                countdown to the next defender instead. Hence the id on a
+                label every other mode leaves alone. -->
                 <div class="stat">
-                  <span class="stat-label">MULTIPLIER</span>
+                  <span id="combo-label" class="stat-label">MULTIPLIER</span>
                   <strong id="combo-value">×1</strong>
                 </div>
                 <div class="stat lives-stat">
@@ -721,7 +725,9 @@
                   </div>
                   <div id="result-stats" class="result-stats" hidden>
                     <dl class="result-headline">
-                      <div><dt>Score</dt><dd id="result-score">0</dd></div>
+                      <!-- Endless is scored on how long the run lasted, so
+                      this pair is relabelled there (see showRoundResults). -->
+                      <div><dt id="result-score-label">Score</dt><dd id="result-score">0</dd></div>
                       <div><dt>XP earned</dt><dd id="result-xp">+0</dd></div>
                     </dl>
                     <dl class="result-breakdown">

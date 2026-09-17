@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOST_DRAIN_RATE, FOCUS_DRAIN_RATE, STAR_RATIOS, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS, zoneMultiplier, ZONE_MULTIPLIER_CEILING, ZONE_POINTS, ZONE_LIFETIME, ZONE_BLIND_GAP } from '../src/game.js';
+import { BOOST_DRAIN_RATE, FOCUS_DRAIN_RATE, STAR_RATIOS, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS, zoneMultiplier, ZONE_MULTIPLIER_CEILING, ZONE_POINTS, ZONE_LIFETIME, ZONE_BLIND_GAP, endlessStage, ENDLESS_PRESS, ENDLESS_DEFENDER_STEPS } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -943,10 +943,71 @@ test('empty or exhausted focus must be released before earned charge can activat
   assert.equal(game.focusNeedsRelease, true);
 });
 
-test('endless triangles extend the clock while standard triangles do not', () => {
-  const standard = openGame(), endless = openGame({ endless: true });
-  for (const target of [1, 2, 0]) { completePass(standard, target); completePass(endless, target); }
-  assert.ok(Math.abs(endless.time - standard.time - 5) < 1e-7);
+// An unpressed endless game: the ladder would otherwise walk two defenders
+// onto a court these clock tests are not about, and the first turnover would
+// stop the very clock being measured.
+function openEndless(extra = {}) {
+  const game = openGame({ endless: true, possessions: 1, ...extra });
+  game.defenderCount = () => 0;
+  game.defenders = [];
+  return game;
+}
+
+test('endless counts the clock up and scores it, while a career round counts down', () => {
+  const standard = openGame(), endless = openEndless({ time: 90 });
+  advance(standard, 3);
+  advance(endless, 3);
+  assert.ok(Math.abs(standard.time - 87) < 1e-6, 'a career clock runs out');
+  assert.ok(Math.abs(endless.time - 3) < 1e-6, 'an endless clock runs up from zero');
+  assert.equal(endless.score, 3, 'seconds survived ARE the endless score');
+});
+
+test('endless pays energy and colour for bonuses but never points', () => {
+  const endless = openEndless();
+  endless.zone = { ...endless.players[1], r: 92 };
+  completePass(endless, 1);
+  assert.equal(endless.zones, 1, 'the zone still registers');
+  assert.equal(endless.zoneStreak, 1, 'the streak still climbs');
+  assert.equal(endless.focus, FOCUS_REWARDS.zone, 'the zone still pays energy');
+  assert.equal(endless.score, 0, 'no elapsed time yet means no score, bonus or not');
+  const popup = endless.events.find(e => e.type === 'score');
+  assert.equal(popup.points, null, 'the popup carries no number to print');
+  assert.equal(popup.bestBonus, 'zone', 'the bonus is still named in the popup');
+  assert.ok(!/\+/.test(popup.text), 'and never reads "+0"');
+});
+
+test('endless never ends on the clock, only on a mistake', () => {
+  const game = openEndless({ time: 1 });
+  advance(game, 5);
+  assert.equal(game.status, 'playing', 'there is no clock to run out');
+  game.turnover('TEST');
+  assert.equal(game.status, 'finished', 'one possession: the first mistake ends the run');
+  assert.equal(game.score, 5, 'the score is the seconds that were survived');
+});
+
+test('the endless ladder adds defenders on the clock and never stops pressing', () => {
+  assert.equal(endlessStage(0).defenders, 2);
+  assert.equal(endlessStage(44).defenders, 2);
+  assert.equal(endlessStage(45).defenders, 3);
+  assert.equal(endlessStage(105).defenders, 4);
+  assert.equal(endlessStage(195).defenders, MAX_DEFENDERS);
+  assert.equal(endlessStage(6000).defenders, MAX_DEFENDERS, 'the ladder tops out at five bodies');
+  // No cap: a run that survives the fifth defender must still get harder, or
+  // it would never end at all. See the note above ENDLESS_PRESS.
+  assert.ok(endlessStage(600).speed > endlessStage(195).speed);
+  assert.ok(endlessStage(3600).speed > endlessStage(600).speed);
+  assert.ok(endlessStage(0).speed < COURTS[0].speed, 'endless opens softer than the first court');
+});
+
+test('an endless round grows its defender set mid-run', () => {
+  const game = new Game({ ...COURTS[0], endless: true, defenders: 2, possessions: 1 });
+  assert.equal(game.defenders.length, 2);
+  game.elapsed = 46;
+  game.update(STEP);
+  assert.equal(game.defenders.length, 3, 'the third defender walks on at 0:45');
+  const called = game.events.find(e => e.type === 'defender');
+  assert.equal(called.defenders, 3, 'the arrival is announced so the UI can call it');
+  assert.deepEqual([...new Set(game.defenders.map(d => d.id))].length, 3, 'ids stay unique');
 });
 
 test('clock expiry ends the run and future updates cannot change the result', () => {

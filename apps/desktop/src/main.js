@@ -13,6 +13,9 @@ import {
   PLAYER_RADIUS,
   ONE_TOUCH,
   zoneMultiplier,
+  endlessStage,
+  ENDLESS_PRESS,
+  ENDLESS_DEFENDER_STEPS,
 } from "../../../packages/engine/src/game.js";
 import { Renderer } from "../../../packages/presentation/src/renderer.js";
 import {
@@ -788,14 +791,22 @@ function syncTitle() {
     ? " Resume"
     : selectedHomeMode === "practice"
       ? " Practice"
-      : " Play";
+      : selectedHomeMode === "endless"
+        ? " Run"
+        : " Play";
+  // Endless has no court and no clock running out: an in-progress run is
+  // described by how long it has already lasted.
   $("title-play-copy").textContent = isResumingSelected
-    ? (selectedHomeMode === "practice"
-        ? `${court.name} · Free Practice in progress`
-        : `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`)
+    ? selectedHomeMode === "practice"
+      ? `${court.name} · Free Practice in progress`
+      : selectedHomeMode === "endless"
+        ? `${game.config.name} · ${formatClock(game.time)} survived`
+        : `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`
     : selectedHomeMode === "practice"
       ? `${court.name} · Free Practice`
-      : `${court.name} · ${court.place}`;
+      : selectedHomeMode === "endless"
+        ? "The infinite rondo · Survive the rising press"
+        : `${court.name} · ${court.place}`;
 }
 function selectCourt(i) {
   if (i < 0 || i >= COURTS.length || i > progress.unlocked) return;
@@ -876,7 +887,15 @@ function syncHome() {
   );
   $("home-cleared").textContent =
     `${COURTS.filter((_court, i) => bestStarsForCourt(i) > 0).length} / ${COURTS.length}`;
-  const best = Math.max(0, ...Object.values(progress.records || {}));
+  // World tour keys only ("court-<i>-<tier>"). An Endless record is a number
+  // of seconds, and taking Math.max over both would print a run length in a
+  // box labelled as a score.
+  const best = Math.max(
+    0,
+    ...Object.entries(progress.records || {})
+      .filter(([key]) => key.startsWith("court-"))
+      .map(([, value]) => Number(value) || 0),
+  );
   $("home-best").textContent = best ? String(best) : "—";
   $("home-games").textContent = String(accountStats.games);
   $("home-total-passes").textContent = String(accountStats.totalPasses);
@@ -933,6 +952,10 @@ function syncHomeLeaderboardHeading() {
   if (heading) heading.textContent = `${label.toUpperCase()} LEADERBOARD`;
   const section = $("home-leaderboard");
   if (section) section.setAttribute("aria-label", `${label} leaderboard`);
+  // The ranked column is seconds survived in Endless, points everywhere else.
+  const scoreHead = $("hl-head-score");
+  if (scoreHead)
+    scoreHead.textContent = isSurvivalMode(homeLeaderboardMode) ? "TIME" : "SCORE";
   const icon = $("hl-mode-icon");
   const source = document.querySelector(
     `[data-home-mode="${homeLeaderboardMode}"] .mode-icon`,
@@ -1135,10 +1158,12 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
 
   function emptyStateMessage() {
     // World tour's empty state names the court, since that's what's being
-    // filtered. Kotc and endless aren't playable yet at all (switchMode()
-    // refuses both), so their empty state says so plainly rather than
-    // implying a court came up empty.
+    // filtered. Endless has no court filter - one global ladder - so it says
+    // the board is empty. King of the Court still has no gameplay at all
+    // (switchMode() refuses it), so it says so plainly rather than implying a
+    // court came up empty.
     if (modeAtRequest === "career") return "No scores recorded yet for this court.";
+    if (isSurvivalMode(modeAtRequest)) return "No runs recorded yet. Be the first.";
     const modeLabel = LEADERBOARD_MODES.find((m) => m.id === modeAtRequest)?.label || "This mode";
     return `${modeLabel} is coming soon — no scores yet.`;
   }
@@ -1178,7 +1203,10 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
 
         const score = document.createElement("span");
         score.className = "hl-cell-score";
-        score.textContent = Number(entry.score).toLocaleString();
+        // Endless ranks on seconds survived, so its "score" is a duration.
+        score.textContent = isSurvivalMode(modeAtRequest)
+          ? formatClock(entry.score)
+          : Number(entry.score).toLocaleString();
 
         li.append(rank, player, oles, triangles, splits, zones, passes, score);
         return li;
@@ -1194,10 +1222,16 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
     let userBestSplits = 0;
     let userBestZones = 0;
 
-    // progress.records only ever holds World tour's court-and-tier keys;
-    // kotc/endless have no such record to look up yet.
-    if (modeAtRequest === "career" && progress?.records) {
-      const directScore = progress.records[`court-${courtIdx}-${tier}`];
+    // World tour records are keyed by court and tier; Endless keeps one
+    // record under its own mode name (awardMatch writes `records.endless`,
+    // in seconds). King of the Court has nothing to look up yet.
+    if (progress?.records) {
+      const directScore =
+        modeAtRequest === "career"
+          ? progress.records[`court-${courtIdx}-${tier}`]
+          : isSurvivalMode(modeAtRequest)
+            ? progress.records.endless
+            : undefined;
       if (typeof directScore === "number" && directScore > 0) {
         userBestScore = directScore;
       }
@@ -1228,7 +1262,13 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
 
     if (userPlayerEl) userPlayerEl.textContent = profile?.username || "GUEST PLAYER";
     if (userPassesEl) userPassesEl.textContent = userBestPasses != null ? Number(userBestPasses).toLocaleString() : "—";
-    if (userScoreEl) userScoreEl.textContent = userBestScore > 0 ? Number(userBestScore).toLocaleString() : "—";
+    if (userScoreEl)
+      userScoreEl.textContent =
+        userBestScore > 0
+          ? isSurvivalMode(modeAtRequest)
+            ? formatClock(userBestScore)
+            : Number(userBestScore).toLocaleString()
+          : "—";
     for (const [id, value] of [
       ["hl-user-triangles", userBestTriangles],
       ["hl-user-oles", userBestOles],
@@ -1887,26 +1927,32 @@ function stepAttract(dt) {
 }
 function config() {
   if (mode === "endless")
-    return applyDifficulty(
-      {
-        ...COURTS[1],
-        name: "The infinite rondo",
-        place: "STAY IN THE FLOW",
-        // No target and no reference: Endless is not scored against a court's
-        // ceiling, so progress.js falls back to ENDLESS_REFERENCE for the
-        // performance XP rather than grading a 60-second run against a
-        // 90-second court's clean round.
-        target: 0,
-        reference: 0,
-        time: 60,
-        speed: 85,
-        endless: true,
-        seed: Date.now() >>> 0,
-        description:
-          "Three lives. Endless possibility. Every triangle adds 5 seconds. The press gets faster.",
-      },
-      progress.difficulty,
-    );
+    // Deliberately NOT run through applyDifficulty(): Endless has one
+    // difficulty, and it is the clock. A tier picked on the home screen would
+    // hand it extra possessions (the run ends on the first mistake by
+    // design) and rescale a target it does not have. `difficulty` is stamped
+    // "standard" by hand only because every saved round carries a tier
+    // column; nothing in the round reads it.
+    return {
+      ...COURTS[1],
+      name: "The infinite rondo",
+      place: "STAY IN THE FLOW",
+      // No target and no reference: Endless is not scored on points at all.
+      // The score is the seconds survived (see Game#update), and progress.js
+      // grades that against ENDLESS_REFERENCE for performance XP.
+      target: 0,
+      reference: 0,
+      // The clock counts UP from here; nothing runs out.
+      time: 0,
+      speed: ENDLESS_PRESS.base,
+      defenders: ENDLESS_DEFENDER_STEPS[0].defenders,
+      possessions: 1,
+      difficulty: "standard",
+      endless: true,
+      seed: Date.now() >>> 0,
+      description:
+        "One possession, and a press that never stops growing. A third defender at 0:45, a fourth at 1:45, a fifth at 3:15 — and they keep getting quicker after that. Last as long as you can.",
+    };
   if (mode === "practice") {
     const court = COURTS[courtIndex] || COURTS[0];
     return applyDifficulty(
@@ -1935,6 +1981,25 @@ function config() {
 // about the possession count must call this rather than repeat the literal
 // 3, or a difficulty tier's Relaxed/Ruthless possession count (4/2) silently
 // disagrees with what the engine is actually enforcing.
+// m:ss for every place a number of seconds is shown to a player: the HUD
+// clock, an Endless run's result, and an Endless leaderboard row (where the
+// "score" column IS seconds - see Game#update). One formatter so a 167-second
+// run cannot read as 2:47 in one place and 2:46 in another.
+function formatClock(seconds) {
+  const whole = Math.max(0, Math.floor(Number(seconds) || 0));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+// Endless is ranked on seconds survived, not points, so every readout of a
+// "score" in that mode is a duration.
+const isSurvivalMode = (m) => m === "endless";
+// The clock at which the rung a run is currently on began, so the goal bar
+// can fill across that rung rather than across the whole run.
+function stageStart(stage) {
+  const reached = ENDLESS_DEFENDER_STEPS.filter(
+    (step) => step.defenders <= stage.defenders,
+  );
+  return reached.length ? reached[reached.length - 1].at : 0;
+}
 function possessionLimit(config = game?.config) {
   return Number.isFinite(config?.possessions) ? config.possessions : 3;
 }
@@ -2053,6 +2118,17 @@ function tierPracticeDescriptionHtml(tier) {
 // off-screen tactic-select pattern) and the overlay toggle/target/
 // description, which is what a player actually sees before a round.
 function syncDifficultyChrome() {
+  // Endless has one difficulty and the clock turns it (see config()). Showing
+  // a tier toggle that changes nothing about the round is the control-that-
+  // does-nothing trap; hide it outright instead.
+  if (mode === "endless") {
+    $("overlay-difficulty").hidden = true;
+    $("difficulty-select").disabled = true;
+    $("difficulty-description").textContent =
+      "Endless has one difficulty: the press rises with the clock.";
+    $("difficulty-target").textContent = "";
+    return;
+  }
   const activeDifficulty = game.config.difficulty;
   const difficultyMeta =
     DIFFICULTIES.find((tier) => tier.id === activeDifficulty) || DIFFICULTIES[1];
@@ -2232,7 +2308,11 @@ function showRoundResults({
     actions = $("overlay-actions");
   overlay.dataset.result = cleared ? "victory" : "defeat";
   overlay.dataset.actions = "waiting";
-  $("result-score").textContent = String(game.score);
+  const survival = isSurvivalMode(mode);
+  $("result-score-label").textContent = survival ? "You lasted" : "Score";
+  $("result-score").textContent = survival
+    ? formatClock(game.score)
+    : String(game.score);
   $("result-xp").textContent = `+${xp}`;
   const breakdown = {
     triangles: game.triangles || 0,
@@ -2248,8 +2328,12 @@ function showRoundResults({
     $(`result-${key}`).textContent = String(value);
     $(`result-${key}-cell`).classList.toggle("is-zero", value === 0);
   }
-  const flowPeak = zoneMultiplier(game.bestZoneStreak || 0);
-  $("result-combo").textContent = `x${flowPeak}`;
+  // Endless pays no points, so its "peak multiplier" would always be a
+  // number that multiplied nothing. Its zone streak is still a real measure
+  // of how well the run flowed, so show that instead.
+  $("result-combo").textContent = survival
+    ? String(game.bestZoneStreak || 0)
+    : `x${zoneMultiplier(game.bestZoneStreak || 0)}`;
   $("result-burst").hidden = false;
   $("result-stats").hidden = false;
   $("result-cheer").hidden = false;
@@ -2342,10 +2426,15 @@ function prepare() {
     venue.secondary,
   );
   if ($("venue-vibe")) $("venue-vibe").textContent = venue.vibe;
+  // Endless borrows London's art and soundtrack (see getVenue) but is not
+  // played AT London - it is one fixed rondo of its own, so the band names
+  // the mode rather than a court on the circuit.
+  const bandName = mode === "endless" ? game.config.name : venue.name;
+  const bandSub = mode === "endless" ? game.config.place : venue.vibe;
   if ($("arena-venue-label"))
-    $("arena-venue-label").textContent = venue.name.toUpperCase();
+    $("arena-venue-label").textContent = bandName.toUpperCase();
   if ($("arena-venue-sub"))
-    $("arena-venue-sub").textContent = venue.vibe.toUpperCase();
+    $("arena-venue-sub").textContent = bandSub.toUpperCase();
   phase = "ready";
   finished = false;
   roundCleared = false;
@@ -2368,12 +2457,22 @@ function prepare() {
   // "FLOW SCORE" label with no target suffix, same as before this target
   // pairing existed.
   const hasScoreTarget = Boolean(game.config.target) && !game.config.practice;
-  $("score-label").textContent = hasScoreTarget ? "SCORE" : "FLOW SCORE";
+  // Endless repurposes two pills: the big readout counts defenders (its score
+  // is the clock, already on the band) and the multiplier pill counts down to
+  // the next one. syncHud() fills both; these are their names.
+  $("score-label").textContent = hasScoreTarget
+    ? "SCORE"
+    : mode === "endless"
+      ? "DEFENDERS"
+      : "FLOW SCORE";
+  $("combo-label").textContent = mode === "endless" ? "NEXT DEFENDER" : "MULTIPLIER";
   $("score-target").textContent = hasScoreTarget ? `/ ${game.config.target}` : "";
   $("score-target").hidden = !hasScoreTarget;
+  // Endless's objective line is rewritten every frame by syncHud() as the
+  // ladder advances; this is only what it says before kickoff.
   $("goal-label").textContent =
     mode === "endless"
-      ? "TRIANGLE = +5 SECONDS"
+      ? "SURVIVE. THE PRESS GROWS WITH THE CLOCK."
       : `${game.config.target} POINTS TO CLEAR`;
   $("tactic-select").disabled = false;
   $("tactic-select").value = progress.tactic;
@@ -2393,10 +2492,9 @@ function prepare() {
   $("touch-boost").setAttribute("aria-pressed", "false");
   // Every branch below reads the possession count off game.config
   // (possessionLimit(), the same fallback the engine itself uses) rather
-  // than a literal 3 — Relaxed/Ruthless move it to 4/2, and endless mode is
-  // tier-scaled here too (config() runs it through applyDifficulty just
-  // like career), so a hardcoded 3 would silently disagree with the engine
-  // on any tier but Standard.
+  // than a literal 3 — Relaxed/Ruthless move it to 4/2 and Endless fixes it
+  // at 1, so a hardcoded 3 would silently disagree with the engine about
+  // when the round actually ends.
   const possessions = possessionLimit(game.config);
   const possessionsOrdinal = possessionOrdinal(possessions).toUpperCase();
   const possessionLabel = possessions === 1 ? "POSSESSION" : "POSSESSIONS";
@@ -2404,7 +2502,7 @@ function prepare() {
     mode === "practice"
       ? `NO TIMER · UNLIMITED RECOVERIES · FIND YOUR RHYTHM`
       : mode === "endless"
-        ? `60 SECONDS · ${possessions} POSSESSIONS · TRIANGLES ADD TIME`
+        ? `NO CLOCK TO BEAT · ONE POSSESSION · THE PRESS NEVER STOPS GROWING`
         : `${game.config.time} SECONDS · ${possessions} ${possessionLabel} · ${possessionsOrdinal} LOSS ENDS THE ROUND`;
   setOverlay(
     mode === "endless"
@@ -2414,7 +2512,7 @@ function prepare() {
         : "FOUR PLAYERS. ONE BALL.",
     mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
-      ? "Connect triangles to buy time. Survive the rising press."
+      ? "Two defenders now, a third at 0:45, a fourth at 1:45, a fifth at 3:15 — and they keep getting quicker after that. One mistake ends the run. Last as long as you can."
       : mode === "practice"
         ? "No timer. Unlimited recoveries. Experiment freely."
         : `Keep possession for ${game.config.time} seconds. Earn ${game.config.target} points. You have ${possessions} ${possessions === 1 ? "possession" : "possessions"}; the ${possessionOrdinal(possessions)} loss ends the round.`,
@@ -2436,7 +2534,7 @@ function prepare() {
   syncHud();
 }
 function switchMode(next, index = courtIndex) {
-  if (next === "kotc" || next === "endless") return;
+  if (next === "kotc") return;
   closePauseMenu({ restoreFocus: false });
   selectedCourtIndex = index;
   selectedHomeMode = next;
@@ -2809,6 +2907,7 @@ const hudCache = {
   focusCap: -1,
   focusEmpty: null,
   goalWidth: "",
+  goalText: "",
   bestText: "",
   targetText: "",
   isPlaying: null,
@@ -3354,30 +3453,49 @@ function syncOneTouchReadout() {
 function syncHud() {
   syncOneTouchReadout();
 
-  if (game.score !== hudCache.score) {
-    $("score-value").textContent = String(game.score).padStart(3, "0");
-    hudCache.score = game.score;
+  const isEndless = Boolean(game.config.endless);
+  const stage = isEndless ? endlessStage(game.elapsed) : null;
+  // In Endless the score IS the clock, already shown in the TIME pill, so the
+  // big readout carries the other half of the story instead: how many bodies
+  // are on the court right now. It stays digits-only, as the markup requires.
+  const scoreReadout = isEndless ? game.defenders.length : game.score;
+  if (scoreReadout !== hudCache.score) {
+    $("score-value").textContent = isEndless
+      ? String(scoreReadout)
+      : String(scoreReadout).padStart(3, "0");
+    hudCache.score = scoreReadout;
   }
 
   const isPractice = Boolean(game.config.practice);
-  const timeCeil = Math.ceil(game.time);
+  // Counting up, a ceil() would show 0:01 the instant the round started and
+  // read a second ahead of the survival score for the whole run.
+  const timeWhole = isEndless ? Math.floor(game.time + 1e-9) : Math.ceil(game.time);
   const timeString = isPractice
     ? "∞"
-    : `${Math.floor(timeCeil / 60)}:${String(Math.max(0, timeCeil % 60)).padStart(2, "0")}`;
+    : `${Math.floor(timeWhole / 60)}:${String(Math.max(0, timeWhole % 60)).padStart(2, "0")}`;
   if (timeString !== hudCache.timeString) {
     $("time-value").textContent = timeString;
     hudCache.timeString = timeString;
   }
-  const isUrgent = !isPractice && game.time < 15;
+  // Nothing is running out in Endless, so the clock never goes red - it
+  // would otherwise be urgent for the first fifteen seconds of every run.
+  const isUrgent = !isPractice && !isEndless && game.time < 15;
   if (isUrgent !== hudCache.timeUrgent) {
     $("time-value").classList.toggle("urgent", isUrgent);
     hudCache.timeUrgent = isUrgent;
   }
 
-  const comboTier = zoneMultiplier(game.zoneStreak);
-  if (comboTier !== hudCache.combo) {
-    $("combo-value").textContent = `×${comboTier}`;
-    hudCache.combo = comboTier;
+  // Endless pays no points, so it has no multiplier to show. The pill counts
+  // down to the next defender instead - the one number a player in a run
+  // actually wants: how long this much space lasts.
+  const comboText = isEndless
+    ? stage.next
+      ? formatClock(Math.ceil(stage.next.at - game.elapsed))
+      : "—"
+    : `×${zoneMultiplier(game.zoneStreak)}`;
+  if (comboText !== hudCache.combo) {
+    $("combo-value").textContent = comboText;
+    hudCache.combo = comboText;
   }
 
   const roundPossessions = possessionLimit(game.config);
@@ -3467,9 +3585,27 @@ function syncHud() {
     hudCache.musicFocusActive = musicFocus;
   }
 
-  const goalPercent = game.config.target
-    ? Math.min(100, (game.score / game.config.target) * 100)
-    : Math.min(100, (game.time / 60) * 100);
+  if (isEndless) {
+    // The objective line is the ladder: what is on the court now, and what
+    // is coming. At the top of the ladder it says so, because "next
+    // defender: never" would read as the press having stopped - it has not.
+    const goalText = stage.next
+      ? `${game.defenders.length} DEFENDERS · ${stage.next.defenders} AT ${formatClock(stage.next.at)}`
+      : `${game.defenders.length} DEFENDERS · THE PRESS KEEPS QUICKENING`;
+    if (goalText !== hudCache.goalText) {
+      $("goal-label").textContent = goalText;
+      hudCache.goalText = goalText;
+    }
+  }
+  const goalPercent = isEndless
+    ? // Progress toward the next rung, so the bar reads as "how much longer
+      // does this much space last". Full once there is no rung left.
+      stage.next
+      ? Math.min(100, ((game.elapsed - stageStart(stage)) / (stage.next.at - stageStart(stage))) * 100)
+      : 100
+    : game.config.target
+      ? Math.min(100, (game.score / game.config.target) * 100)
+      : Math.min(100, (game.time / 60) * 100);
   const goalWidth = `${Math.round(goalPercent * 10) / 10}%`;
   if (goalWidth !== hudCache.goalWidth) {
     $("goal-fill").style.width = goalWidth;
@@ -3477,7 +3613,12 @@ function syncHud() {
   }
 
   const record = progress.records[recordKey()];
-  const bestText = record ? String(record) : "—";
+  // An Endless record is a run length, not a point total.
+  const bestText = record
+    ? isEndless
+      ? formatClock(record)
+      : String(record)
+    : "—";
   if (bestText !== hudCache.bestText) {
     $("best-label").textContent = bestText;
     hudCache.bestText = bestText;
@@ -3525,7 +3666,11 @@ function finish() {
   const completedRound = {
     id: globalThis.crypto?.randomUUID?.() || `round-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     mode,
-    court: courtIndex,
+    // Endless is one fixed rondo, not a venue on the circuit: its rows carry
+    // no court, so the board is a single global ladder rather than six
+    // identical ones. The column is nullable for exactly this (see
+    // round_scores_court_range_check).
+    court: isSurvivalMode(mode) ? null : courtIndex,
     score: game.score,
     passes: game.passes,
     bestOneTouch: game.bestOneTouch,
@@ -3565,8 +3710,16 @@ function finish() {
   // can't drift the way a re-typed literal 3 already had.
   const outOfPossessions =
     game.turnovers >= possessionLimit(game.config) && !game.config.practice;
+  const survivalRun = isSurvivalMode(mode);
+  const endlessBest = progress.records.endless || 0;
   const extra =
-    mode === "career" && result.cleared
+    survivalRun
+      ? result.newBest
+        ? `A new personal best. ${game.defenders.length} defenders were on the court when it ended.`
+        : endlessBest > game.score
+          ? `Your best run is ${formatClock(endlessBest)}. ${game.defenders.length} defenders were on the court when this one ended.`
+          : `${game.defenders.length} defenders were on the court when it ended.`
+      : mode === "career" && result.cleared
       ? courtIndex === COURTS.length - 1
         ? "Circuit complete. Chase three stars on every court."
         : `${COURTS[courtIndex + 1].name} is now unlocked.`
@@ -3582,11 +3735,13 @@ function finish() {
   // from here — this overlay never pretends to offer it.
   showRoundResults({
     cleared: result.cleared,
-    kicker: result.cleared
-      ? `VICTORY · COURT CLEARED${result.newBest ? " · NEW BEST" : ""}`
-      : outOfPossessions
-        ? "DEFEAT · POSSESSIONS LOST"
-        : "DEFEAT · TARGET MISSED",
+    kicker: survivalRun
+      ? `RUN OVER · ${formatClock(game.score)}${result.newBest ? " · NEW BEST" : ""}`
+      : result.cleared
+        ? `VICTORY · COURT CLEARED${result.newBest ? " · NEW BEST" : ""}`
+        : outOfPossessions
+          ? "DEFEAT · POSSESSIONS LOST"
+          : "DEFEAT · TARGET MISSED",
     title:
       mode === "endless"
         ? "What a run."
@@ -3597,14 +3752,19 @@ function finish() {
     primary:
       mode === "career" && result.cleared && courtIndex < COURTS.length - 1
         ? "Play the next court"
-        : !result.cleared
-          ? "Retry"
-          : mode === "endless"
-            ? "Start a new run"
+        : // Endless is checked before the generic "Retry": every run ends in a
+          // mistake, so it is never "cleared" and would always have read
+          // Retry - a word that frames a survival run as a failed attempt.
+          survivalRun
+          ? "Start a new run"
+          : !result.cleared
+            ? "Retry"
             : mode === "practice"
               ? "Practise this court again"
               : "Play this court again",
-    secondary: "Change difficulty",
+    // The secondary button returns to the pre-round card, which is where the
+    // difficulty picker lives - and Endless has no picker to return to.
+    secondary: survivalRun ? "Back to kickoff" : "Change difficulty",
     tertiary: "Home",
     // Only career records stars (awardMatch writes them under
     // progress.courts). Practice cannot be failed, so every practice round
@@ -3616,7 +3776,9 @@ function finish() {
   });
   sound.play(result.cleared ? "victory" : "defeat");
   announce(
-    `Round complete. ${game.score} points. ${result.cleared ? "Court cleared." : ""}`,
+    survivalRun
+      ? `Run over. You lasted ${formatClock(game.score)}.`
+      : `Round complete. ${game.score} points. ${result.cleared ? "Court cleared." : ""}`,
   );
   if (pendingScoreRounds.length) showScoreSaveDialog();
 }

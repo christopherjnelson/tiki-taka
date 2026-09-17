@@ -370,6 +370,48 @@ export const DIFFICULTIES = [
   },
 ];
 export const MAX_DEFENDERS = 5;
+// Endless is one fixed difficulty that rises with the clock instead of a tier
+// picked before kickoff. Two dials move, and only these two: how many
+// defenders are on the court, and how fast they close.
+//
+// The defender ladder is the landmark - the court visibly gains a body at
+// each rung, and the fifth is the one players will talk about. It stops at
+// MAX_DEFENDERS because that is as crowded as the court can be without the
+// avoidance in update() turning the press into a scrum.
+//
+// The speed ramp deliberately has NO ceiling. A cap would mean the game
+// stops getting harder at 3:15, and a player good enough to survive the
+// fifth defender at that speed could then hold the ball indefinitely - the
+// run would end when they got bored, not when they were beaten. Rising
+// forever keeps "last as long as you can" honest: every run ends eventually,
+// and how long it took to end is the whole score. The rate is gentle enough
+// (about +17 speed per minute) that the difference between two good runs is
+// still skill rather than the ramp.
+export const ENDLESS_DEFENDER_STEPS = [
+  { at: 0, defenders: 2 },
+  { at: 45, defenders: 3 },
+  { at: 105, defenders: 4 },
+  { at: 195, defenders: MAX_DEFENDERS },
+];
+export const ENDLESS_PRESS = { base: 75, perSecond: 0.28 };
+// Pure: the press the clock has earned at `elapsed` seconds. Exported so the
+// UI can telegraph the next rung without re-deriving the ladder.
+export function endlessStage(elapsed) {
+  const seconds = Math.max(0, Number(elapsed) || 0);
+  let step = ENDLESS_DEFENDER_STEPS[0];
+  let next = null;
+  for (const candidate of ENDLESS_DEFENDER_STEPS) {
+    if (seconds >= candidate.at) step = candidate;
+    else {
+      next = next || candidate;
+    }
+  }
+  return {
+    defenders: step.defenders,
+    speed: ENDLESS_PRESS.base + seconds * ENDLESS_PRESS.perSecond,
+    next,
+  };
+}
 // Pure: returns a new config with the tier's multipliers applied, never
 // mutating `config`.
 export function applyDifficulty(config, tier) {
@@ -411,7 +453,10 @@ export class Game {
     this.ball = null;
     this.carrier = 0;
     this.score = 0;
-    this.time = config.time;
+    // Endless counts UP: there is no clock to run out, and the seconds
+    // survived are the score. Everything that reads game.time - the HUD
+    // readout, the results screen - therefore needs no mode branch.
+    this.time = config.endless ? 0 : config.time;
     this.elapsed = 0;
     this.passes = 0;
     this.turnovers = 0;
@@ -463,11 +508,9 @@ export class Game {
       id: i,
       phase: this.rng() * 6.28,
     }));
-    this.defenders = Array.from({ length: this.config.defenders }, (_, i) => ({
-      x: 570 + (i % 2) * 85,
-      y: 240 + Math.floor(i / 2) * 120,
-      id: i,
-    }));
+    this.defenders = Array.from({ length: this.defenderCount() }, (_, i) =>
+      this.spawnDefender(i),
+    );
     this.carrier = 0;
     this.ball = null;
     this.hold = 0;
@@ -480,6 +523,19 @@ export class Game {
     this.oneTouchDistance = 0;
     this.oneTouchEligible = false;
     this.queuedPass = null;
+  }
+  // How many defenders this round should have right now. Endless reads the
+  // clock; every other mode is fixed at kickoff.
+  defenderCount() {
+    if (this.config.endless) return endlessStage(this.elapsed).defenders;
+    return this.config.defenders;
+  }
+  // Defenders start on the right-hand side of the court in two columns. A
+  // defender added mid-round (Endless) uses the same formation slot it would
+  // have had at kickoff, so the press never grows out of thin air next to
+  // the carrier.
+  spawnDefender(i) {
+    return { x: 570 + (i % 2) * 85, y: 240 + Math.floor(i / 2) * 120, id: i };
   }
   emit(type, text, x, y, extra) {
     this.events.push({ type, text, x, y, ...extra });
@@ -669,7 +725,6 @@ export class Game {
       this.triangles++;
       bonuses.push("triangle");
       focusReward += FOCUS_REWARDS.triangle;
-      if (this.config.endless) this.time += 5;
       const ids = Array.from(new Set(this.history.slice(-4)));
       triangleCoords = ids.map((id) => ({
         id,
@@ -705,17 +760,35 @@ export class Game {
         focusReward += ONE_TOUCH.milestoneFocus;
       }
     }
+    // Endless is scored on survival time alone (see update()), so bonuses
+    // there pay Energy and colour and nothing else. Zeroing the points here
+    // rather than skipping the work above keeps one scoring path: the
+    // multiplier, the streaks and the popup stack all still run, so a zone
+    // hit still reads as a zone hit.
+    if (this.config.endless) points = 0;
     this.score += points;
     // Several bonuses can land on one pass; the label shows the best of them
     // while `bonuses` carries the full list for the popup stack.
     const best = Object.keys(BONUS_LABELS).find((key) => bonuses.includes(key));
-    this.emit(
-      "score",
-      `${best ? BONUS_LABELS[best] : "PASS"} +${points}`,
-      p.x,
-      p.y - 25,
-      { bonuses, points, bestBonus: best || null, triangle: triangleCoords },
-    );
+    // In Endless a popup carries the bonus's name and colour and no number -
+    // `points: null` is what tells the renderer to print the text rather than
+    // a total, so the mode does not spray "+0" over every pass. A plain pass
+    // there has nothing to say at all and stays silent.
+    if (!this.config.endless || best)
+      this.emit(
+        "score",
+        this.config.endless
+          ? BONUS_LABELS[best]
+          : `${best ? BONUS_LABELS[best] : "PASS"} +${points}`,
+        p.x,
+        p.y - 25,
+        {
+          bonuses,
+          points: this.config.endless ? null : points,
+          bestBonus: best || null,
+          triangle: triangleCoords,
+        },
+      );
     if (!ball.focusUsed && focusReward > 0) {
       const gained = Math.min(focusReward, this.tactic.focus - this.focus);
       if (gained > 0) {
@@ -837,17 +910,26 @@ export class Game {
     }
     if (this.ball && this.focusActive) this.ball.focusUsed = true;
     const delta = dt - focusedTime * 0.68;
-    if (!this.config.practice) {
+    if (this.config.endless) {
+      this.time += delta;
+    } else if (!this.config.practice) {
       this.time -= delta;
     }
     this.elapsed += delta;
+    // The score IS the clock in Endless. Whole seconds only: a leaderboard
+    // row, a personal best and the Discord record post all carry an integer,
+    // and a run is not meaningfully better for a stray hundredth.
+    // The epsilon is not cosmetic: `elapsed` is a sum of 1/60 frames, so a
+    // whole second arrives as 2.9999999999 and a bare floor() would hold the
+    // score a second behind the clock the player is reading.
+    if (this.config.endless) this.score = Math.floor(this.elapsed + 1e-9);
     this.motionTime += delta;
     if (this.zone) {
       this.zoneTimer -= delta;
     } else if (this.zoneBlindTimer > 0) {
       this.zoneBlindTimer -= delta;
     }
-    if (!this.config.practice && this.time <= 0) {
+    if (!this.config.practice && !this.config.endless && this.time <= 0) {
       this.finish();
       return;
     }
@@ -939,9 +1021,24 @@ export class Game {
         );
       }
     }
+    // A rung of the Endless ladder can land mid-possession; the new
+    // defender walks in from its formation slot rather than appearing on top
+    // of anyone, and the event lets the UI call it out.
+    //
+    // Endless only. Every other mode fixes its defenders at kickoff, and
+    // topping the set up from config on every frame would override whatever
+    // is actually on the court - including a round whose defenders were
+    // removed deliberately.
+    const wanted = this.config.endless ? this.defenderCount() : this.defenders.length;
+    while (this.defenders.length < wanted) {
+      const added = this.spawnDefender(this.defenders.length);
+      this.defenders.push(added);
+      this.emit("defender", `${this.defenders.length} DEFENDERS`, added.x, added.y, {
+        defenders: this.defenders.length,
+      });
+    }
     const press =
-      this.config.speed +
-      (this.config.endless ? Math.floor(this.elapsed / 20) * 7 : 0) +
+      (this.config.endless ? endlessStage(this.elapsed).speed : this.config.speed) +
       Math.min(65, this.hold * 9);
     const closest = [...this.defenders].sort(
       (a, b) => distance(a, p) - distance(b, p),
