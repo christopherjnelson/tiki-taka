@@ -7,6 +7,22 @@ this file is not touched by ordinary pull requests. Parsed at build time by
 in Settings by `apps/desktop/src/main.js` - never fetched at runtime, so it
 works offline behind the service worker like everything else.
 
+## 0.4.8 - 2026-09-17
+
+### Account buttons say when they are working
+
+Signing in, creating an account, signing out, connecting Discord and saving a
+leaderboard name now disable their form and swap the button to a pending
+label with a small spinner while the request is in flight. On a slow
+connection the old behaviour was a live form and a button that looked
+unclicked; now the wait is visible and the form comes back, label and all,
+whether the call succeeds or fails.
+
+### New Discord invite
+
+The Discord links on the home page and in the app point at the current
+server invite.
+
 ## 0.4.7 - 2026-09-16
 
 ### Endless is playable

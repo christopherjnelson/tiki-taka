@@ -4453,6 +4453,44 @@ $("close-account").addEventListener("click", () => $("account-dialog").close());
 // sign-in) all resolve to a profile the same shape, and from there a
 // guest-progress handoff, a pending score save and a data-context switch all
 // need to happen identically regardless of which one got the player there.
+// Wraps an account button's async handler so a slow connection is visible
+// rather than looking unclicked: the button (and every other control in its
+// form, if it has one) is disabled for the duration, the button gets a
+// pending label plus aria-busy and a small CSS spinner (see .is-pending),
+// and both are restored in a finally block on success or failure alike. The
+// dataset.pending guard ignores a re-entrant call while one is already in
+// flight, which the disabling should already prevent but a fast Enter can
+// otherwise race.
+function withPendingState(button, label, fn) {
+  return async (event, ...rest) => {
+    if (button.dataset.pending) {
+      // A native submit would still fire on a re-entrant Enter, so swallow it.
+      event?.preventDefault?.();
+      return;
+    }
+    button.dataset.pending = "true";
+    const form = button.closest("form");
+    const controls = form ? Array.from(form.elements) : [button];
+    const originalLabel = button.innerHTML;
+    controls.forEach((el) => {
+      el.disabled = true;
+    });
+    button.setAttribute("aria-busy", "true");
+    button.classList.add("is-pending");
+    button.innerHTML = label;
+    try {
+      await fn(event, ...rest);
+    } finally {
+      controls.forEach((el) => {
+        el.disabled = false;
+      });
+      button.removeAttribute("aria-busy");
+      button.classList.remove("is-pending");
+      button.innerHTML = originalLabel;
+      delete button.dataset.pending;
+    }
+  };
+}
 async function afterAuthenticated(next, successMessage) {
   await switchDataContext(next);
   $("account-dialog").close();
@@ -4465,51 +4503,63 @@ async function afterAuthenticated(next, successMessage) {
     toast(successMessage);
   }
 }
-$("register-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const next = await dataAdapter.register({
-      email: $("register-email").value,
-      username: $("register-username").value,
-      password: $("register-password").value,
-    });
-    await afterAuthenticated(next, `Account ${next.username} created.`);
-  } catch (error) {
-    $("account-status").textContent = error.message;
-  }
-});
-$("login-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const next = await dataAdapter.login({
-      identifier: $("login-identifier").value,
-      password: $("login-password").value,
-    });
-    await afterAuthenticated(next, `Signed in as ${next.username}.`);
-  } catch (error) {
-    $("account-status").textContent = error.message;
-  }
-});
-$("logout-button").addEventListener("click", async () => {
-  await dataAdapter.logout();
-  await switchDataContext(null);
-  $("account-dialog").close();
-  toast("Returned to guest progress.");
-});
+$("register-form").addEventListener(
+  "submit",
+  withPendingState($("register-form").querySelector("button[type=submit]"), "Creating account…", async (event) => {
+    event.preventDefault();
+    try {
+      const next = await dataAdapter.register({
+        email: $("register-email").value,
+        username: $("register-username").value,
+        password: $("register-password").value,
+      });
+      await afterAuthenticated(next, `Account ${next.username} created.`);
+    } catch (error) {
+      $("account-status").textContent = error.message;
+    }
+  }),
+);
+$("login-form").addEventListener(
+  "submit",
+  withPendingState($("login-form").querySelector("button[type=submit]"), "Signing in…", async (event) => {
+    event.preventDefault();
+    try {
+      const next = await dataAdapter.login({
+        identifier: $("login-identifier").value,
+        password: $("login-password").value,
+      });
+      await afterAuthenticated(next, `Signed in as ${next.username}.`);
+    } catch (error) {
+      $("account-status").textContent = error.message;
+    }
+  }),
+);
+$("logout-button").addEventListener(
+  "click",
+  withPendingState($("logout-button"), "Signing out…", async () => {
+    await dataAdapter.logout();
+    await switchDataContext(null);
+    $("account-dialog").close();
+    toast("Returned to guest progress.");
+  }),
+);
 // The redirect to Discord replaces the whole page, so there is nothing to
 // await here in the success case - the player is gone before this promise
 // would resolve. Only a failure to even start the redirect (network error,
 // misconfigured provider) surfaces here.
-$("discord-signin").addEventListener("click", async () => {
-  $("account-status").textContent = "";
-  try {
-    await dataAdapter.signInWithDiscord({
-      redirectTo: `${location.origin}${location.pathname}`,
-    });
-  } catch (error) {
-    $("account-status").textContent = error.message;
-  }
-});
+$("discord-signin").addEventListener(
+  "click",
+  withPendingState($("discord-signin"), "Connecting…", async () => {
+    $("account-status").textContent = "";
+    try {
+      await dataAdapter.signInWithDiscord({
+        redirectTo: `${location.origin}${location.pathname}`,
+      });
+    } catch (error) {
+      $("account-status").textContent = error.message;
+    }
+  }),
+);
 function openUsernamePrompt(user) {
   if (phase === "playing") pause();
   closeMusicPopup();
@@ -4521,30 +4571,36 @@ function openUsernamePrompt(user) {
   $("username-dialog").showModal();
 }
 $("close-username").addEventListener("click", () => $("username-dialog").close());
-$("username-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const next = await dataAdapter.completeProfile({
-      username: $("username-input").value,
-    });
-    pendingUsernamePrompt = null;
-    await afterAuthenticated(next, `Welcome, ${next.username}.`);
-  } catch (error) {
-    $("username-status").textContent = error.message;
-  }
-});
+$("username-form").addEventListener(
+  "submit",
+  withPendingState($("username-form").querySelector("button[type=submit]"), "Saving…", async (event) => {
+    event.preventDefault();
+    try {
+      const next = await dataAdapter.completeProfile({
+        username: $("username-input").value,
+      });
+      pendingUsernamePrompt = null;
+      await afterAuthenticated(next, `Welcome, ${next.username}.`);
+    } catch (error) {
+      $("username-status").textContent = error.message;
+    }
+  }),
+);
 $("close-score-save").addEventListener("click", () => $("score-save-dialog").close());
 $("score-save-later").addEventListener("click", () => $("score-save-dialog").close());
-$("score-save-never").addEventListener("click", async () => {
-  try {
-    await saveScorePreference("never");
-    pendingScoreRounds = [];
-    $("score-save-dialog").close();
-    toast("Scores will stay on this device.");
-  } catch (error) {
-    $("score-save-status").textContent = error.message || "Your choice could not be saved.";
-  }
-});
+$("score-save-never").addEventListener(
+  "click",
+  withPendingState($("score-save-never"), "Saving…", async () => {
+    try {
+      await saveScorePreference("never");
+      pendingScoreRounds = [];
+      $("score-save-dialog").close();
+      toast("Scores will stay on this device.");
+    } catch (error) {
+      $("score-save-status").textContent = error.message || "Your choice could not be saved.";
+    }
+  }),
+);
 async function chooseAlwaysSave() {
   if (!profile) {
     saveScoreAfterAuthentication = true;
@@ -4568,7 +4624,10 @@ async function chooseAlwaysSave() {
     $("score-save-status").textContent = error.message || "Your score preference could not be saved.";
   }
 }
-$("score-save-always").addEventListener("click", chooseAlwaysSave);
+$("score-save-always").addEventListener(
+  "click",
+  withPendingState($("score-save-always"), "Saving…", chooseAlwaysSave),
+);
 // Sessions can change in another tab or when Supabase restores one after the
 // shell has booted. Keep the visible account and scoped local state honest.
 const unsubscribeAuthState = dataAdapter.onAuthStateChange?.((session) => {
