@@ -125,7 +125,7 @@ jobs:
             tiki-taka-${{ github.event.release.tag_name || inputs.release_tag }}.tar.gz
             tiki-taka-${{ github.event.release.tag_name || inputs.release_tag }}.tar.gz.sha256
           if-no-files-found: error
-          retention-days: 90
+          retention-days: 7
 
   deploy:
     name: Deploy verified release to production
