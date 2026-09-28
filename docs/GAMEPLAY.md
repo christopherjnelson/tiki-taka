@@ -5,7 +5,7 @@
 Move the ball carrier while three teammates find supporting positions. An intercepted pass or tackle costs a possession and resets the formation. Running out of possessions ends the round; reaching a score target early does not end it. How many you get is set by the difficulty tier: five on Relaxed, three on Standard, one on Ruthless.
 
 - **Pass:** 12 points, or 6 when immediately returning to the previous carrier.
-- **Multiplier:** raised only by receiving in the bonus zone — one step per zone up to x5, then one step per two zones to a x10 ceiling. It never decays; a turnover resets it to x1.
+- **Multiplier (flow):** built by bonuses. A zone reception builds the most (1 flow), an Olé milestone 0.75, a triangle or press split 0.5 each; wall passes and plain passes build nothing. One step per flow up to x5, then one step per two flow to a x10 ceiling. A bonus counts toward its own pass. The multiplier slips one step after 6 seconds without a flow-building bonus (Focus slows that clock); a turnover resets it to x1.
 - **One touch:** queue while the ball travels or release within 0.35 seconds without dribbling. Each completed one-touch pass adds 5 points; every ten adds another 50 points and 2 units of Energy (Olé milestone). Holding, dribbling, or losing possession breaks the streak.
 - **Triangle:** complete A → B → C → A with distinct players within 3.5 seconds (and without any player holding the ball longer than 1.2 seconds) for 35 points and 1 unit of Energy.
 - **Wall pass:** bank off the boundary for 18 points. It does not earn Energy.
