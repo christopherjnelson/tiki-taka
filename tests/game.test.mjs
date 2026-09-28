@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOST_DRAIN_RATE, FOCUS_DRAIN_RATE, STAR_RATIOS, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS, zoneMultiplier, ZONE_MULTIPLIER_CEILING, ZONE_POINTS, ZONE_LIFETIME, ZONE_BLIND_GAP, endlessStage, ENDLESS_PRESS, ENDLESS_DEFENDER_STEPS } from '../src/game.js';
+import { BOOST_DRAIN_RATE, FOCUS_DRAIN_RATE, STAR_RATIOS, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS, flowMultiplier, flowForMultiplier, FLOW_BUILD, FLOW_DECAY_SECONDS, MULTIPLIER_CEILING, ZONE_POINTS, ZONE_LIFETIME, ZONE_BLIND_GAP, endlessStage, ENDLESS_PRESS, ENDLESS_DEFENDER_STEPS } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -268,7 +268,7 @@ test('direct passing transfers possession, adds score and resets hold', () => {
   completePass(game, 1);
   assert.equal(game.passes, 1);
   assert.equal(game.score, Math.round(12 * passDistanceMultiplier(passLength)));
-  assert.equal(game.zoneStreak, 0);
+  assert.equal(game.flow, 0);
   assert.equal(game.hold, 0);
   assert.ok(game.grace > 0);
   assert.ok(game.events.some(event => event.type === 'kick'));
@@ -302,30 +302,30 @@ test('pass distance multipliers are bounded, exact at their thresholds, and mono
   assert.ok(long.score > short.score, 'a longer ordinary pass pays more');
 });
 
-test('zoneMultiplier follows the diminishing-returns table exactly, one hit per step to x5 then two per step to its x10 ceiling', () => {
+test('flowMultiplier follows the diminishing-returns table exactly, one hit per step to x5 then two per step to its x10 ceiling', () => {
   const table = {
     0: 1, 1: 2, 2: 3, 3: 4, 4: 5,
     5: 5, 6: 6, 7: 6, 8: 7, 9: 7,
     10: 8, 11: 8, 12: 9, 13: 9, 14: 10,
   };
   for (const [hits, multiplier] of Object.entries(table)) {
-    assert.equal(zoneMultiplier(Number(hits)), multiplier, `hits=${hits}`);
+    assert.equal(flowMultiplier(Number(hits)), multiplier, `hits=${hits}`);
   }
-  assert.equal(zoneMultiplier(15), ZONE_MULTIPLIER_CEILING, 'the ceiling holds past the table');
-  assert.equal(zoneMultiplier(1000), ZONE_MULTIPLIER_CEILING);
-  assert.equal(zoneMultiplier(-5), 1, 'a negative streak floors at the base multiplier');
-  assert.equal(ZONE_MULTIPLIER_CEILING, 10);
+  assert.equal(flowMultiplier(15), MULTIPLIER_CEILING, 'the ceiling holds past the table');
+  assert.equal(flowMultiplier(1000), MULTIPLIER_CEILING);
+  assert.equal(flowMultiplier(-5), 1, 'a negative streak floors at the base multiplier');
+  assert.equal(MULTIPLIER_CEILING, 10);
 });
 
-test('the zone streak - and so the multiplier - resets to its floor on turnover', () => {
+test('the flow - and so the multiplier - resets to its floor on turnover', () => {
   const game = openGame();
   game.zone = { ...game.players[1], r: 92 };
   completePass(game, 1);
-  assert.equal(game.zoneStreak, 1);
-  assert.equal(zoneMultiplier(game.zoneStreak), 2);
+  assert.equal(game.flow, 1);
+  assert.equal(flowMultiplier(game.flow), 2);
   game.turnover('TEST');
-  assert.equal(game.zoneStreak, 0);
-  assert.equal(zoneMultiplier(game.zoneStreak), 1);
+  assert.equal(game.flow, 0);
+  assert.equal(flowMultiplier(game.flow), 1);
 });
 
 test('a brief first-touch cooldown prevents instant pass chains after reception', () => {
@@ -400,16 +400,17 @@ test('one-touch milestone adds its flat bonus exactly once every ten passes', ()
   const events = game.events.filter(event => event.type === 'one-touch');
   assert.equal(events.length, 20);
   assert.equal(events.filter(event => event.milestone).length, 2);
-  assert.equal(events.at(-1).bonus, ONE_TOUCH.passBonus + ONE_TOUCH.milestoneBonus);
-  assert.equal(events.at(-1).text, 'ONE TOUCH ×20 +55');
+  // Two olés built 1.5 flow, so the second milestone lands at x2.
+  assert.equal(events.at(-1).bonus, (ONE_TOUCH.passBonus + ONE_TOUCH.milestoneBonus) * 2);
+  assert.equal(events.at(-1).text, 'ONE TOUCH ×20 +110');
   assert.equal(game.focus, ONE_TOUCH.milestoneFocus * 2);
   assert.ok(game.events.some(event => event.type === 'focus' && event.text.includes(`+${ONE_TOUCH.milestoneFocus} ENERGY`)));
 });
 
 test('one-touch and the olé milestone scale with the zone multiplier like every other reward', () => {
   const game = openGame();
-  game.zoneStreak = 3; // multiplier 4; openGame keeps the zone offscreen so it holds steady
-  const mult = zoneMultiplier(game.zoneStreak);
+  game.flow = 3; // multiplier 4; openGame keeps the zone offscreen so it holds steady
+  const mult = flowMultiplier(game.flow);
   assert.equal(mult, 4);
   completePass(game, 1);
   const before = game.score;
@@ -420,7 +421,7 @@ test('one-touch and the olé milestone scale with the zone multiplier like every
   assert.equal(game.oneTouchStreak, 1);
   assert.equal(
     game.score - before,
-    ordinaryPassPoints(passLength, game.zoneStreak) + ONE_TOUCH.passBonus * mult,
+    ordinaryPassPoints(passLength, game.flow) + ONE_TOUCH.passBonus * mult,
     'a plain one-touch pass scales at the multiplier, not just the ordinary points',
   );
   const oneTouchEvent = game.events.find(event => event.type === 'one-touch');
@@ -442,7 +443,7 @@ test('one-touch and the olé milestone scale with the zone multiplier like every
   const milestoneBonus = (ONE_TOUCH.passBonus + ONE_TOUCH.milestoneBonus) * mult;
   assert.equal(
     game.score - beforeMilestone,
-    ordinaryPassPoints(milestoneLength, game.zoneStreak, repeat) + milestoneBonus,
+    ordinaryPassPoints(milestoneLength, game.flow, repeat) + milestoneBonus,
   );
   const milestoneEvent = game.events.filter(event => event.type === 'one-touch').at(-1);
   assert.equal(milestoneEvent.milestone, true);
@@ -529,7 +530,7 @@ test('return passes score less, and ordinary passing alone never grows the multi
   // Combo is no longer a scoring input, so a fourth ordinary pass repeats
   // the same (smaller) return-pass reward rather than growing with volume.
   assert.equal(game.score - beforeFourth, second);
-  assert.equal(game.zoneStreak, 0);
+  assert.equal(game.flow, 0);
   assert.equal(game.triangles, 0);
 });
 
@@ -586,8 +587,8 @@ test('receiving inside a zone earns a bonus, raises the multiplier, and goes dar
   game.zone = { ...game.players[1], r: 92 };
   completePass(game, 1);
   assert.equal(game.zones, 1);
-  assert.equal(game.zoneStreak, 1);
-  assert.equal(game.bestZoneStreak, 1);
+  assert.equal(game.flow, 1);
+  assert.equal(game.bestFlow, 1);
   assert.ok(game.score > 12, 'the hit pass itself scores at the new x2 multiplier');
   assert.equal(game.focus, FOCUS_REWARDS.zone);
   // The zone does not reappear immediately - it goes dark for a short,
@@ -743,11 +744,11 @@ test('turnovers retain earned score and focus, reset the zone streak and formati
   completePass(game, 1);
   game.focus = 2.25;
   const score = game.score;
-  assert.equal(game.zoneStreak, 1);
+  assert.equal(game.flow, 1);
   game.turnover('TEST');
   assert.equal(game.score, score);
-  assert.equal(game.zoneStreak, 0);
-  assert.equal(game.bestZoneStreak, 1, 'the peak reached before the turnover is preserved');
+  assert.equal(game.flow, 0);
+  assert.equal(game.bestFlow, 1, 'the peak reached before the turnover is preserved');
   assert.equal(game.carrier, 0);
   assert.equal(game.ball, null);
   assert.equal(game.turnovers, 1);
@@ -967,7 +968,7 @@ test('endless pays energy and colour for bonuses but never points', () => {
   endless.zone = { ...endless.players[1], r: 92 };
   completePass(endless, 1);
   assert.equal(endless.zones, 1, 'the zone still registers');
-  assert.equal(endless.zoneStreak, 1, 'the streak still climbs');
+  assert.equal(endless.flow, 1, 'the streak still climbs');
   assert.equal(endless.focus, FOCUS_REWARDS.zone, 'the zone still pays energy');
   assert.equal(endless.score, 0, 'no elapsed time yet means no score, bonus or not');
   const popup = endless.events.find(e => e.type === 'score');
@@ -1149,11 +1150,11 @@ function threadingGame(defenders) {
 // `hits` is the zone streak (since the last turnover) in effect for this
 // pass, not a pass count - the multiplier's only input now.
 function ordinaryPassPoints(length, hits = 0, repeat = false) {
-  return Math.round((repeat ? 6 : 12) * passDistanceMultiplier(length)) * zoneMultiplier(hits);
+  return Math.round((repeat ? 6 : 12) * passDistanceMultiplier(length)) * flowMultiplier(hits);
 }
 
 function splitPassPoints(length, tightness, defenders = 2, hits = 0) {
-  const flowMultiplier = zoneMultiplier(hits);
+  const mult = flowMultiplier(hits);
   const splitDistanceMultiplier =
     1 + (passDistanceMultiplier(length) - 1) * PASS_DISTANCE.splitInfluence;
   const splitPoints = Math.round(
@@ -1161,7 +1162,7 @@ function splitPassPoints(length, tightness, defenders = 2, hits = 0) {
       (1 + SPLIT_PRESS.perDefender * (defenders - 2)) *
       splitDistanceMultiplier,
   );
-  return ordinaryPassPoints(length, hits) + splitPoints * flowMultiplier;
+  return ordinaryPassPoints(length, hits) + splitPoints * mult;
 }
 
 test('segmentsCross is a proper crossing: strict, so touching and collinear are not', () => {
@@ -1324,7 +1325,7 @@ test('with several crossed pairs the narrowest one sets the reward', () => {
 
 test('splits scale with the zone multiplier like other bonuses', () => {
   const game = threadingGame([{ x: 450, y: 260 }, { x: 450, y: 340 }]);
-  game.zoneStreak = 7;
+  game.flow = 7;
   completePass(game, 1);
   assert.equal(game.splits, 1);
   assert.equal(
@@ -1426,7 +1427,7 @@ test('the zone outranks the wall on a banked pass into the zone', () => {
   // This pass's own zone hit already counts toward its multiplier: the
   // first-ever hit takes the streak from 0 to 1, so this pass (ordinary
   // points, wall, and zone alike) scores at x2, not x1.
-  const mult = zoneMultiplier(1);
+  const mult = flowMultiplier(1);
   assert.equal(
     game.score,
     ordinaryPassPoints(passLength, 1) + 18 * mult + ZONE_POINTS * mult,
@@ -1435,4 +1436,143 @@ test('the zone outranks the wall on a banked pass into the zone', () => {
   const scored = game.events.filter(event => event.type === 'score').at(-1);
   assert.equal(scored.text, `ZONE BONUS +${game.score}`);
   assert.deepEqual(scored.bonuses, ['wall', 'zone']);
+});
+
+// ---- Flow: every bonus builds the multiplier, idle time drains it ----
+
+// Plays a pass and reports the ordinary-pass length so a test can price it.
+function passLength(game, id, bank = false) {
+  if (game.passCooldown > 0) advance(game, game.passCooldown + STEP);
+  assert.equal(game.pass(id, bank), true);
+  const length = game.ball.passDistance;
+  for (let frame = 0; game.ball && frame < 600 && game.status === 'playing'; frame++) game.update(STEP);
+  return length;
+}
+
+test('flowMultiplier reads the whole part of fractional flow and flowForMultiplier inverts it', () => {
+  assert.equal(flowMultiplier(0.99), 1);
+  assert.equal(flowMultiplier(1), 2);
+  assert.equal(flowMultiplier(1.75), 2);
+  assert.equal(flowMultiplier(4.5), 5);
+  assert.equal(flowMultiplier(5.99), 5);
+  assert.equal(flowMultiplier(6.5), 6);
+  assert.equal(flowMultiplier(NaN), 1);
+  assert.equal(flowMultiplier(Infinity), 1);
+  for (let m = 1; m <= MULTIPLIER_CEILING; m++) {
+    assert.equal(flowMultiplier(flowForMultiplier(m)), m, `m=${m}`);
+    if (m > 1) assert.equal(flowMultiplier(flowForMultiplier(m) - 0.25), m - 1, `just below m=${m}`);
+  }
+  assert.deepEqual([1, 2, 5, 6, 10].map(flowForMultiplier), [0, 1, 4, 6, 14]);
+  assert.deepEqual(FLOW_BUILD, { zone: 1, ole: 0.75, triangle: 0.5, split: 0.5 });
+  assert.equal('wall' in FLOW_BUILD, false, 'wall passes build nothing');
+});
+
+test('a triangle builds flow and counts toward its own pass', () => {
+  const game = openGame();
+  passLength(game, 1);
+  passLength(game, 2);
+  game.flow = 0.5;
+  const before = game.score;
+  const length = passLength(game, 0);
+  assert.equal(game.triangles, 1);
+  assert.equal(game.flow, 0.5 + FLOW_BUILD.triangle);
+  assert.equal(game.score - before, ordinaryPassPoints(length, 1) + 35 * 2 + ONE_TOUCH.passBonus * 2);
+});
+
+test('a split builds flow and counts toward its own pass', () => {
+  const game = threadingGame([{ x: 450, y: 260 }, { x: 450, y: 340 }]);
+  game.flow = 0.5;
+  completePass(game, 1);
+  assert.equal(game.splits, 1);
+  assert.equal(game.flow, 0.5 + FLOW_BUILD.split);
+  assert.equal(game.score, splitPassPoints(500, (200 - 80) / (200 - 70), 2, 1));
+});
+
+test('an olé milestone builds flow; plain one-touch passes build none', () => {
+  const game = openGame();
+  completePass(game, 1);
+  for (let index = 0; index < 9; index++) completePass(game, index % 2 ? 1 : 2);
+  assert.equal(game.oneTouchStreak, 9);
+  assert.equal(game.flow, 0, 'nine plain one-touch passes build nothing');
+  completePass(game, 1);
+  assert.equal(game.oles, 1);
+  assert.equal(game.flow, FLOW_BUILD.ole);
+});
+
+test('a wall pass builds no flow and pays at the current multiplier', () => {
+  const game = openGame();
+  game.flow = 2; // x3
+  const before = game.score;
+  const length = passLength(game, 1, true);
+  assert.equal(game.banks, 1);
+  assert.equal(game.flow, 2, 'flow is unchanged by a wall pass');
+  assert.equal(game.score - before, ordinaryPassPoints(length, 2) + 18 * 3);
+});
+
+test('a zone counts toward its own pass, as before', () => {
+  const game = openGame();
+  game.zone = { ...game.players[1], r: 92 };
+  const length = passLength(game, 1);
+  assert.equal(game.flow, FLOW_BUILD.zone);
+  assert.equal(game.score, ordinaryPassPoints(length, 1) + 18 * 2);
+});
+
+test('flow slips exactly one multiplier step per 6 idle seconds', () => {
+  const game = openGame();
+  game.flow = flowForMultiplier(4); // 3 flow
+  game.hold = 0;
+  const keepHolding = () => { game.hold = 0; game.grace = 1; };
+  const run = (seconds) => {
+    for (let t = 0; t < seconds - 1e-9; t += STEP) { keepHolding(); game.update(STEP); }
+  };
+  run(FLOW_DECAY_SECONDS - 0.1);
+  assert.equal(flowMultiplier(game.flow), 4, 'nothing drops before 6 seconds');
+  run(0.2);
+  assert.equal(flowMultiplier(game.flow), 3, 'one step after 6 seconds');
+  assert.equal(game.flow, flowForMultiplier(3));
+  assert.ok(game.events.some(e => e.type === 'flow-drop' && e.text === '×3'));
+  run(FLOW_DECAY_SECONDS - 0.3);
+  assert.equal(flowMultiplier(game.flow), 3);
+  run(0.5);
+  assert.equal(flowMultiplier(game.flow), 2, 'another step after 12 seconds');
+});
+
+test('a flow-building bonus restarts the decay timer; Focus slows it; a turnover resets it', () => {
+  const game = openGame();
+  game.flow = 3;
+  const run = (seconds, input = {}) => {
+    for (let t = 0; t < seconds - 1e-9; t += STEP) { game.hold = 0; game.grace = 1; game.update(STEP, input); }
+  };
+  run(5);
+  game.zone = { ...game.players[1], r: 92 };
+  completePass(game, 1);
+  assert.equal(game.flow, 4);
+  assert.equal(game.flowIdle, 0);
+  game.zone = { x: -1000, y: -1000, r: 1 };
+  run(5.5);
+  assert.equal(flowMultiplier(game.flow), 5, 'the timer restarted at the bonus');
+  game.focus = 10;
+  const idleBefore = game.flowIdle;
+  run(1, { focus: true });
+  assert.ok(game.flowIdle - idleBefore < 0.5, 'Focus slow-mo slows the decay clock');
+  game.turnover('TEST');
+  assert.equal(game.flow, 0);
+  assert.equal(game.flowIdle, 0);
+  const idle = game.flowIdle;
+  game.update(STEP);
+  assert.equal(game.flowIdle, idle, 'the timer does not tick during the turnover lock');
+});
+
+test('flow scoring is deterministic for a given seed and inputs', () => {
+  const run = () => {
+    const game = new Game({ ...COURTS[0], seed: 4242 }, 'balanced');
+    for (let i = 0; i < 40; i++) {
+      const id = (game.carrier + 1 + (i % 2)) % game.players.length;
+      if (game.status !== 'playing') break;
+      if (!game.ball && game.pass(id)) { /* thrown */ }
+      advance(game, 0.4);
+    }
+    return [game.score, game.flow, game.bestFlow, game.turnovers];
+  };
+  assert.deepEqual(run(), run());
 });

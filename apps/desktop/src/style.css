@@ -6718,3 +6718,15 @@ body:has(.noscript) .boot-sync {
     letter-spacing: 0.04em;
   }
 }
+
+/* The multiplier is about to slip a step (last 2 seconds of the idle timer). */
+#combo-value.decaying {
+  animation: flow-decay-pulse 0.5s ease-in-out infinite;
+}
+@keyframes flow-decay-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #combo-value.decaying { animation: none; opacity: 0.65; }
+}

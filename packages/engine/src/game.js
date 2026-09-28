@@ -18,15 +18,29 @@ export const FOCUS_REWARDS = { split: 2, triangle: 1, zone: 1, ole: 2, wall: 0 }
 export const TRIANGLE_WINDOW = 3.5;
 export const TRIANGLE_MAX_HOLD = 1.2;
 export const MAX_HOLD = 6;
-// Zone hits are the multiplier's only input, counted since the last turnover.
-// The first four hits step the multiplier by one each; past that, every two
-// hits earns a step, up to a ceiling. Table: hits 1/2/3/4/6/8/10/12/14 ->
-// multiplier 2/3/4/5/6/7/8/9/10.
-export const ZONE_MULTIPLIER_CEILING = 10;
-export function zoneMultiplier(hits) {
-  if (!Number.isFinite(hits) || hits <= 0) return 1;
+// Flow is the multiplier's only input. Every bonus builds it, at different
+// rates (FLOW_BUILD): a zone pass fastest, an ole, triangle or split less. Wall
+// passes and plain passes build nothing. The multiplier reads the whole-number
+// part of flow on the curve the zone-only rule used: the first four flow points
+// step it by one each; past that, every two earn a step, up to a ceiling.
+// Table: flow 1/2/3/4/6/8/10/12/14 -> multiplier 2/3/4/5/6/7/8/9/10.
+// Flow is not banked: FLOW_DECAY_SECONDS without a flow-building bonus drops
+// one multiplier step (see Game.decayFlow), and a turnover clears it.
+export const MULTIPLIER_CEILING = 10;
+export const FLOW_BUILD = { zone: 1, ole: 0.75, triangle: 0.5, split: 0.5 };
+export const FLOW_DECAY_SECONDS = 6;
+export function flowMultiplier(flow) {
+  if (!Number.isFinite(flow) || flow <= 0) return 1;
+  const hits = Math.floor(flow);
+  if (hits <= 0) return 1;
   if (hits <= 4) return hits + 1;
-  return Math.min(ZONE_MULTIPLIER_CEILING, 5 + Math.floor((hits - 4) / 2));
+  return Math.min(MULTIPLIER_CEILING, 5 + Math.floor((hits - 4) / 2));
+}
+// Pure inverse: the smallest flow that yields multiplier `m`.
+export function flowForMultiplier(m) {
+  if (!Number.isFinite(m) || m <= 1) return 0;
+  if (m <= 5) return m - 1;
+  return 4 + 2 * (m - 5);
 }
 export const ZONE_POINTS = 18;
 export const ZONE_LIFETIME = 7;
@@ -195,6 +209,10 @@ const COURT_DEFS = [
 // about 20k. Three stars sits exactly there on purpose - it is the round the
 // court is capable of, not a round beyond it.
 //
+// NOTE: these numbers (and STAR_RATIOS / CLEAR_RATIO below) were measured
+// under the old zone-only multiplier. Every bonus now builds flow and flow
+// decays when idle, so they need re-measuring by playtest.
+//
 // PROVISIONAL for courts 1-5, which carry Amsterdam's number until they are
 // measured too. The earlier sweep found clean-round scores flat across all
 // six, so a flat reference is the honest placeholder rather than an invented
@@ -316,8 +334,9 @@ export function bankPoint(a, b) {
 // stopped differing exactly where it should have bitten hardest.
 //
 // scoreMultiplier is not a difficulty knob - it is how much of the court's
-// reference this tier's rounds can actually produce. `zoneStreak` resets
-// only on a turnover, so the number of possessions a tier grants IS the
+// reference this tier's rounds can actually produce. `flow` resets
+// on a turnover (and slips a step per idle 6 seconds), so the number of
+// possessions a tier grants IS the
 // number of times the multiplier is knocked back to x1, and that dominates
 // the final score far more than press speed does. Ruthless grants one
 // possession, so every Ruthless round that reaches the whistle had no
@@ -485,8 +504,9 @@ export class Game {
     this.elapsed = 0;
     this.passes = 0;
     this.turnovers = 0;
-    this.zoneStreak = 0;
-    this.bestZoneStreak = 0;
+    this.flow = 0;
+    this.bestFlow = 0;
+    this.flowIdle = 0;
     this.oneTouchStreak = 0;
     this.bestOneTouch = 0;
     this.oneTouchAge = 0;
@@ -690,26 +710,11 @@ export class Game {
     this.passCooldown = 0.12;
     this.passes++;
     const p = this.players[this.carrier];
-    // The zone hit for this pass (if any) counts toward this same pass's
-    // multiplier: landing in the zone is the reward, not just future passes.
+    // Every bonus on this pass is detected first and its flow added before the
+    // multiplier is read, so the bonus that lands counts toward its own pass.
     const zoneHit =
       this.zone && distance(p, this.zone) <= this.zone.r + PLAYER_RADIUS;
-    if (zoneHit) {
-      this.zoneStreak++;
-      this.bestZoneStreak = Math.max(this.bestZoneStreak, this.zoneStreak);
-    }
-    const multiplier = zoneMultiplier(this.zoneStreak);
     const repeat = this.history.at(-2) === this.carrier;
-    const distanceMultiplier = passDistanceMultiplier(ball.passDistance);
-    let points =
-      Math.round((repeat ? 6 : 12) * distanceMultiplier) * multiplier;
-    const bonuses = [];
-    let focusReward = 0;
-    if (ball.bank) {
-      this.banks++;
-      points += 18 * multiplier;
-      bonuses.push("wall");
-    }
     this.history.push(this.carrier);
     this.historyTimes.push(this.elapsed);
     if (this.history.length > 4) {
@@ -725,8 +730,36 @@ export class Game {
       this.history.at(-4) === this.carrier &&
       new Set(this.history.slice(-3)).size === 3 &&
       triangleElapsed <= TRIANGLE_WINDOW;
+    const splitHit = ball.split !== null && !completesTriangle;
+    let milestone = false;
+    if (ball.oneTouch) {
+      this.oneTouchStreak++;
+      this.bestOneTouch = Math.max(this.bestOneTouch, this.oneTouchStreak);
+      milestone = this.oneTouchStreak % ONE_TOUCH.milestoneEvery === 0;
+    }
+    let flowBuilt = 0;
+    if (zoneHit) flowBuilt += FLOW_BUILD.zone;
+    if (completesTriangle) flowBuilt += FLOW_BUILD.triangle;
+    if (splitHit) flowBuilt += FLOW_BUILD.split;
+    if (milestone) flowBuilt += FLOW_BUILD.ole;
+    if (flowBuilt > 0) {
+      this.flow += flowBuilt;
+      this.bestFlow = Math.max(this.bestFlow, this.flow);
+      this.flowIdle = 0;
+    }
+    const multiplier = flowMultiplier(this.flow);
+    const distanceMultiplier = passDistanceMultiplier(ball.passDistance);
+    let points =
+      Math.round((repeat ? 6 : 12) * distanceMultiplier) * multiplier;
+    const bonuses = [];
+    let focusReward = 0;
+    if (ball.bank) {
+      this.banks++;
+      points += 18 * multiplier;
+      bonuses.push("wall");
+    }
     let triangleCoords = null;
-    if (ball.split !== null && !completesTriangle) {
+    if (splitHit) {
       // Splitting two of three is far harder than two of two, so the reward
       // scales with how crowded the court is. Long passes add up to half of
       // the ordinary pass-distance multiplier so the geometry matters without
@@ -769,11 +802,7 @@ export class Game {
       this.beginZoneBlindGap();
     }
     let oneTouchBonus = 0;
-    let milestone = false;
     if (ball.oneTouch) {
-      this.oneTouchStreak++;
-      this.bestOneTouch = Math.max(this.bestOneTouch, this.oneTouchStreak);
-      milestone = this.oneTouchStreak % ONE_TOUCH.milestoneEvery === 0;
       oneTouchBonus =
         (ONE_TOUCH.passBonus + (milestone ? ONE_TOUCH.milestoneBonus : 0)) *
         multiplier;
@@ -840,6 +869,22 @@ export class Game {
       this.pass(queued.id, queued.bank);
     }
   }
+  // Flow is not banked: each FLOW_DECAY_SECONDS without a flow-building bonus
+  // slips the multiplier one step (flow falls to the floor of the step below)
+  // and restarts the timer. Runs on game time, so Focus slows it, and never
+  // during a turnover lock (update() returns before reaching it).
+  decayFlow(delta) {
+    const multiplier = flowMultiplier(this.flow);
+    if (multiplier <= 1) {
+      this.flowIdle = 0;
+      return;
+    }
+    this.flowIdle += delta;
+    if (this.flowIdle <= FLOW_DECAY_SECONDS) return;
+    this.flowIdle = 0;
+    this.flow = flowForMultiplier(multiplier - 1);
+    this.emit("flow-drop", `×${multiplier - 1}`, 500, 310);
+  }
   // Ends the current zone (hit or timed out) and goes dark for a random
   // beat before the next spot activates. `nextZone` is set immediately so
   // the renderer can telegraph where it is coming, not just that it left.
@@ -861,7 +906,8 @@ export class Game {
   }
   turnover(reason) {
     this.turnovers++;
-    this.zoneStreak = 0;
+    this.flow = 0;
+    this.flowIdle = 0;
     this.oneTouchStreak = 0;
     this.oneTouchAge = 0;
     this.oneTouchDistance = 0;
@@ -949,6 +995,7 @@ export class Game {
     // score a second behind the clock the player is reading.
     if (this.config.endless) this.score = Math.floor(this.elapsed + 1e-9);
     this.motionTime += delta;
+    this.decayFlow(delta);
     if (this.zone) {
       this.zoneTimer -= delta;
     } else if (this.zoneBlindTimer > 0) {

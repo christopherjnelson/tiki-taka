@@ -36,7 +36,7 @@ Play in a desktop browser with keyboard, mouse, or a standard gamepad. The game 
 
 Control the ball carrier while three teammates find supporting positions. Pass before the press closes in. An interception or tackle costs a possession and resets the formation; the number of possessions depends on the difficulty tier (five on Relaxed, three on Standard, one on Ruthless).
 
-Build a score multiplier by receiving in bonus zones and queue passes for one-touch combinations. Triangles, bonus-zone receptions, press splits, and Olé milestones earn Energy, the shared reserve behind Focus (slowing the court) and Boost. Home offers four modes:
+Build a score multiplier by chaining bonuses (zones build it fastest; olés, triangles and splits build it too, wall passes don't) before it slips a step after 6 seconds idle, and queue passes for one-touch combinations. Triangles, bonus-zone receptions, press splits, and Olé milestones earn Energy, the shared reserve behind Focus (slowing the court) and Boost. Home offers four modes:
 
 - **World tour** — six fixed venues, three difficulty tiers, stars and progression.
 - **King of the Court** — four players, one ball, scored on squares taken rather than flow. Not yet playable; shown on Home as coming soon.

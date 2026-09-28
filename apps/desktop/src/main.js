@@ -12,7 +12,8 @@ import {
   TRIANGLE_WINDOW,
   PLAYER_RADIUS,
   ONE_TOUCH,
-  zoneMultiplier,
+  flowMultiplier,
+  FLOW_DECAY_SECONDS,
   endlessStage,
   ENDLESS_COURT,
   ENDLESS_DEFENDER_STEPS,
@@ -2333,11 +2334,11 @@ function showRoundResults({
     $(`result-${key}-cell`).classList.toggle("is-zero", value === 0);
   }
   // Endless pays no points, so its "peak multiplier" would always be a
-  // number that multiplied nothing. Its zone streak is still a real measure
+  // number that multiplied nothing. Its zone count is still a real measure
   // of how well the run flowed, so show that instead.
   $("result-combo").textContent = survival
-    ? String(game.bestZoneStreak || 0)
-    : `x${zoneMultiplier(game.bestZoneStreak || 0)}`;
+    ? String(game.zones || 0)
+    : `x${flowMultiplier(game.bestFlow || 0)}`;
   $("result-burst").hidden = false;
   $("result-stats").hidden = false;
   $("result-cheer").hidden = false;
@@ -3506,10 +3507,19 @@ function syncHud() {
     ? stage.next
       ? formatClock(Math.ceil(stage.next.at - game.elapsed))
       : "—"
-    : `×${zoneMultiplier(game.zoneStreak)}`;
+    : `×${flowMultiplier(game.flow)}`;
   if (comboText !== hudCache.combo) {
     $("combo-value").textContent = comboText;
     hudCache.combo = comboText;
+  }
+  // The multiplier is about to slip: pulse the pill for the last 2 seconds.
+  const comboDecaying =
+    !isEndless &&
+    flowMultiplier(game.flow) > 1 &&
+    game.flowIdle > FLOW_DECAY_SECONDS - 2;
+  if (comboDecaying !== hudCache.comboDecaying) {
+    $("combo-value").classList.toggle("decaying", comboDecaying);
+    hudCache.comboDecaying = comboDecaying;
   }
 
   const roundPossessions = possessionLimit(game.config);
@@ -5599,6 +5609,9 @@ function frame(now) {
     // the turnover is what decides whether anything else is allowed to speak.
     const turnoverEvent = game.events.find((e) => e.type === "turnover") || null;
     for (const event of game.events) {
+      // The multiplier pill updates itself; a flow drop has no canvas popup
+      // or voice of its own.
+      if (event.type === "flow-drop") continue;
       // The turnover's floating canvas text is deferred until after the loop,
       // because whether the hold takes over is only known once "end" has had
       // its chance to finish the round. When it does take over, #resume-reason
