@@ -5,8 +5,9 @@
 //   - desktop Home screen 1600x900
 //   - desktop in-round gameplay mid-play
 //   - phone portrait in-round (390x844, deviceScaleFactor 2)
+//   - phone landscape in-round (844x390, deviceScaleFactor 2)
 //
-// Output: docs/screenshots/{home,gameplay-desktop,gameplay-phone-portrait}.png
+// Output: docs/screenshots/{home,gameplay-desktop,gameplay-phone-portrait,gameplay-phone-landscape}.png
 //
 // Usage:
 //   npm run build           # ensure an up-to-date dist/desktop/
@@ -157,6 +158,8 @@ async function gotoArenaAndRun(page, runMs = 2500) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
   });
   const page = await context.newPage();
   await gotoArenaAndRun(page, 2500);
@@ -164,6 +167,25 @@ async function gotoArenaAndRun(page, runMs = 2500) {
   await page.screenshot({ path, fullPage: false });
   await optimizePng(path);
   console.log(`Saved: docs/screenshots/gameplay-phone-portrait.png`);
+  await context.close();
+}
+
+// ------------------------------------------------------------------
+// 4. Phone landscape in-round 844x390 @2x
+// ------------------------------------------------------------------
+{
+  const context = await browser.newContext({
+    viewport: { width: 844, height: 390 },
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
+  const page = await context.newPage();
+  await gotoArenaAndRun(page, 2500);
+  const path = fileURLToPath(new URL("gameplay-phone-landscape.png", OUT));
+  await page.screenshot({ path, fullPage: false });
+  await optimizePng(path);
+  console.log(`Saved: docs/screenshots/gameplay-phone-landscape.png`);
   await context.close();
 }
 

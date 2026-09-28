@@ -59,8 +59,9 @@ from both base tables, which is the stronger position.
 
 The trade the advisor is naming is real: a definer view runs as its owner and
 bypasses RLS, so **anything added to this view's definition is exposed with
-those privileges**. Keep it to the seven columns it publishes — `username`,
-`mode`, `court`, `score`, `passes`, `best_one_touch`, `created_at`. It must
+those privileges**. Keep it to the columns it publishes — `username`,
+`mode`, `court`, `score`, `passes`, `best_one_touch`, `triangles`, `oles`,
+`splits`, `zones`, `difficulty`, `created_at`. It must
 never select `user_id`, anything from `auth.users`, or another table.
 
 If that constraint ever becomes awkward, replace the view with a
