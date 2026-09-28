@@ -2,6 +2,7 @@
   "name": "tiki-taka",
   "version": "0.4.8",
   "releaseStage": "alpha",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "private": true,
   "workspaces": [
     "packages/*"
@@ -12,6 +13,7 @@
     "dev": "node scripts/dev.mjs",
     "start": "node scripts/dev.mjs",
     "build": "node scripts/build.mjs",
+    "screenshots": "npm run build && node scripts/screenshots.mjs",
     "perf:bundle": "npm run build && node scripts/perf-budget.mjs --check",
     "test:sw-contract": "npm run build && node --test tests/service-worker-contract.mjs",
     "test": "node --test tests/*.test.mjs",

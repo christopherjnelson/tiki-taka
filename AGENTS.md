@@ -49,4 +49,4 @@ Requires **Node.js 22.12 or newer** (Node 24 recommended).
 2. **Untracked files**: `dist/`, `test-results/`, `.tooling/`, `.env`, and local caches must remain untracked. Never commit them.
 3. **No runtime bloat**: Core gameplay uses Canvas 2D and Web Audio. Do not add heavy web frameworks or external UI dependencies unless explicitly requested.
 4. **Supabase optionality**: When `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` are unset, the game runs guest-only and hides account UI. Signed-in accounts gracefully fall back to local storage when offline without corrupting remote saves.
-5. **No License Grant**: This is a commercial game repository. No license grant is provided.
+5. **License**: This repository is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md). Personal and noncommercial use is permitted. Commercial use requires separate permission from the author.
