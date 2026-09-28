@@ -14,6 +14,7 @@ import {
   ONE_TOUCH,
   zoneMultiplier,
   endlessStage,
+  EXTRA_TIME,
   ENDLESS_COURT,
   ENDLESS_DEFENDER_STEPS,
 } from "../../../packages/engine/src/game.js";
@@ -794,13 +795,13 @@ function syncTitle() {
       : selectedHomeMode === "endless"
         ? " Run"
         : " Play";
-  // Endless has no court and no clock running out: an in-progress run is
+  // Extra Time has no court to name: an in-progress run is
   // described by how long it has already lasted.
   $("title-play-copy").textContent = isResumingSelected
     ? selectedHomeMode === "practice"
       ? `${court.name} · Free Practice in progress`
       : selectedHomeMode === "endless"
-        ? `${game.config.name} · ${formatClock(game.time)} survived`
+        ? `${game.config.name} · ${formatClock(game.score)} survived`
         : `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`
     : selectedHomeMode === "practice"
       ? `${court.name} · Free Practice`
@@ -925,7 +926,7 @@ function shortTierLabel(id) {
 const LEADERBOARD_MODES = [
   { id: "career", label: "World tour" },
   { id: "kotc", label: "King of the Court" },
-  { id: "endless", label: "Endless flow" },
+  { id: "endless", label: "Extra Time" },
 ];
 const LEADERBOARD_MODE_IDS = LEADERBOARD_MODES.map((m) => m.id);
 // Only World tour has courts and a difficulty tier in the same sense: it is
@@ -1490,7 +1491,7 @@ function syncCourtsHeading() {
   if (!title) return;
   title.textContent =
     selectedHomeMode === "endless"
-      ? `Endless plays ${ENDLESS_COURT.name}.`
+      ? `Extra Time plays ${ENDLESS_COURT.name}.`
       : "Choose your court.";
 }
 // Re-skins the demo in place: background, accent and secondary colors only.
@@ -2129,7 +2130,7 @@ function syncDifficultyChrome() {
     $("overlay-difficulty").hidden = true;
     $("difficulty-select").disabled = true;
     $("difficulty-description").textContent =
-      "Endless has one difficulty: the press rises with the clock.";
+      "Extra Time has one difficulty: the press keeps growing.";
     $("difficulty-target").textContent = "";
     return;
   }
@@ -2332,7 +2333,7 @@ function showRoundResults({
     $(`result-${key}`).textContent = String(value);
     $(`result-${key}-cell`).classList.toggle("is-zero", value === 0);
   }
-  // Endless pays no points, so its "peak multiplier" would always be a
+  // Extra Time pays no points, so its "peak multiplier" would always be a
   // number that multiplied nothing. Its zone streak is still a real measure
   // of how well the run flowed, so show that instead.
   $("result-combo").textContent = survival
@@ -2453,7 +2454,9 @@ function prepare() {
   $("mode-label").textContent =
     mode === "career"
       ? `THE CIRCUIT / ${String(courtIndex + 1).padStart(2, "0")}`
-      : mode.toUpperCase();
+      : mode === "endless"
+        ? "EXTRA TIME"
+        : mode.toUpperCase();
   // Endless sets target: 0, and Free practice's target is an internal pacing
   // number for the objective/goal-bar rather than a real pass/fail line (it
   // has unlimited recoveries and no clock) — neither should show a "/ N"
@@ -2461,22 +2464,22 @@ function prepare() {
   // "FLOW SCORE" label with no target suffix, same as before this target
   // pairing existed.
   const hasScoreTarget = Boolean(game.config.target) && !game.config.practice;
-  // Endless repurposes two pills: the big readout counts defenders (its score
-  // is the clock, already on the band) and the multiplier pill counts down to
-  // the next one. syncHud() fills both; these are their names.
+  // Extra Time repurposes two pills: the big readout is the seconds lasted
+  // (its score) and the multiplier pill counts down to the next defender.
+  // syncHud() fills both; these are their names.
   $("score-label").textContent = hasScoreTarget
     ? "SCORE"
     : mode === "endless"
-      ? "DEFENDERS"
+      ? "LASTED"
       : "FLOW SCORE";
   $("combo-label").textContent = mode === "endless" ? "NEXT DEFENDER" : "MULTIPLIER";
   $("score-target").textContent = hasScoreTarget ? `/ ${game.config.target}` : "";
   $("score-target").hidden = !hasScoreTarget;
-  // Endless's objective line is rewritten every frame by syncHud() as the
-  // ladder advances; this is only what it says before kickoff.
+  // Extra Time's objective line is rewritten every frame by syncHud() as
+  // challenges come and go; this is only what it says before kickoff.
   $("goal-label").textContent =
     mode === "endless"
-      ? "SURVIVE. THE PRESS GROWS WITH THE CLOCK."
+      ? "BONUSES BUY TIME. CHALLENGES BUY MORE."
       : `${game.config.target} POINTS TO CLEAR`;
   $("tactic-select").disabled = false;
   $("tactic-select").value = progress.tactic;
@@ -2506,17 +2509,17 @@ function prepare() {
     mode === "practice"
       ? `NO TIMER · UNLIMITED RECOVERIES · FIND YOUR RHYTHM`
       : mode === "endless"
-        ? `NO CLOCK TO BEAT · ONE POSSESSION · THE PRESS NEVER STOPS GROWING`
+        ? `${EXTRA_TIME.start} SECONDS TO START · BONUSES BUY TIME · ONE MISTAKE ENDS IT`
         : `${game.config.time} SECONDS · ${possessions} ${possessionLabel} · ${possessionsOrdinal} LOSS ENDS THE ROUND`;
   setOverlay(
     mode === "endless"
-      ? "HOW LONG CAN YOU KEEP IT?"
+      ? "BUY YOURSELF EXTRA TIME"
       : mode === "practice"
         ? "A LITTLE SPACE TO LEARN"
         : "FOUR PLAYERS. ONE BALL.",
     mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
-      ? "Two defenders now, a third at 0:45, a fourth at 1:45, a fifth at 3:15 — and they keep getting quicker after that. One mistake ends the run. Last as long as you can."
+      ? `You start with ${EXTRA_TIME.start} seconds. Zones, splits, triangles and olés buy more time; a challenge buys ${EXTRA_TIME.challenge.reward} at once. Walls earn none. One mistake ends the run, and the press keeps growing — a third defender at 0:45, a fourth at 1:45, a fifth at 3:15.`
       : mode === "practice"
         ? "No timer. Unlimited recoveries. Experiment freely."
         : `Keep possession for ${game.config.time} seconds. Earn ${game.config.target} points. You have ${possessions} ${possessions === 1 ? "possession" : "possessions"}; the ${possessionOrdinal(possessions)} loss ends the round.`,
@@ -2912,6 +2915,8 @@ const hudCache = {
   focusEmpty: null,
   goalWidth: "",
   goalText: "",
+  challengeText: null,
+  challengeFill: "",
   bestText: "",
   targetText: "",
   isPlaying: null,
@@ -2921,6 +2926,8 @@ const hudCache = {
 };
 
 function resetHudCache() {
+  hudCache.challengeText = null;
+  hudCache.challengeFill = "";
   hudCache.oneTouchStreak = -1;
   hudCache.oneTouchMilestone = null;
   hudCache.oneTouchProgress = -1;
@@ -3469,10 +3476,10 @@ function syncHud() {
 
   const isEndless = Boolean(game.config.endless);
   const stage = isEndless ? endlessStage(game.elapsed) : null;
-  // In Endless the score IS the clock, already shown in the TIME pill, so the
-  // big readout carries the other half of the story instead: how many bodies
-  // are on the court right now. It stays digits-only, as the markup requires.
-  const scoreReadout = isEndless ? game.defenders.length : game.score;
+  // In Extra Time the TIME pill is the bank draining, so the big readout
+  // carries the score proper: whole seconds survived. It stays digits-only,
+  // as the markup requires.
+  const scoreReadout = game.score;
   if (scoreReadout !== hudCache.score) {
     $("score-value").textContent = isEndless
       ? String(scoreReadout)
@@ -3481,9 +3488,7 @@ function syncHud() {
   }
 
   const isPractice = Boolean(game.config.practice);
-  // Counting up, a ceil() would show 0:01 the instant the round started and
-  // read a second ahead of the survival score for the whole run.
-  const timeWhole = isEndless ? Math.floor(game.time + 1e-9) : Math.ceil(game.time);
+  const timeWhole = Math.ceil(game.time);
   const timeString = isPractice
     ? "∞"
     : `${Math.floor(timeWhole / 60)}:${String(Math.max(0, timeWhole % 60)).padStart(2, "0")}`;
@@ -3491,16 +3496,15 @@ function syncHud() {
     $("time-value").textContent = timeString;
     hudCache.timeString = timeString;
   }
-  // Nothing is running out in Endless, so the clock never goes red - it
-  // would otherwise be urgent for the first fifteen seconds of every run.
-  const isUrgent = !isPractice && !isEndless && game.time < 15;
+  // Extra Time's bank is short by design, so it only goes red under ten.
+  const isUrgent = !isPractice && game.time < (isEndless ? 10 : 15);
   if (isUrgent !== hudCache.timeUrgent) {
     $("time-value").classList.toggle("urgent", isUrgent);
     hudCache.timeUrgent = isUrgent;
   }
 
-  // Endless pays no points, so it has no multiplier to show. The pill counts
-  // down to the next defender instead - the one number a player in a run
+  // Extra Time pays no points, so it has no multiplier to show. The pill
+  // counts down to the next defender instead - the one number a player in a run
   // actually wants: how long this much space lasts.
   const comboText = isEndless
     ? stage.next
@@ -3599,22 +3603,46 @@ function syncHud() {
     hudCache.musicFocusActive = musicFocus;
   }
 
+  const challenge = isEndless ? game.challenge : null;
   if (isEndless) {
-    // The objective line is the ladder: what is on the court now, and what
-    // is coming. At the top of the ladder it says so, because "next
-    // defender: never" would read as the press having stopped - it has not.
-    const goalText = stage.next
-      ? `${game.defenders.length} DEFENDERS · ${stage.next.defenders} AT ${formatClock(stage.next.at)}`
-      : `${game.defenders.length} DEFENDERS · THE PRESS KEEPS QUICKENING`;
+    // The objective line is the live challenge when there is one. Otherwise
+    // it is the ladder: what is on the court now, and what is coming. At the
+    // top of the ladder it says so, because "next defender: never" would
+    // read as the press having stopped - it has not.
+    const goalText = challenge
+      ? `${challenge.label} · ${Math.ceil(challenge.remaining)}s · +${EXTRA_TIME.challenge.reward}s`
+      : stage.next
+        ? `${game.defenders.length} DEFENDERS · ${stage.next.defenders} AT ${formatClock(stage.next.at)}`
+        : `${game.defenders.length} DEFENDERS · THE PRESS KEEPS QUICKENING`;
     if (goalText !== hudCache.goalText) {
       $("goal-label").textContent = goalText;
       hudCache.goalText = goalText;
     }
   }
+  // The objective card is hidden in play view, so the challenge also lives
+  // in its own pill on the court (a sibling of the one-touch readout).
+  const challengeText = challenge
+    ? `${challenge.label} ${Math.ceil(challenge.remaining)}s`
+    : "";
+  if (challengeText !== hudCache.challengeText) {
+    hudCache.challengeText = challengeText;
+    $("challenge-readout").hidden = !challenge;
+    if (challenge) $("challenge-label").textContent = challengeText;
+  }
+  if (challenge) {
+    const fill = `${Math.round((challenge.remaining / challenge.window) * 100)}%`;
+    if (fill !== hudCache.challengeFill) {
+      $("challenge-fill").style.width = fill;
+      hudCache.challengeFill = fill;
+    }
+  }
   const goalPercent = isEndless
-    ? // Progress toward the next rung, so the bar reads as "how much longer
-      // does this much space last". Full once there is no rung left.
-      stage.next
+    ? // A live challenge drains the bar with its remaining time. Otherwise it
+      // shows progress toward the next rung, so the bar reads as "how much
+      // longer does this much space last". Full once there is no rung left.
+      challenge
+      ? Math.min(100, (challenge.remaining / challenge.window) * 100)
+      : stage.next
       ? Math.min(100, ((game.elapsed - stageStart(stage)) / (stage.next.at - stageStart(stage))) * 100)
       : 100
     : game.config.target
@@ -3726,13 +3754,19 @@ function finish() {
     game.turnovers >= possessionLimit(game.config) && !game.config.practice;
   const survivalRun = isSurvivalMode(mode);
   const endlessBest = progress.records.endless || 0;
+  // Extra Time ends one of two ways: the bank hit zero (finish() zeroes it)
+  // or the one possession was lost with time still in hand.
+  const timeRanOut = survivalRun && game.time <= 0;
+  const ending = timeRanOut
+    ? "Time ran out"
+    : "The press caught you";
   const extra =
     survivalRun
       ? result.newBest
-        ? `A new personal best. ${game.defenders.length} defenders were on the court when it ended.`
+        ? `${ending}. A new personal best, with ${game.defenders.length} defenders on the court.`
         : endlessBest > game.score
-          ? `Your best run is ${formatClock(endlessBest)}. ${game.defenders.length} defenders were on the court when this one ended.`
-          : `${game.defenders.length} defenders were on the court when it ended.`
+          ? `${ending}. Your best run is ${formatClock(endlessBest)}; ${game.defenders.length} defenders were on the court at the end of this one.`
+          : `${ending}, with ${game.defenders.length} defenders on the court.`
       : mode === "career" && result.cleared
       ? courtIndex === COURTS.length - 1
         ? "Circuit complete. Chase three stars on every court."
@@ -3750,7 +3784,7 @@ function finish() {
   showRoundResults({
     cleared: result.cleared,
     kicker: survivalRun
-      ? `RUN OVER · ${formatClock(game.score)}${result.newBest ? " · NEW BEST" : ""}`
+      ? `${timeRanOut ? "TIME UP" : "CAUGHT"} · ${formatClock(game.score)}${result.newBest ? " · NEW BEST" : ""}`
       : result.cleared
         ? `VICTORY · COURT CLEARED${result.newBest ? " · NEW BEST" : ""}`
         : outOfPossessions
@@ -3758,7 +3792,9 @@ function finish() {
           : "DEFEAT · TARGET MISSED",
     title:
       mode === "endless"
-        ? "What a run."
+        ? timeRanOut
+          ? "Out of time."
+          : "Caught out."
         : result.cleared
           ? "Beautiful football."
           : "Full time.",
@@ -3791,7 +3827,7 @@ function finish() {
   sound.play(result.cleared ? "victory" : "defeat");
   announce(
     survivalRun
-      ? `Run over. You lasted ${formatClock(game.score)}.`
+      ? `${timeRanOut ? "Time ran out" : "Caught"}. You lasted ${formatClock(game.score)}.`
       : `Round complete. ${game.score} points. ${result.cleared ? "Court cleared." : ""}`,
   );
   if (pendingScoreRounds.length) showScoreSaveDialog();
@@ -5613,7 +5649,12 @@ function frame(now) {
       // — still sound, so a noise now means something happened rather than
       // just that the ball arrived. The score popup is unaffected; only the
       // voice is dropped, and audio.js still defines one if it should return.
-      if (event.type !== "end" && event.type !== "score")
+      // A missed challenge is deliberately quiet: only a completed one sounds.
+      if (
+        event.type !== "end" &&
+        event.type !== "score" &&
+        !(event.type === "challenge" && !event.completed)
+      )
         sound.play(event.type);
       if (event.type === "focus") {
         // The flash is about the Energy resource, not either ability chip.

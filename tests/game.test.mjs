@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOST_DRAIN_RATE, FOCUS_DRAIN_RATE, STAR_RATIOS, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS, zoneMultiplier, ZONE_MULTIPLIER_CEILING, ZONE_POINTS, ZONE_LIFETIME, ZONE_BLIND_GAP, endlessStage, ENDLESS_PRESS, ENDLESS_DEFENDER_STEPS } from '../src/game.js';
+import { BOOST_DRAIN_RATE, FOCUS_DRAIN_RATE, STAR_RATIOS, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS, zoneMultiplier, ZONE_MULTIPLIER_CEILING, ZONE_POINTS, ZONE_LIFETIME, ZONE_BLIND_GAP, endlessStage, ENDLESS_PRESS, ENDLESS_DEFENDER_STEPS, EXTRA_TIME, TIME_REWARDS, CHALLENGE_TYPES, refundScale, extraTimeGrant } from '../src/game.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -953,36 +953,248 @@ function openEndless(extra = {}) {
   return game;
 }
 
-test('endless counts the clock up and scores it, while a career round counts down', () => {
+// Like advance(), but the carrier never dawdles into the six-second hold
+// turnover, so a test can watch a long stretch of an Extra Time run.
+function advanceAlive(game, seconds, input = {}) {
+  for (let remaining = seconds; remaining > 1e-9; remaining -= STEP) {
+    game.hold = 0;
+    game.update(Math.min(STEP, remaining), input);
+  }
+}
+
+test('extra time counts a bank down and scores the seconds survived', () => {
   const standard = openGame(), endless = openEndless({ time: 90 });
-  advance(standard, 3);
-  advance(endless, 3);
+  advanceAlive(standard, 3);
+  advanceAlive(endless, 3);
   assert.ok(Math.abs(standard.time - 87) < 1e-6, 'a career clock runs out');
-  assert.ok(Math.abs(endless.time - 3) < 1e-6, 'an endless clock runs up from zero');
-  assert.equal(endless.score, 3, 'seconds survived ARE the endless score');
+  assert.ok(Math.abs(endless.time - (EXTRA_TIME.start - 3)) < 1e-6, 'the bank drains from 30s whatever config.time says');
+  assert.equal(endless.score, 3, 'seconds survived ARE the extra time score');
+  assert.ok(Math.abs(endless.elapsed - 3) < 1e-6, 'elapsed still counts up');
 });
 
-test('endless pays energy and colour for bonuses but never points', () => {
+test('extra time slows with Focus like the World tour clock', () => {
   const endless = openEndless();
-  endless.zone = { ...endless.players[1], r: 92 };
-  completePass(endless, 1);
-  assert.equal(endless.zones, 1, 'the zone still registers');
-  assert.equal(endless.zoneStreak, 1, 'the streak still climbs');
-  assert.equal(endless.focus, FOCUS_REWARDS.zone, 'the zone still pays energy');
-  assert.equal(endless.score, 0, 'no elapsed time yet means no score, bonus or not');
-  const popup = endless.events.find(e => e.type === 'score');
-  assert.equal(popup.points, null, 'the popup carries no number to print');
-  assert.equal(popup.bestBonus, 'zone', 'the bonus is still named in the popup');
-  assert.ok(!/\+/.test(popup.text), 'and never reads "+0"');
+  endless.focus = 5;
+  advanceAlive(endless, 1, { focus: true });
+  assert.ok(EXTRA_TIME.start - endless.time < 0.5, 'slow motion drains the bank more slowly');
+  assert.ok(Math.abs(EXTRA_TIME.start - endless.time - endless.elapsed) < 1e-6);
 });
 
-test('endless never ends on the clock, only on a mistake', () => {
-  const game = openEndless({ time: 1 });
-  advance(game, 5);
-  assert.equal(game.status, 'playing', 'there is no clock to run out');
-  game.turnover('TEST');
-  assert.equal(game.status, 'finished', 'one possession: the first mistake ends the run');
-  assert.equal(game.score, 5, 'the score is the seconds that were survived');
+test('extra time ends when the bank reaches zero, or on the one mistake', () => {
+  const game = openEndless();
+  advanceAlive(game, EXTRA_TIME.start - 1);
+  assert.equal(game.status, 'playing');
+  advanceAlive(game, 1.1);
+  assert.equal(game.status, 'finished', 'an empty bank ends the run');
+  assert.equal(game.time, 0);
+  assert.equal(game.score, EXTRA_TIME.start, 'the score is the seconds survived');
+  assert.ok(game.events.some(e => e.type === 'end'));
+  const mistake = openEndless();
+  advanceAlive(mistake, 5);
+  mistake.turnover('TEST');
+  assert.equal(mistake.status, 'finished', 'one possession: the first mistake ends the run');
+  assert.equal(mistake.score, 5);
+});
+
+test('refundScale fades from full value to 40% at three minutes', () => {
+  assert.equal(refundScale(0), 1);
+  assert.ok(Math.abs(refundScale(150) - 0.5) < 1e-9);
+  assert.equal(refundScale(180), 0.4);
+  assert.equal(refundScale(3000), 0.4);
+  assert.equal(refundScale(-5), 1);
+});
+
+test('extraTimeGrant follows the reward table, stacks, scales, rounds and floors at half a second', () => {
+  assert.deepEqual(TIME_REWARDS, { ole: 4, zone: 3, triangle: 2, split: 2 });
+  assert.equal(extraTimeGrant(['zone'], 0), 3);
+  assert.equal(extraTimeGrant(['ole'], 0), 4);
+  assert.equal(extraTimeGrant(['triangle'], 0), 2);
+  assert.equal(extraTimeGrant(['split'], 0), 2);
+  assert.equal(extraTimeGrant(['zone', 'split', 'triangle', 'ole'], 0), 11, 'bonuses on one pass sum');
+  assert.equal(extraTimeGrant(['wall'], 0), 0, 'a wall pass earns no time');
+  assert.equal(extraTimeGrant(['one-touch'], 0), 0, 'a plain one-touch earns no time');
+  assert.equal(extraTimeGrant([], 0), 0);
+  assert.equal(extraTimeGrant(['wall', 'zone'], 0), 3, 'a wall adds nothing to a stack');
+  assert.equal(extraTimeGrant(['zone'], 180), 1, '3 x 0.4 = 1.2 rounds to 1');
+  assert.equal(extraTimeGrant(['zone'], 60), 2.5, '3 x 0.8 = 2.4 rounds to 2.5');
+  assert.equal(extraTimeGrant(['split'], 180), 1, '2 x 0.4 = 0.8 rounds to 1');
+  const tiny = extraTimeGrant(['split'], 1e6);
+  assert.ok(tiny >= 0.5 && tiny % 0.5 === 0);
+});
+
+test('a zone pass buys time and the popup names it', () => {
+  const game = openEndless();
+  game.zone = { ...game.players[1], r: 92 };
+  const before = game.time;
+  completePass(game, 1);
+  assert.equal(game.zones, 1, 'the zone still registers');
+  assert.equal(game.zoneStreak, 1, 'the streak still climbs');
+  assert.equal(game.focus, FOCUS_REWARDS.zone, 'the zone still pays energy');
+  assert.equal(game.score, Math.floor(game.elapsed + 1e-9), 'points never pay in extra time');
+  assert.ok(game.time > before + 2, 'three seconds went into the bank');
+  const popup = game.events.find(e => e.type === 'score');
+  assert.equal(popup.points, null, 'the popup carries no number to print');
+  assert.equal(popup.bestBonus, 'zone');
+  assert.equal(popup.text, 'ZONE BONUS +3s');
+});
+
+test('a wall pass earns no time and no time text; a plain pass is silent', () => {
+  const game = openEndless();
+  const before = game.time;
+  completePass(game, 1, true);
+  assert.equal(game.banks, 1);
+  assert.ok(Math.abs(game.time - (before - game.elapsed)) < 1e-6, 'the bank only drained');
+  const popup = game.events.find(e => e.type === 'score');
+  assert.equal(popup.text, 'WALL PLAY', 'a wall names itself and nothing more');
+  const plain = openEndless();
+  completePass(plain, 1);
+  assert.equal(plain.events.filter(e => e.type === 'score').length, 0);
+});
+
+test('the time bank never exceeds the cap', () => {
+  const game = openEndless();
+  game.time = EXTRA_TIME.cap - 1;
+  game.zone = { ...game.players[1], r: 92 };
+  completePass(game, 1);
+  assert.ok(game.time <= EXTRA_TIME.cap + 1e-9);
+  assert.ok(game.time > EXTRA_TIME.cap - 0.5);
+  game.time = EXTRA_TIME.cap;
+  game.bankTime(8);
+  assert.equal(game.time, EXTRA_TIME.cap);
+});
+
+test('challenges start at 8s, rotate without repeating, and expose their state', () => {
+  const game = openEndless();
+  advanceAlive(game, EXTRA_TIME.challenge.firstAt - 0.5);
+  assert.equal(game.challenge, null, 'nothing before 8s');
+  advanceAlive(game, 0.6);
+  assert.ok(game.challenge, 'the first challenge appears at 8s');
+  for (const key of ['type', 'label', 'remaining', 'window']) assert.ok(key in game.challenge, key);
+  assert.ok(CHALLENGE_TYPES.some(t => t.id === game.challenge.type && t.label === game.challenge.label));
+  assert.deepEqual(CHALLENGE_TYPES.map(t => t.label), ['SPLIT THE PRESS', 'PLAY A TRIANGLE', 'ZONE + A BONUS', 'FIVE ONE-TOUCH PASSES']);
+  assert.equal(game.challenge.window, EXTRA_TIME.challenge.window);
+  const seen = [game.challenge.type];
+  for (let i = 0; i < 30; i++) {
+    let guard = 0;
+    while (game.challenge && guard++ < 2000) { game.time = 30; advanceAlive(game, STEP); }
+    assert.equal(game.challenge, null, 'it expired');
+    while (!game.challenge && guard++ < 4000) { game.time = 30; advanceAlive(game, STEP); }
+    assert.ok(game.challenge, 'the next one arrives after the gap');
+    seen.push(game.challenge.type);
+  }
+  for (let i = 1; i < seen.length; i++) assert.notEqual(seen[i], seen[i - 1], 'never the same type twice in a row');
+  assert.ok(new Set(seen).size > 2, 'the rotation uses the whole table');
+});
+
+test('the next challenge waits the full gap after expiry', () => {
+  const game = openEndless();
+  advanceAlive(game, 8.1);
+  const startedAt = game.challenge.startedAt;
+  advanceAlive(game, EXTRA_TIME.challenge.window + 0.05);
+  assert.equal(game.challenge, null);
+  const expired = game.events.find(e => e.type === 'challenge');
+  assert.equal(expired.completed, false, 'expiry emits a quiet challenge event');
+  assert.ok(!/\+\d/.test(expired.text));
+  advanceAlive(game, EXTRA_TIME.challenge.gap - 0.5);
+  assert.equal(game.challenge, null, 'still inside the gap');
+  advanceAlive(game, 0.6);
+  assert.ok(game.challenge.startedAt > startedAt + EXTRA_TIME.challenge.window);
+});
+
+function openChallenge(type, extra = {}) {
+  const game = openEndless(extra);
+  advanceAlive(game, 8.1);
+  game.challenge = { type, label: CHALLENGE_TYPES.find(t => t.id === type).label, remaining: 10, window: 10, startedAt: game.elapsed, count: 0 };
+  game.lastChallengeType = type;
+  game.time = 30;
+  game.events = [];
+  return game;
+}
+
+test('a lone zone hit does not complete ZONE + A BONUS, but a zone with another bonus does', () => {
+  const game = openChallenge('zone-combo');
+  game.zone = { ...game.players[1], r: 92 };
+  completePass(game, 1);
+  assert.ok(game.challenge, 'still live after a zone alone');
+  assert.equal(game.events.filter(e => e.type === 'challenge').length, 0);
+  const combo = openChallenge('zone-combo');
+  assert.equal(combo.challengeMet(combo.challenge, ['zone', 'triangle']), true);
+  assert.equal(combo.challengeMet(combo.challenge, ['zone', 'ole']), true);
+  assert.equal(combo.challengeMet(combo.challenge, ['zone', 'split']), true);
+  assert.equal(combo.challengeMet(combo.challenge, ['zone', 'wall', 'one-touch']), false);
+  assert.equal(combo.challengeMet(combo.challenge, ['split', 'triangle']), false);
+});
+
+test('a completed challenge banks reward x refundScale, emits an event and schedules the next', () => {
+  const game = openChallenge('split');
+  const before = game.time;
+  game.progressChallenge(['split'], { oneTouch: false }, game.players[game.carrier]);
+  assert.ok(Math.abs(game.time - (before + EXTRA_TIME.challenge.reward)) < 1e-9);
+  assert.equal(game.challenge, null);
+  const event = game.events.find(e => e.type === 'challenge');
+  assert.equal(event.completed, true);
+  assert.equal(event.text, 'CHALLENGE +8s');
+  assert.ok(Math.abs(game.challengeNextAt - (game.elapsed + EXTRA_TIME.challenge.gap)) < 1e-9);
+  const late = openChallenge('triangle');
+  late.elapsed = 180;
+  late.time = 20;
+  late.progressChallenge(['triangle'], { oneTouch: false }, late.players[0]);
+  assert.equal(late.time, 23, '8 x 0.4 = 3.2 rounds to 3');
+  const capped = openChallenge('split');
+  capped.time = 58;
+  capped.progressChallenge(['split'], { oneTouch: false }, capped.players[0]);
+  assert.equal(capped.time, EXTRA_TIME.cap);
+});
+
+test('five one-touch passes complete the challenge and any break resets the count', () => {
+  const game = openChallenge('one-touch');
+  const p = game.players[0];
+  for (let i = 0; i < 4; i++) game.progressChallenge(['one-touch'], { oneTouch: true }, p);
+  assert.equal(game.challenge.count, 4);
+  game.progressChallenge([], { oneTouch: false }, p);
+  assert.equal(game.challenge.count, 0, 'a non one-touch reception resets the count');
+  for (let i = 0; i < 4; i++) game.progressChallenge(['one-touch'], { oneTouch: true }, p);
+  game.oneTouchStreak = 0;
+  advanceAlive(game, STEP);
+  assert.equal(game.challenge.count, 0, 'a lapsed streak resets the count');
+  for (let i = 0; i < 5; i++) game.progressChallenge(['one-touch'], { oneTouch: true }, p);
+  assert.equal(game.challenge, null, 'the fifth completes it');
+  assert.equal(game.events.filter(e => e.type === 'challenge' && e.completed).length, 1);
+});
+
+test('challenge selection uses its own seeded rng, so the World tour zone sequence is unchanged', () => {
+  // Fingerprint recorded from the engine before Extra Time existed.
+  const g = new Game({ ...COURTS[1], seed: 12345 }, 'balanced');
+  assert.equal(g.players.map(p => p.phase.toFixed(6)).join(','), '6.152694,1.926404,3.040810,5.136628');
+  const trace = [];
+  for (let f = 0; f < 3600 && g.status === 'playing'; f++) {
+    if (f % 45 === 0 && !g.ball) g.pass((g.carrier + 1) % 4, false);
+    g.update(1 / 60, {});
+    if (f % 60 === 0) trace.push(`${g.zoneIndex}:${g.zone ? 'z' : 'b'}:${g.score}:${g.turnovers}`);
+  }
+  assert.equal(trace.slice(0, 20).join('|'), '0:z:0:0|0:z:14:0|0:z:53:0|0:z:70:0|0:z:84:0|0:z:122:0|0:z:141:0|2:b:159:0|2:b:195:0|2:z:215:0|2:z:235:0|2:z:255:0|2:z:294:0|2:z:294:1|2:z:308:1|2:z:328:1|2:z:348:1|3:b:379:1|3:z:399:1|3:z:418:1');
+  assert.equal(g.challenge, null, 'no challenges outside extra time');
+  // An Extra Time run keeps the main rng on the same track as a plain one.
+  const a = new Game({ ...COURTS[1], seed: 99 });
+  const b = new Game({ ...COURTS[1], seed: 99, endless: true, time: 500 });
+  a.time = b.time = 500;
+  for (let i = 0; i < 600; i++) { a.update(STEP); b.update(STEP); }
+  assert.equal(a.zoneIndex, b.zoneIndex);
+  assert.equal(a.rng(), b.rng());
+});
+
+test('an extra time run is deterministic for a seed', () => {
+  const run = () => {
+    const game = new Game({ ...COURTS[0], endless: true, defenders: 2, possessions: 1, seed: 4242 });
+    const trace = [];
+    for (let f = 0; f < 60 * 40 && game.status === 'playing'; f++) {
+      if (f % 50 === 0 && !game.ball) game.pass((game.carrier + 1) % 4, f % 100 === 0);
+      game.update(STEP, { x: Math.sin(f / 40) });
+      if (f % 30 === 0) trace.push([game.elapsed.toFixed(4), game.time.toFixed(4), game.challenge?.type ?? '-', game.score].join(':'));
+    }
+    return trace.join('|') + game.status;
+  };
+  assert.equal(run(), run());
 });
 
 test('the endless ladder adds defenders on the clock and never stops pressing', () => {

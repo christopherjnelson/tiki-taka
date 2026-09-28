@@ -1509,7 +1509,7 @@ await check(
     await endlessButton.click();
     await page.waitForFunction(() => window.__leaderboardCalls.at(-1)?.mode === "endless");
     assert.equal(await page.locator("#hl-tabs").isHidden(), true);
-    assert.equal(await heading.textContent(), "ENDLESS FLOW LEADERBOARD");
+    assert.equal(await heading.textContent(), "EXTRA TIME LEADERBOARD");
     assert.match(await status.textContent(), /no runs recorded yet/i);
     assert.equal(await page.locator("#hl-head-score").textContent(), "TIME");
 

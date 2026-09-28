@@ -45,7 +45,9 @@ World Tour has six courts from Lisbon to Amsterdam. Meet the target and survive 
 Difficulty rises from two to four defenders, base defender speed from 76 to 123 court units per second, and 90 seconds to complete each court. Targets depend on the chosen difficulty tier; on Standard they range from 4,900 (The Courtyard) to 7,000 (Total Football).
 
 - **Free practice:** press capped at 65 units per second, unlimited recoveries, no time limit.
-- **Endless:** counts up from zero on Still Water. One possession — the first mistake ends the run. A third defender joins at 0:45, a fourth at 1:45, a fifth at 3:15, and the press keeps quickening after that with no ceiling.
+- **Extra Time:** one possession on Still Water, played against a countdown that starts at 30 seconds and never holds more than 60. Your score is the whole seconds you last, and the run ends when the clock hits zero or on the first mistake. Bonuses buy time back: olé +4s, zone +3s, triangle +2s, split the press +2s (bonuses on one pass add up). Wall passes and plain one-touch passes earn none. Refunds fade with the run: full value at the start, down to 40% from 3:00, so every run ends eventually. Focus slow-motion slows the clock too.
+  - **Challenges:** the first appears at 8 seconds, then one every 6 seconds after the last is done or missed, each giving you 10 seconds. Split the press, play a triangle, hit the zone with another bonus on the same pass, or play five one-touch passes in a row. A completed challenge pays 8 seconds (scaled by the same fade). It never repeats the previous one.
+  - **The press:** a third defender joins at 0:45, a fourth at 1:45, a fifth at 3:15, and they keep quickening after that with no ceiling.
 Finished rounds grant XP on a 50-level curve that widens as it climbs; Free practice grants none.
 
 | Tactic | Strength | Tradeoff |

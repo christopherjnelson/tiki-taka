@@ -20,6 +20,7 @@ const BADGE_STACK_STEP = 34,
 const isStackedBadge = (e) =>
   e &&
   (e.type === "score" ||
+    e.type === "challenge" ||
     e.type === "focus" ||
     (e.type === "one-touch" && !e.milestone));
 const badgeAnchorY = (e) =>
@@ -170,7 +171,7 @@ const VENUE_LOOK = {
   tokyo: { surround: ["#0d0726", "#241148"], surface: ["#141338", "#0c0b24"], light: "#38f5e5", wash: 0.15 },
   "sao-paulo": { surround: ["#0c2a27", "#16453c"], surface: ["#0f3327", "#0a2419"], light: "#9bff8a", wash: 0.12 },
   amsterdam: { surround: ["#0b1f4c", "#123468"], surface: ["#0f2b52", "#0a1d3a"], light: "#8fd9ff", wash: 0.1 },
-  // Endless's court. Ink and jade rather than neon, and the quietest wash of
+  // Extra Time's court. Ink and jade rather than neon, and the quietest wash of
   // the lot: nothing here should feel like a stadium.
   "still-water": { surround: ["#0d1518", "#16262a"], surface: ["#122024", "#0a1418"], light: "#d9f5ec", wash: 0.09 },
 };
@@ -662,6 +663,8 @@ export class Renderer {
           ? 1.35
           : e.type === "score"
             ? 1.25
+            : e.type === "challenge"
+              ? 1.7
             : e.type === "focus"
               ? 1.05
               : e.type === "one-touch"
@@ -971,7 +974,7 @@ export class Renderer {
   // the gap as the zone breaking rather than one about to appear.
   drawZone(game) {
     const z = game.zone;
-    // Endless pays no points, so the zone cannot promise "+18" there. It
+    // Extra Time pays no points, so the zone cannot promise "+18" there. It
     // still pays Energy and still feeds the streak, so it keeps its ring and
     // its name - only the number goes.
     const scored = !game.config?.endless;
@@ -1371,16 +1374,26 @@ export class Renderer {
         };
       if (c._tikiPortrait) this.upright(badgeX, badgeY, drawBadge);
       else drawBadge();
-    } else if (e.type === "score" || e.type === "focus") {
+    } else if (
+      e.type === "score" ||
+      e.type === "focus" ||
+      e.type === "challenge"
+    ) {
       const focus = e.type === "focus",
+        // A popup with no points (Extra Time) prints its own text, which
+        // already carries the time it bought, e.g. "ZONE BONUS +3s".
         displayText = focus
           ? e.text
           : e.points != null
             ? `+${e.points}`
-            : e.text?.match(/\+\d+/)
-              ? e.text.match(/\+\d+/)[0]
-              : e.text,
-        badgeColor = focus ? BONUS_GOLD : getScoreEventColor(e),
+            : e.text,
+        badgeColor = focus
+          ? BONUS_GOLD
+          : e.type === "challenge"
+            ? e.completed
+              ? BONUS_GOLD
+              : "#9aa4c0"
+            : getScoreEventColor(e),
         // The badge is 28 units tall around this centre, so the clamp has to
         // keep half of it clear of PITCH_MARGIN at both ends: a bonus taken
         // up against the touchline used to float its popup into the border
