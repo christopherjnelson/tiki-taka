@@ -1381,13 +1381,20 @@ export class Renderer {
               ? e.text.match(/\+\d+/)[0]
               : e.text,
         badgeColor = focus ? BONUS_GOLD : getScoreEventColor(e),
+        // The badge is 28 units tall around this centre, so the clamp has to
+        // keep half of it clear of PITCH_MARGIN at both ends: a bonus taken
+        // up against the touchline used to float its popup into the border
+        // band, where the arena's signage is painted over the top of it.
         worldY = Math.max(
-          40,
-          e.y -
-            (this.reducedMotion ? 10 : t * 38) -
-            16 +
-            (focus ? 27 : 0) -
-            (e.stackOffset || 0),
+          PITCH_MARGIN + 14,
+          Math.min(
+            HEIGHT - PITCH_MARGIN - 14,
+            e.y -
+              (this.reducedMotion ? 10 : t * 38) -
+              16 +
+              (focus ? 27 : 0) -
+              (e.stackOffset || 0),
+          ),
         );
       c.font = `900 ${focus ? 12 : 15}px ${FONT}`;
       const textW = c.measureText(displayText).width,
