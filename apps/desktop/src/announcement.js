@@ -15,7 +15,7 @@
 // Leave it as an empty string to hide the strip entirely (e.g. between
 // releases when there's nothing worth calling out).
 export const ANNOUNCEMENT_TEXT =
-  "0.4.7 is live — Endless is playable. Survive on Still Water, a court of " +
-  "its own: the clock counts up, bonuses pay Energy instead of points, and " +
-  "the press grows to five defenders and never stops quickening. One mistake " +
-  "ends the run. See the Changelog for the full picture.";
+  "0.5.0 is live — every bonus now builds the multiplier, and it slips if " +
+  "you stop earning them. Endless is now Extra Time: start with 30 seconds " +
+  "and buy more with bonuses and challenges. See the Changelog for the full " +
+  "picture.";

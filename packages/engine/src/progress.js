@@ -190,7 +190,10 @@ export function awardMatch(progress, game, mode, courtIndex) {
     ? game.config.difficulty
     : "standard";
   const isPractice = mode === "practice" || Boolean(game.config?.practice);
+  // Extra Time is never "cleared": its clock reaching zero is the run
+  // ending, not a target met, and it has no star or clear line to earn.
   const cleared =
+    !game.config?.endless &&
     (game.time <= 0 || isPractice) &&
     (isPractice || game.turnovers < possessions) &&
     game.score >= game.config.target;

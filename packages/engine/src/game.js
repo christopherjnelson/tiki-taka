@@ -389,8 +389,8 @@ export const DIFFICULTIES = [
   },
 ];
 export const MAX_DEFENDERS = 5;
-// Endless is one fixed difficulty that rises with the clock instead of a tier
-// picked before kickoff. Two dials move, and only these two: how many
+// Extra Time (internally "endless") is one fixed difficulty that rises with
+// the run's length instead of a tier picked before kickoff. Two dials move, and only these two: how many
 // defenders are on the court, and how fast they close.
 //
 // The defender ladder is the landmark - the court visibly gains a body at
@@ -413,17 +413,55 @@ export const ENDLESS_DEFENDER_STEPS = [
   { at: 195, defenders: MAX_DEFENDERS },
 ];
 export const ENDLESS_PRESS = { base: 75, perSecond: 0.28 };
-// Endless's own court. It is NOT a member of COURTS: the circuit is six
+// Extra Time (mode key "endless") runs on a bank of seconds that drains in
+// real play time. It starts at `start`, is refilled by bonuses and challenges
+// and never holds more than `cap`. The refund shrinks with the run (see
+// refundScale) so the bank cannot be farmed forever: every run still ends.
+export const EXTRA_TIME = {
+  start: 30,
+  cap: 60,
+  // A challenge is a short objective that pays a big chunk of time. The first
+  // appears at `firstAt` seconds; after one completes or expires the next
+  // follows `gap` seconds later and gets `window` seconds to be finished.
+  challenge: { firstAt: 8, gap: 6, window: 10, reward: 8 },
+};
+// Seconds each bonus refunds at full value. Wall passes and plain one-touch
+// passes deliberately earn nothing; an olé is the ten-pass one-touch chain.
+export const TIME_REWARDS = { ole: 4, zone: 3, triangle: 2, split: 2 };
+export const CHALLENGE_TYPES = [
+  { id: "split", label: "SPLIT THE PRESS" },
+  { id: "triangle", label: "PLAY A TRIANGLE" },
+  { id: "zone-combo", label: "ZONE + A BONUS" },
+  { id: "one-touch", label: "FIVE ONE-TOUCH PASSES" },
+];
+const ONE_TOUCH_CHALLENGE_COUNT = 5;
+// Pure: how much of a refund survives at `elapsed` seconds. Full value at the
+// start, fading linearly to 40% from 3:00 on.
+export function refundScale(elapsed) {
+  const seconds = Math.max(0, Number(elapsed) || 0);
+  return Math.max(0.4, 1 - seconds / 300);
+}
+const roundToHalf = (seconds) => Math.round(seconds * 2) / 2;
+// Pure: seconds of time earned by a pass that scored `bonuses` at `elapsed`.
+// Bonuses stack, the total is scaled then rounded to the nearest half second,
+// and anything above zero pays at least half a second.
+export function extraTimeGrant(bonuses = [], elapsed = 0) {
+  let raw = 0;
+  for (const bonus of new Set(bonuses)) raw += TIME_REWARDS[bonus] || 0;
+  if (raw <= 0) return 0;
+  return Math.max(0.5, roundToHalf(raw * refundScale(elapsed)));
+}
+// Extra Time's own court. It is NOT a member of COURTS: the circuit is six
 // venues with targets, stars and a clear line, and this has none of those -
 // putting it in that array would give it a court card, a leaderboard tab and
 // a place in the progression it is not part of. The court contributes what a
 // court contributes (its look, its name, its seed); everything about the
 // difficulty comes from the ladder above, which is why it carries no target,
-// no reference and no clock.
+// no reference and no fixed clock (Extra Time starts its own bank in Game).
 export const ENDLESS_COURT = {
   name: "Still Water",
-  place: "STAY IN THE FLOW",
-  short: "Keep it moving",
+  place: "BUY EXTRA TIME",
+  short: "Earn every second",
   venue: "still-water",
   target: 0,
   reference: 0,
@@ -436,7 +474,7 @@ export const ENDLESS_COURT = {
   difficulty: "standard",
   endless: true,
   description:
-    "One possession, and a press that never stops growing. A third defender at 0:45, a fourth at 1:45, a fifth at 3:15 — and they keep getting quicker after that. Last as long as you can.",
+    "Extra Time: start with 30 seconds and one possession. Bonuses buy time, challenges buy more, and the press never stops growing. A third defender at 0:45, a fourth at 1:45, a fifth at 3:15. One mistake ends it.",
 };
 // Pure: the press the clock has earned at `elapsed` seconds. Exported so the
 // UI can telegraph the next rung without re-deriving the ladder.
@@ -497,11 +535,16 @@ export class Game {
     this.ball = null;
     this.carrier = 0;
     this.score = 0;
-    // Endless counts UP: there is no clock to run out, and the seconds
-    // survived are the score. Everything that reads game.time - the HUD
-    // readout, the results screen - therefore needs no mode branch.
-    this.time = config.endless ? 0 : config.time;
+    // Extra Time counts DOWN like the World tour clock, from a bank that
+    // bonuses refill; `elapsed` counts up and its whole seconds are the score.
+    this.time = config.endless ? EXTRA_TIME.start : config.time;
     this.elapsed = 0;
+    // Extra Time challenge state. Its own PRNG keeps this.rng (zones, player
+    // phases) on exactly the sequence every other mode already reproduces.
+    this.challenge = null;
+    this.challengeRng = seeded((config.seed ^ 0x9e3779b9) >>> 0);
+    this.challengeNextAt = EXTRA_TIME.challenge.firstAt;
+    this.lastChallengeType = null;
     this.passes = 0;
     this.turnovers = 0;
     this.flow = 0;
@@ -814,25 +857,26 @@ export class Game {
         focusReward += ONE_TOUCH.milestoneFocus;
       }
     }
-    // Endless is scored on survival time alone (see update()), so bonuses
-    // there pay Energy and colour and nothing else. Zeroing the points here
-    // rather than skipping the work above keeps one scoring path: the
-    // multiplier, the streaks and the popup stack all still run, so a zone
-    // hit still reads as a zone hit.
+    // Extra Time is scored on survival time alone (see update()), so bonuses
+    // there pay time (and Energy), never points.
     if (this.config.endless) points = 0;
     this.score += points;
     // Several bonuses can land on one pass; the label shows the best of them
     // while `bonuses` carries the full list for the popup stack.
     const best = Object.keys(BONUS_LABELS).find((key) => bonuses.includes(key));
-    // In Endless a popup carries the bonus's name and colour and no number -
-    // `points: null` is what tells the renderer to print the text rather than
-    // a total, so the mode does not spray "+0" over every pass. A plain pass
-    // there has nothing to say at all and stays silent.
+    const timeGrant = this.config.endless
+      ? this.settleExtraTime(bonuses, ball, p)
+      : 0;
+    // In Extra Time a popup carries the bonus's name, colour and any time it
+    // bought, and no number - `points: null` tells the renderer to print the
+    // text rather than a total. A plain pass stays silent.
     if (!this.config.endless || best)
       this.emit(
         "score",
         this.config.endless
-          ? BONUS_LABELS[best]
+          ? timeGrant > 0
+            ? `${BONUS_LABELS[best]} +${timeGrant}s`
+            : BONUS_LABELS[best]
           : `${best ? BONUS_LABELS[best] : "PASS"} +${points}`,
         p.x,
         p.y - 25,
@@ -884,6 +928,97 @@ export class Game {
     this.flowIdle = 0;
     this.flow = flowForMultiplier(multiplier - 1);
     this.emit("flow-drop", `×${multiplier - 1}`, 500, 310);
+  }
+  // Adds seconds to the Extra Time bank without exceeding the cap. Returns
+  // the seconds actually banked.
+  bankTime(seconds) {
+    const before = this.time;
+    this.time = Math.min(EXTRA_TIME.cap, this.time + seconds);
+    return this.time - before;
+  }
+  // Extra Time's one entry point from receive(): refunds time for this pass's
+  // bonuses, then lets the active challenge see the same reception. Returns
+  // the refund in seconds so the popup can name it.
+  settleExtraTime(bonuses, ball, p) {
+    const grant = extraTimeGrant(bonuses, this.elapsed);
+    if (grant > 0) this.bankTime(grant);
+    this.progressChallenge(bonuses, ball, p);
+    return grant;
+  }
+  challengeMet(challenge, bonuses) {
+    switch (challenge.type) {
+      case "split":
+        return bonuses.includes("split");
+      case "triangle":
+        return bonuses.includes("triangle");
+      case "zone-combo":
+        return (
+          bonuses.includes("zone") &&
+          (bonuses.includes("split") ||
+            bonuses.includes("triangle") ||
+            bonuses.includes("ole"))
+        );
+      case "one-touch":
+        return challenge.count >= ONE_TOUCH_CHALLENGE_COUNT;
+      default:
+        return false;
+    }
+  }
+  progressChallenge(bonuses, ball, p) {
+    const challenge = this.challenge;
+    if (!challenge) return;
+    if (challenge.type === "one-touch")
+      challenge.count = ball.oneTouch ? challenge.count + 1 : 0;
+    if (!this.challengeMet(challenge, bonuses)) return;
+    const reward = roundToHalf(
+      EXTRA_TIME.challenge.reward * refundScale(this.elapsed),
+    );
+    this.bankTime(reward);
+    this.challenge = null;
+    this.challengeNextAt = this.elapsed + EXTRA_TIME.challenge.gap;
+    this.emit("challenge", `CHALLENGE +${reward}s`, p.x, p.y - 50, {
+      points: null,
+      completed: true,
+      challengeType: challenge.type,
+      reward,
+    });
+  }
+  // Runs every frame in Extra Time: expires a stale challenge and starts the
+  // next one when its turn comes.
+  tickChallenge() {
+    const challenge = this.challenge;
+    if (challenge) {
+      // Any break in the one-touch chain restarts the count.
+      if (challenge.type === "one-touch" && this.oneTouchStreak === 0)
+        challenge.count = 0;
+      challenge.remaining = Math.max(
+        0,
+        challenge.startedAt + challenge.window - this.elapsed,
+      );
+      if (challenge.remaining > 1e-9) return;
+      this.challenge = null;
+      this.challengeNextAt = this.elapsed + EXTRA_TIME.challenge.gap;
+      const carrier = this.players[this.carrier];
+      this.emit("challenge", "CHALLENGE MISSED", carrier.x, carrier.y - 50, {
+        points: null,
+        completed: false,
+        challengeType: challenge.type,
+      });
+      return;
+    }
+    if (this.elapsed + 1e-9 < this.challengeNextAt) return;
+    const pool = CHALLENGE_TYPES.filter((t) => t.id !== this.lastChallengeType);
+    const pick = pool[Math.floor(this.challengeRng() * pool.length)];
+    this.lastChallengeType = pick.id;
+    const window = EXTRA_TIME.challenge.window;
+    this.challenge = {
+      type: pick.id,
+      label: pick.label,
+      remaining: window,
+      window,
+      startedAt: this.elapsed,
+      count: 0,
+    };
   }
   // Ends the current zone (hit or timed out) and goes dark for a random
   // beat before the next spot activates. `nextZone` is set immediately so
@@ -981,15 +1116,10 @@ export class Game {
     }
     if (this.ball && this.focusActive) this.ball.focusUsed = true;
     const delta = dt - focusedTime * 0.68;
-    if (this.config.endless) {
-      this.time += delta;
-    } else if (!this.config.practice) {
-      this.time -= delta;
-    }
+    if (!this.config.practice) this.time -= delta;
     this.elapsed += delta;
-    // The score IS the clock in Endless. Whole seconds only: a leaderboard
-    // row, a personal best and the Discord record post all carry an integer,
-    // and a run is not meaningfully better for a stray hundredth.
+    // The score is the seconds survived, whole seconds only: a leaderboard
+    // row, a personal best and the Discord record post all carry an integer.
     // The epsilon is not cosmetic: `elapsed` is a sum of 1/60 frames, so a
     // whole second arrives as 2.9999999999 and a bare floor() would hold the
     // score a second behind the clock the player is reading.
@@ -1001,10 +1131,11 @@ export class Game {
     } else if (this.zoneBlindTimer > 0) {
       this.zoneBlindTimer -= delta;
     }
-    if (!this.config.practice && !this.config.endless && this.time <= 0) {
+    if (!this.config.practice && this.time <= 0) {
       this.finish();
       return;
     }
+    if (this.config.endless) this.tickChallenge();
     if (this.zone && this.zoneTimer <= 0) this.beginZoneBlindGap();
     else if (!this.zone && this.zoneBlindTimer <= 0)
       this.activatePendingZone();
