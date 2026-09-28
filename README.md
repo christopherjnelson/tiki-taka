@@ -28,15 +28,15 @@ Open the game at <http://localhost:5173>.
 
 Play in a desktop browser with keyboard, mouse, or a standard gamepad. The game is also playable on a phone in both orientations — the arena renders a rotated court in portrait. The production build precaches its app shell after the first online load and is installable where the browser supports it; service workers require localhost or HTTPS. The soundtrack is not part of that precache or the build itself: tracks are fetched from a runtime manifest alongside the served app and cached after first use, so new music can ship without a new release.
 
-| Desktop | Phone portrait |
-|---------|---------------|
-| ![Home screen](docs/screenshots/home.png) | ![Phone in-round](docs/screenshots/gameplay-phone-portrait.png) |
+| Desktop | Phone portrait | Phone landscape |
+|---------|---------------|-----------------|
+| ![Home screen](docs/screenshots/home.png) | ![Phone in-round portrait](docs/screenshots/gameplay-phone-portrait.png) | ![Phone in-round landscape](docs/screenshots/gameplay-phone-landscape.png) |
 
 ## Game overview
 
 Control the ball carrier while three teammates find supporting positions. Pass before the press closes in. An interception or tackle costs a possession and resets the formation; the number of possessions depends on the difficulty tier (five on Relaxed, three on Standard, one on Ruthless).
 
-Build a score multiplier by receiving in bonus zones and queue passes for one-touch combinations. Triangles, wall passes, and bonus-zone receptions earn Energy, the shared reserve behind Focus (slowing the court) and Boost. Home offers four modes:
+Build a score multiplier by receiving in bonus zones and queue passes for one-touch combinations. Triangles, bonus-zone receptions, press splits, and Olé milestones earn Energy, the shared reserve behind Focus (slowing the court) and Boost. Home offers four modes:
 
 - **World tour** — six fixed venues, three difficulty tiers, stars and progression.
 - **King of the Court** — four players, one ball, scored on squares taken rather than flow. Not yet playable; shown on Home as coming soon.
