@@ -187,6 +187,28 @@ for (const viewport of VIEWPORTS) {
     // information. It needs eyes on a screenshot instead, which is why the
     // slow suites and a look at the rendered page both still earn their keep.
 
+    // The court-corner-label and build-identity are decorative/diagnostic DOM
+    // elements that in the play view sit directly behind the floating joystick
+    // and action cluster. Both are hidden by CSS during mobile play (see the
+    // mobile play-view block in style.css). Canvas-painted signage such as
+    // "TIKI TAKA WORLD TOUR" at the court's bottom touchline is not assertable
+    // here; it is suppressed in portrait via the renderer's horizontal guard.
+    const hiddenDuringPlay = await page.evaluate(() => {
+      const hidden = [];
+      for (const sel of [".court-corner-label", "#build-identity"]) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) hidden.push(sel);
+      }
+      return hidden;
+    });
+    assert.deepEqual(
+      hiddenDuringPlay,
+      [],
+      `${viewport.name}: DOM elements must be hidden during play: ${hiddenDuringPlay.join(", ")}`,
+    );
+
     assert.equal(
       await page.evaluate(
         () =>

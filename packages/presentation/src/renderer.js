@@ -585,11 +585,17 @@ export class Renderer {
     // The hoarding names the competition, which is the COURT's, not the
     // mode's: Still Water is not on the tour, so it says so in the home
     // preview and in a live run alike.
-    const footText = v.competition || "TIKI TAKA WORLD TOUR",
-      footSize = Math.max(9, Math.round(short * 0.017));
-    c.font = `500 ${footSize}px ${FONT}`;
-    signPlate(c, W / 2, H - margin / 2, c.measureText(footText).width + short * 0.1, margin * 0.6, p.muted);
-    label(c, footText, W / 2, H - margin / 2, footSize, p.muted, "center", 500, 2);
+    // In portrait the bottom touchline sits where the floating action cluster
+    // (SHOUT / FOCUS / BOOST) hovers, so the label would be partially covered
+    // by those buttons. The top label already identifies the venue; skip the
+    // bottom plate in portrait so nothing is obscured.
+    if (horizontal) {
+      const footText = v.competition || "TIKI TAKA WORLD TOUR",
+        footSize = Math.max(9, Math.round(short * 0.017));
+      c.font = `500 ${footSize}px ${FONT}`;
+      signPlate(c, W / 2, H - margin / 2, c.measureText(footText).width + short * 0.1, margin * 0.6, p.muted);
+      label(c, footText, W / 2, H - margin / 2, footSize, p.muted, "center", 500, 2);
+    }
     const markSize = Math.max(9, short * 0.017);
     c.font = `800 ${markSize}px ${FONT}`;
     signPlate(c, margin * 0.95, margin / 2, c.measureText("TT 98").width + short * 0.03, margin * 0.6, v.secondary);
@@ -1375,13 +1381,20 @@ export class Renderer {
               ? e.text.match(/\+\d+/)[0]
               : e.text,
         badgeColor = focus ? BONUS_GOLD : getScoreEventColor(e),
+        // The badge is 28 units tall around this centre, so the clamp has to
+        // keep half of it clear of PITCH_MARGIN at both ends: a bonus taken
+        // up against the touchline used to float its popup into the border
+        // band, where the arena's signage is painted over the top of it.
         worldY = Math.max(
-          40,
-          e.y -
-            (this.reducedMotion ? 10 : t * 38) -
-            16 +
-            (focus ? 27 : 0) -
-            (e.stackOffset || 0),
+          PITCH_MARGIN + 14,
+          Math.min(
+            HEIGHT - PITCH_MARGIN - 14,
+            e.y -
+              (this.reducedMotion ? 10 : t * 38) -
+              16 +
+              (focus ? 27 : 0) -
+              (e.stackOffset || 0),
+          ),
         );
       c.font = `900 ${focus ? 12 : 15}px ${FONT}`;
       const textW = c.measureText(displayText).width,

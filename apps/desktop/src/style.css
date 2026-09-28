@@ -3404,6 +3404,17 @@ body.play-view #bank-button {
   body.play-view .invitation-note {
     margin-top: 7px;
   }
+  /* The floating joystick (bottom-left) and action cluster (bottom-right)
+     sit over the bottom of the game-panel in both orientations. The
+     court-corner-label is absolutely positioned at the panel's bottom-left,
+     so it lands directly behind the joystick. The build-identity is fixed at
+     the viewport's bottom-right, where the action buttons hover. Both are
+     decorative/diagnostic and serve no purpose mid-round; hide them here so
+     neither leaks through the translucent control circles. */
+  body.play-view .court-corner-label,
+  body.play-view .build-identity {
+    display: none;
+  }
 }
 /* The two aspect-specific deltas the shared block above points at. Landscape
    keeps the 1000:620 court it always had, sized by whichever dimension runs
