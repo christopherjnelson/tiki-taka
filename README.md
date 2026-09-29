@@ -39,7 +39,7 @@ Control the ball carrier while three teammates find supporting positions. Pass b
 Build a score multiplier by chaining bonuses (zones build it fastest; olés, triangles and splits build it too, wall passes don't) before it slips a step after 6 seconds idle, and queue passes for one-touch combinations. Triangles, bonus-zone receptions, press splits, and Olé milestones earn Energy, the shared reserve behind Focus (slowing the court) and Boost. Home offers four modes:
 
 - **World tour** — six fixed venues, three difficulty tiers, stars and progression.
-- **King of the Court** — four players, one ball, scored on squares taken rather than flow. Not yet playable; shown on Home as coming soon.
+- **King of the Court** — its own court (The Rooftop) cut into a grid of 24 squares, and a 90-second round. Passes take the square the receiver stands in and bonuses take whole shapes of squares; a turnover costs the ground around it but never the round, and holding all 24 crowns you and clears the board. Scored on crowns and squares, not flow; difficulty sets the press.
 - **Extra Time** — its own court (Still Water, the one venue that is not on the tour) and one difficulty. You start with 30 seconds on a clock that counts down; zones, splits, triangles and olés buy time back (walls buy none), and a rotating challenge pays 8 seconds at once. Nothing is scored but the seconds you last. The bank holds 60 seconds at most and refunds shrink as the run goes on, while the press grows — a third defender at 0:45, a fourth at 1:45, a fifth at 3:15, quicker forever. The first mistake, or an empty clock, ends the run.
 - **Free practice** — no turnover limit, for learning the rhythm.
 

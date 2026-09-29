@@ -41,6 +41,11 @@ const COLORS: Record<string, number> = {
 const isEndless = (mode: unknown) => mode === "endless";
 // Its own colour, matching the court's jade rather than the tour's teal.
 const ENDLESS_COLOR = 0x8fe6cf;
+// King of the Court is scored on squares held (crowns * 24 + squares), has no
+// court number, and keeps one board per difficulty. Read as points it would
+// post "took UNKNOWN COURT".
+const isKotc = (mode: unknown) => mode === "kotc";
+const KOTC_COLOR = 0xffd166;
 
 async function config(): Promise<Record<string, string>> {
   const response = await fetch(
@@ -100,6 +105,8 @@ Deno.serve(async (req: Request) => {
   // A run is read as a duration everywhere it appears, including the margin:
   // "by 0:14" is the sentence a player would say, "by 14" is not.
   const amount = endless ? clock : count;
+  const kotc = isKotc(record.mode);
+  const squares = (value: unknown) => `${count(value)} squares`;
 
   // previous_best is 0 when the board was empty (the trigger sends it that
   // way): there is nothing beaten, so the line is omitted rather than
@@ -108,27 +115,35 @@ Deno.serve(async (req: Request) => {
     previousBest <= 0
       ? ""
       : previousHolder
-        ? `Beat **${previousHolder}**'s ${amount(previousBest)} by ${amount(margin)}.`
-        : `Beat the old best of ${amount(previousBest)} by ${amount(margin)}.`;
+        ? `Beat **${previousHolder}**'s ${kotc ? squares(previousBest) : amount(previousBest)} by ${kotc ? squares(margin) : amount(margin)}.`
+        : `Beat the old best of ${kotc ? squares(previousBest) : amount(previousBest)} by ${kotc ? squares(margin) : amount(margin)}.`;
 
   const body = {
     username: "Tiki Taka Scores",
     allowed_mentions: { parse: [] },
     embeds: [{
-      title: endless ? "🌊 NEW ENDLESS RECORD" : "🏆 NEW COURT RECORD",
+      title: endless
+        ? "🌊 NEW ENDLESS RECORD"
+        : kotc
+          ? "👑 NEW KING OF THE COURT RECORD"
+          : "🏆 NEW COURT RECORD",
       description: [
         endless
           ? `**${username}** lasted **${clock(record.score)}** on **STILL WATER**.`
-          : `**${username}** took **${courtName(record.court)}** on **${title(record.difficulty)}**.`,
+          : kotc
+            ? `**${username}** held **${squares(record.score)}** on **THE ROOFTOP** on **${title(record.difficulty)}**.`
+            : `**${username}** took **${courtName(record.court)}** on **${title(record.difficulty)}**.`,
         beaten,
       ]
         .filter(Boolean)
         .join("\n"),
-      color: endless ? ENDLESS_COLOR : COLORS[record.difficulty] ?? 0x35d7c3,
+      color: endless ? ENDLESS_COLOR : kotc ? KOTC_COLOR : COLORS[record.difficulty] ?? 0x35d7c3,
       fields: [
         endless
           ? { name: "Survived", value: clock(record.score), inline: true }
-          : { name: "Score", value: count(record.score), inline: true },
+          : kotc
+            ? { name: "Squares", value: count(record.score), inline: true }
+            : { name: "Score", value: count(record.score), inline: true },
         { name: "Passes", value: count(record.passes), inline: true },
         { name: "Zones", value: count(record.zones), inline: true },
         { name: "Best one-touch", value: count(record.best_one_touch), inline: true },
@@ -136,7 +151,9 @@ Deno.serve(async (req: Request) => {
       footer: {
         text: endless
           ? "Longest run on the global Endless ladder"
-          : "Global best for this court and difficulty",
+          : kotc
+            ? "Most squares held for this difficulty"
+            : "Global best for this court and difficulty",
       },
       timestamp: record.created_at ?? new Date().toISOString(),
     }],

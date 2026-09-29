@@ -7,6 +7,33 @@ this file is not touched by ordinary pull requests. Parsed at build time by
 in Settings by `apps/desktop/src/main.js` - never fetched at runtime, so it
 works offline behind the service worker like everything else.
 
+## 0.6.0 - 2026-09-29
+
+### King of the Court is playable
+
+Each mode now turns bonuses into something different: World tour into a
+multiplier, Extra Time into seconds, and King of the Court into ground.
+
+The court is a grid of 24 squares, six across and four down, and you have 90
+seconds to take as many as you can. A completed pass takes the square its
+receiver is standing in. Bonuses take whole shapes: a triangle takes every
+square inside it plus the three squares the players stand in, splitting the
+press takes every square the pass crossed, a zone takes the 3x3 block around
+the receiver, and an olé takes the receiver's whole row. A wall pass takes
+nothing, not even the receiver's square, though its bonuses still pay Energy.
+
+Ground only changes hands on a turnover, which costs the 3x3 block of squares
+around where it happened. A turnover does not end the round here, it only
+resets the positions. Hold all 24 squares at once and you are crowned: the
+board clears and play carries on, so a round can hold several crowns.
+
+Your score is crowns x 24 plus the squares you hold at the buzzer. There are
+no points and no multiplier in this mode. Difficulty sets the press: two
+defenders on Relaxed, three on Standard, four on Ruthless. Each tier has its
+own personal best and leaderboard, and rounds are played on a court of their
+own, The Rooftop. The Discord record post for a King of the Court record now
+reads in squares.
+
 ## 0.5.0 - 2026-09-28
 
 ### Every bonus builds the multiplier
