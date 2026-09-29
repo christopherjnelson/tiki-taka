@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BOOST_DRAIN_RATE, FOCUS_DRAIN_RATE, STAR_RATIOS, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS, flowMultiplier, flowForMultiplier, FLOW_BUILD, FLOW_DECAY_SECONDS, MULTIPLIER_CEILING, ZONE_POINTS, ZONE_LIFETIME, ZONE_BLIND_GAP, endlessStage, ENDLESS_PRESS, ENDLESS_DEFENDER_STEPS, EXTRA_TIME, TIME_REWARDS, CHALLENGE_TYPES, refundScale, extraTimeGrant } from '../src/game.js';
+import { BOOST_DRAIN_RATE, FOCUS_DRAIN_RATE, STAR_RATIOS, BOOST_SPEED_MULTIPLIER, Game, COURTS, TACTICS, FOCUS_REWARDS, TRIANGLE_WINDOW, TRIANGLE_MAX_HOLD, MAX_HOLD, SPLIT_PRESS, ONE_TOUCH, LIMITS, PLAYER_RADIUS, TEAMMATE_RUN_SPEED, SHOUT_RUN_SPEED_MULTIPLIER, PASS_DISTANCE, passDistanceMultiplier, seeded, bankPoint, distance, segmentDistance, segmentsCross, DIFFICULTIES, applyDifficulty, MAX_DEFENDERS, flowMultiplier, flowForMultiplier, FLOW_BUILD, FLOW_DECAY_SECONDS, MULTIPLIER_CEILING, ZONE_POINTS, ZONE_LIFETIME, ZONE_BLIND_GAP, endlessStage, ENDLESS_PRESS, ENDLESS_DEFENDER_STEPS, EXTRA_TIME, TIME_REWARDS, CHALLENGE_TYPES, refundScale, extraTimeGrant, KOTC_GRID, KOTC_CELLS, KOTC_COURT, KOTC_TIERS, KOTC_ROUND_SECONDS, kotcCellIndex, kotcCellRect, kotcCellCenter, kotcBlock, kotcRow, kotcPathCells, kotcTriangleCells } from '../src/game.js';
+import { getVenue, VENUES } from '../src/venues.js';
 
 const STEP = 1 / 60;
 function openGame(extra = {}, tactic = 'balanced') {
@@ -1787,4 +1788,285 @@ test('flow scoring is deterministic for a given seed and inputs', () => {
     return [game.score, game.flow, game.bestFlow, game.turnovers];
   };
   assert.deepEqual(run(), run());
+});
+
+// ---- King of the Court ---------------------------------------------------
+// An unpressed King of the Court game with a 90 second clock.
+function openKotc(extra = {}) {
+  return openGame({ kotc: true, time: KOTC_ROUND_SECONDS, possessions: null, ...extra });
+}
+const cellAt = (col, row) => row * KOTC_GRID.cols + col;
+// Lands a pass by hand so a test controls exactly where everyone stands: the
+// carrier hands to `to`, who is placed at `at`, with the history and ball
+// fields that decide which bonuses fire.
+function receiveAt(game, to, at, ball = {}) {
+  Object.assign(game.players[to], at);
+  game.ball = {
+    x: at.x, y: at.y, from: game.carrier, to, bank: false, bounced: false, waypoint: null,
+    origin: { ...game.players[game.carrier] }, passDistance: 200, split: null,
+    focusUsed: false, oneTouch: false, trail: [], ...ball,
+  };
+  game.receive();
+}
+const heldCells = (game) => game.squares.flatMap((held, i) => (held ? [i] : []));
+
+test('the King of the Court grid is 6 x 4 squares tiling the playable area', () => {
+  assert.equal(KOTC_CELLS, 24);
+  const first = kotcCellRect(0), last = kotcCellRect(23);
+  assert.deepEqual([first.x, first.y], [LIMITS.left, LIMITS.top]);
+  assert.equal(last.x + last.w, LIMITS.right);
+  assert.equal(last.y + last.h, LIMITS.bottom);
+  assert.equal(kotcCellIndex(LIMITS.left, LIMITS.top), 0);
+  assert.equal(kotcCellIndex(949, 569), 23);
+  assert.equal(kotcCellIndex(200, 60), 1, 'squares run left to right, then down');
+  assert.equal(kotcCellIndex(60, 200), 6);
+  assert.equal(kotcCellIndex(-50, 9999), cellAt(0, 3), 'a point off the grid clamps onto the nearest square');
+  for (let i = 0; i < KOTC_CELLS; i++) {
+    const c = kotcCellCenter(i);
+    assert.equal(kotcCellIndex(c.x, c.y), i, `the centre of square ${i} is inside it`);
+  }
+  assert.deepEqual(kotcBlock(cellAt(2, 1)), [1, 2, 3, 7, 8, 9, 13, 14, 15]);
+  assert.deepEqual(kotcBlock(0), [0, 1, 6, 7], 'the block clips at the corner');
+  assert.deepEqual(kotcBlock(23), [16, 17, 22, 23]);
+  assert.deepEqual(kotcRow(cellAt(4, 2)), [12, 13, 14, 15, 16, 17]);
+});
+
+test('a completed pass takes the square the receiver is standing in', () => {
+  const game = openKotc();
+  receiveAt(game, 1, { x: 505, y: 155 });
+  assert.deepEqual(heldCells(game), [cellAt(3, 0)]);
+  assert.equal(game.score, 1);
+  const popup = game.events.find(e => e.type === 'score');
+  assert.equal(popup.text, 'PASS +1');
+  assert.equal(popup.points, null, 'a popup names squares, never a point total');
+  assert.deepEqual(popup.taken, [cellAt(3, 0)]);
+  // Passing to a square you already hold takes nothing, and says nothing.
+  game.events.length = 0;
+  game.carrier = 0;
+  receiveAt(game, 1, { x: 510, y: 160 });
+  assert.equal(game.score, 1);
+  assert.equal(game.events.filter(e => e.type === 'score').length, 0);
+});
+
+test('a wall pass takes nothing at all, not even the receiver square', () => {
+  const game = openKotc();
+  completePass(game, 1, true);
+  assert.equal(game.banks, 1);
+  assert.deepEqual(heldCells(game), []);
+  assert.equal(game.score, 0);
+  assert.equal(game.events.find(e => e.type === 'score').text, 'WALL PLAY', 'the bonus is named, no squares are claimed');
+  // The same holds for a wall pass that also earns a bonus shape.
+  const zoned = openKotc();
+  zoned.zone = { x: 505, y: 155, r: 92 };
+  receiveAt(zoned, 1, { x: 505, y: 155 }, { bank: true });
+  assert.deepEqual(heldCells(zoned), []);
+});
+
+test('a triangle takes every square whose centre is inside it plus each corner square', () => {
+  const game = openKotc();
+  game.players[1].x = 850; game.players[1].y = 100;
+  game.players[2].x = 475; game.players[2].y = 500;
+  Object.assign(game.players[0], { x: 100, y: 100 });
+  game.history = [0, 1, 2];
+  game.historyTimes = [0, 0, 0];
+  game.carrier = 2;
+  receiveAt(game, 0, { x: 100, y: 100 });
+  assert.equal(game.triangles, 1);
+  // Row 0 centres sit at y=115 (x 125..725 are inside), row 1 at y=245 (275..575), row 2 at y=375 (425, 575);
+  // the three corners add squares 5 and 20 to the corner already in the fill.
+  assert.deepEqual(heldCells(game), [0, 1, 2, 3, 4, 5, 7, 8, 9, 14, 15, 20]);
+  const popup = game.events.find(e => e.type === 'score');
+  assert.equal(popup.text, 'TRIANGLE +12');
+  assert.equal(popup.squares, 12);
+  assert.equal(game.score, 12);
+  assert.deepEqual(kotcTriangleCells(popup.triangle).length, 10, 'ten square centres are enclosed');
+});
+
+test('splitting the press takes every square the lane crosses', () => {
+  const game = openKotc();
+  game.carrier = 0;
+  receiveAt(game, 1, { x: 850, y: 120 }, { split: 0.5, origin: { x: 100, y: 120 } });
+  assert.equal(game.splits, 1);
+  assert.deepEqual(heldCells(game), [0, 1, 2, 3, 4, 5], 'a horizontal lane paints its whole row of squares');
+  assert.equal(game.events.find(e => e.type === 'score').text, 'SPLIT THE PRESS +6');
+  const down = openKotc();
+  receiveAt(down, 1, { x: 125, y: 560 }, { split: 0.5, origin: { x: 125, y: 60 } });
+  assert.deepEqual(heldCells(down), [0, 6, 12, 18]);
+  assert.deepEqual(kotcPathCells({ x: 125, y: 115 }, { x: 125, y: 115 }), [0], 'a lane with no length is one square');
+});
+
+test('the zone bonus takes the 3x3 block around the receiver, clipped to the grid', () => {
+  const game = openKotc();
+  game.zone = { x: 475, y: 245, r: 92 };
+  receiveAt(game, 1, { x: 475, y: 245 });
+  assert.equal(game.zones, 1);
+  assert.deepEqual(heldCells(game), [1, 2, 3, 7, 8, 9, 13, 14, 15]);
+  assert.equal(game.events.find(e => e.type === 'score').text, 'ZONE BONUS +9');
+  const corner = openKotc();
+  corner.zone = { x: 100, y: 100, r: 92 };
+  receiveAt(corner, 1, { x: 100, y: 100 });
+  assert.deepEqual(heldCells(corner), [0, 1, 6, 7]);
+});
+
+test('an ole takes the receivers whole row', () => {
+  const game = openKotc();
+  game.oneTouchStreak = ONE_TOUCH.milestoneEvery - 1;
+  receiveAt(game, 1, { x: 475, y: 245 }, { oneTouch: true });
+  assert.equal(game.oles, 1);
+  assert.deepEqual(heldCells(game), [6, 7, 8, 9, 10, 11]);
+  assert.equal(game.events.find(e => e.type === 'score').text, 'OLÉ! +6');
+});
+
+test('bonuses on one pass stack their shapes, and still pay Energy', () => {
+  const game = openKotc();
+  game.zone = { x: 475, y: 245, r: 92 };
+  const before = game.focus;
+  receiveAt(game, 1, { x: 475, y: 245 }, { split: 0.5, origin: { x: 100, y: 420 } });
+  assert.ok(game.squaresHeld() > 9, 'the split lane adds to the zone block');
+  assert.equal(game.focus - before, FOCUS_REWARDS.zone + FOCUS_REWARDS.split);
+  assert.ok(game.events.some(e => e.type === 'focus'));
+});
+
+test('there are no points and no multiplier in King of the Court', () => {
+  const game = openKotc();
+  game.zone = { x: 475, y: 245, r: 92 };
+  receiveAt(game, 1, { x: 475, y: 245 }, { split: 0.5 });
+  assert.equal(game.flow, 0);
+  assert.equal(game.bestFlow, 0);
+  advance(game, FLOW_DECAY_SECONDS + 1);
+  assert.equal(game.flow, 0);
+  assert.equal(game.events.filter(e => e.type === 'flow-drop').length, 0);
+  assert.equal(game.score, game.squaresHeld(), 'the score is squares, not points');
+  for (const e of game.events.filter(e => e.type === 'score')) assert.equal(e.points, null);
+});
+
+test('a turnover loses the 3x3 block around where it happened, and nothing else', () => {
+  const game = openKotc();
+  game.squares.fill(true);
+  game.syncGroundScore();
+  assert.equal(game.score, 24);
+  game.turnover('PASS INTERCEPTED', { x: 475, y: 245 });
+  assert.deepEqual(heldCells(game).length, 15);
+  for (const cell of kotcBlock(cellAt(2, 1))) assert.equal(game.squares[cell], false);
+  assert.equal(game.score, 15);
+  const event = game.events.find(e => e.type === 'turnover');
+  assert.equal(event.text, 'PASS INTERCEPTED · -9 SQUARES');
+  assert.equal(event.squares, 9);
+  // Losing ground you never held costs nothing, and the text stays plain.
+  const empty = openKotc();
+  empty.turnover('HELD TOO LONG', { x: 475, y: 245 });
+  assert.equal(empty.events.find(e => e.type === 'turnover').text, 'HELD TOO LONG');
+});
+
+test('a turnover does not end the round, and a real tackle takes the carriers ground', () => {
+  const game = openKotc({ possessions: 1 });
+  const p = game.players[game.carrier];
+  game.squares[kotcCellIndex(p.x, p.y)] = true;
+  game.squares[23] = true;
+  game.syncGroundScore();
+  game.grace = 0;
+  game.defenders = [{ x: p.x, y: p.y, id: 0 }];
+  game.update(STEP);
+  assert.equal(game.turnovers, 1);
+  assert.equal(game.status, 'playing', 'the first turnover is not the end');
+  assert.equal(game.events.some(e => e.type === 'end'), false);
+  assert.equal(game.squares[kotcCellIndex(285, 310)], false, 'the tackle point cost its square');
+  assert.equal(game.squares[23], true, 'ground far from the tackle is kept');
+  assert.ok(game.lock > 0, 'positions reset behind the usual lock');
+  for (let i = 0; i < 4; i++) game.turnover('HELD TOO LONG', { x: 0, y: 0 });
+  assert.equal(game.status, 'playing');
+  // An interception loses the block around the ball, not the carrier.
+  const pass = openKotc();
+  pass.squares.fill(true);
+  pass.pass(1);
+  pass.defenders = [{ x: pass.ball.x, y: pass.ball.y, id: 0 }];
+  pass.update(STEP);
+  assert.equal(pass.events.find(e => e.type === 'turnover').text.startsWith('PASS INTERCEPTED'), true);
+  assert.ok(pass.squaresHeld() < 24);
+});
+
+test('holding all 24 squares crowns the player and clears the board', () => {
+  const game = openKotc();
+  game.squares.fill(true);
+  game.squares[cellAt(3, 0)] = false;
+  game.syncGroundScore();
+  assert.equal(game.score, 23);
+  receiveAt(game, 1, { x: 505, y: 155 });
+  assert.equal(game.crowns, 1);
+  assert.deepEqual(heldCells(game), [], 'the board starts again empty');
+  assert.equal(game.score, 24, 'the crown is worth the squares it took, so the score never drops');
+  const crown = game.events.find(e => e.type === 'crown');
+  assert.equal(crown.text, 'CROWNED!');
+  assert.equal(crown.crowns, 1);
+  assert.equal(game.status, 'playing', 'play continues');
+  // The next lap counts on top: score = crowns * 24 + squares held.
+  game.carrier = 0;
+  game.zone = { x: 475, y: 245, r: 92 };
+  receiveAt(game, 2, { x: 475, y: 245 });
+  assert.equal(game.score, 24 + 9);
+  game.crowns = 2;
+  game.syncGroundScore();
+  assert.equal(game.score, 2 * 24 + 9);
+});
+
+test('a King of the Court round is ninety seconds and the score at the buzzer is the result', () => {
+  const game = new Game({ ...applyDifficulty(KOTC_COURT, 'standard'), seed: 77 });
+  assert.equal(game.time, 90);
+  assert.equal(game.defenders.length, 3);
+  // Nobody presses here: a turnover lock freezes the clock, and this test is
+  // about the clock.
+  game.defenders = [];
+  advanceAlive(game, 89);
+  assert.equal(game.status, 'playing');
+  game.squares[0] = game.squares[1] = true;
+  game.syncGroundScore();
+  advanceAlive(game, 1.1);
+  assert.equal(game.status, 'finished');
+  assert.equal(game.time, 0);
+  assert.equal(game.score, 2);
+  assert.equal(game.events.filter(e => e.type === 'end').length, 1);
+});
+
+test('King of the Court difficulty sets the press and nothing else', () => {
+  assert.deepEqual(Object.keys(KOTC_TIERS), ['relaxed', 'standard', 'ruthless']);
+  const relaxed = applyDifficulty(KOTC_COURT, 'relaxed');
+  const standard = applyDifficulty(KOTC_COURT, 'standard');
+  const ruthless = applyDifficulty(KOTC_COURT, 'ruthless');
+  assert.deepEqual([relaxed.defenders, standard.defenders, ruthless.defenders], [2, 3, 4]);
+  assert.ok(relaxed.speed < standard.speed && standard.speed < ruthless.speed);
+  for (const tier of [relaxed, standard, ruthless]) {
+    assert.ok(tier.speed >= 76 && tier.speed <= 123, 'the press sits inside the tour range');
+    assert.equal(tier.kotc, true);
+    assert.equal(tier.target, 0);
+    assert.equal(tier.time, 90);
+  }
+  assert.equal(ruthless.difficulty, 'ruthless');
+  assert.equal(applyDifficulty(KOTC_COURT, 'nonsense').difficulty, 'standard');
+  assert.equal(COURTS.includes(KOTC_COURT), false, 'it is not a circuit court');
+  assert.equal(getVenue(KOTC_COURT).id, 'the-rooftop');
+  assert.ok(VENUES.some(v => v.id === 'the-rooftop'));
+  assert.equal(getVenue(COURTS[0]).id, 'lisbon');
+});
+
+test('King of the Court leaves the main rng on the sequence every other mode reproduces', () => {
+  const a = new Game({ ...COURTS[1], defenders: 0, seed: 99 });
+  const b = new Game({ ...COURTS[1], defenders: 0, seed: 99, kotc: true, time: 500 });
+  a.time = 500;
+  for (let i = 0; i < 600; i++) { a.update(STEP); b.update(STEP); }
+  assert.equal(a.zoneIndex, b.zoneIndex);
+  assert.equal(a.rng(), b.rng());
+});
+
+test('a King of the Court round is deterministic for a seed', () => {
+  const run = () => {
+    const game = new Game({ ...applyDifficulty(KOTC_COURT, 'ruthless'), seed: 4242 });
+    const trace = [];
+    for (let f = 0; f < 60 * 60 && game.status === 'playing'; f++) {
+      if (f % 40 === 0 && !game.ball) game.pass((game.carrier + 1 + (f % 3)) % 4, f % 200 === 0);
+      game.update(STEP, { x: Math.sin(f / 40), y: Math.cos(f / 55) });
+      if (f % 30 === 0) trace.push([game.score, game.squaresHeld(), game.crowns, game.turnovers, game.time.toFixed(4)].join(':'));
+    }
+    return trace.join('|') + game.status + heldCells(game).join(',');
+  };
+  assert.equal(run(), run());
 });

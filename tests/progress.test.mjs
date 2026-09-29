@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { freshProgress, readProgress, saveProgress, awardMatch, rank, isReadableProgress } from '../src/progress.js';
+import { freshProgress, readProgress, saveProgress, awardMatch, roundCounts, rank, isReadableProgress } from '../src/progress.js';
 
 // `reference` is what a clean round scores on the court; `target` is the
 // clear line taken from it, and the star rungs are their own ratios of the
 // reference (STAR_RATIOS: 0.6 and 0.95). The default pair keeps the same
 // ~0.3 relationship the real courts use, so 600/180 means: clear at 180,
 // two stars at 360, three at 570 and no turnovers.
-function finishedGame({ score = 200, reference = 600, target = 180, time = 0, turnovers = 0, key, difficulty, possessions, endless } = {}) {
-  return { score, turnovers, time, config: { reference, target, key, difficulty, possessions, endless } };
+function finishedGame({ score = 200, reference = 600, target = 180, time = 0, turnovers = 0, key, difficulty, possessions, endless, kotc } = {}) {
+  return { score, turnovers, time, config: { reference, target, key, difficulty, possessions, endless, kotc } };
 }
 
 test('fresh progress has a stable, independent shape', () => {
@@ -341,4 +341,36 @@ test('rank caps at level 50 with a zero span and full bar', () => {
   assert.equal(beyondCap.span, 0);
   assert.equal(beyondCap.fraction, 1);
   assert.equal(beyondCap.into, 99999 - 12840);
+});
+
+test('every finished King of the Court round counts, and is never a clear', () => {
+  assert.equal(roundCounts('kotc', false), true);
+  assert.equal(roundCounts('kotc', true), true);
+  // Turnovers are ground lost, not possessions spent, so a round full of them
+  // still saves.
+  const progress = freshProgress();
+  const result = awardMatch(progress, finishedGame({ score: 30, reference: 0, target: 0, time: 0, turnovers: 6, kotc: true, difficulty: 'ruthless' }), 'kotc', 0);
+  assert.equal(result.cleared, false);
+  assert.equal(result.stars, 0);
+  assert.equal(result.newBest, true);
+  assert.equal(progress.records['kotc-ruthless'], 30, 'the best is kept per tier');
+  assert.equal(progress.courts[0], undefined, 'it never touches the tour progression');
+  assert.equal(progress.unlocked, 0);
+});
+
+test('King of the Court pays performance XP against its own 48-square reference', () => {
+  const xp = (score) => awardMatch(freshProgress(), finishedGame({ score, reference: 0, target: 0, time: 0, kotc: true }), 'kotc', 0).xp;
+  assert.equal(xp(48), 20, 'two crowns pays the full cap');
+  assert.equal(xp(96), 20, 'the cap holds');
+  assert.equal(xp(24), 10, 'one crown pays half');
+  assert.equal(xp(1), 3, 'the 3 XP floor applies');
+  const progress = freshProgress();
+  const run = (score) => awardMatch(progress, finishedGame({ score, reference: 0, target: 0, time: 0, kotc: true }), 'kotc', 0);
+  assert.equal(run(20).newBest, true);
+  assert.equal(run(12).newBest, false);
+  assert.equal(progress.records['kotc-standard'], 20);
+  assert.equal(run(31).newBest, true);
+  assert.equal(progress.records['kotc-standard'], 31);
+  const relaxed = awardMatch(progress, finishedGame({ score: 5, reference: 0, target: 0, time: 0, kotc: true, difficulty: 'relaxed' }), 'kotc', 0);
+  assert.equal(relaxed.newBest, true, 'another tier has its own record');
 });
