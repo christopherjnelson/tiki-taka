@@ -209,13 +209,16 @@ test('first-clear XP scales with tier and with court index', () => {
 
 test('endless pays performance XP only - no star bonus, no clear bonus', () => {
   const progress = freshProgress();
-  // An endless run's "score" is the seconds it lasted, and its clock counts
-  // up, so time is never <= 0 and the round is never "cleared".
+  // An Extra Time run's "score" is the seconds it lasted. Its bank running
+  // out (time <= 0) is the run ending, not a clear, so it is never "cleared".
   const result = awardMatch(progress, finishedGame({ score: 200, reference: 0, target: 0, time: 200, endless: true }), 'endless', 0);
   assert.equal(result.cleared, false);
   assert.equal(result.stars, 0, 'there is nothing to be graded on');
   // Performance only, against ENDLESS_REFERENCE (180 seconds) and capped at 20.
   assert.equal(result.xp, 20);
+  const timedOut = awardMatch(freshProgress(), finishedGame({ score: 200, reference: 0, target: 0, time: 0, endless: true }), 'endless', 0);
+  assert.equal(timedOut.cleared, false, 'an empty bank is not a clear either');
+  assert.equal(timedOut.stars, 0);
   const short = awardMatch(freshProgress(), finishedGame({ score: 45, reference: 0, target: 0, time: 45, endless: true }), 'endless', 0);
   assert.equal(short.xp, 5, 'a 45-second run pays a quarter of the cap');
 });

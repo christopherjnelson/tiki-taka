@@ -342,6 +342,8 @@ export class Sound {
     const notes =
       type === "score"
         ? [440, 660]
+        : type === "challenge"
+          ? [523, 659, 784]
         : type === "victory"
           ? [392, 523, 659, 784]
           : type === "defeat"

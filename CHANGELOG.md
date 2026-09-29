@@ -7,6 +7,37 @@ this file is not touched by ordinary pull requests. Parsed at build time by
 in Settings by `apps/desktop/src/main.js` - never fetched at runtime, so it
 works offline behind the service worker like everything else.
 
+## 0.5.0 - 2026-09-28
+
+### Every bonus builds the multiplier
+
+The multiplier used to climb on zone passes alone, so the best play was to farm
+zones up to ×10 and only then start playing triangles and splits. Now every
+bonus builds it: a zone pass still builds fastest, and an olé, a triangle or a
+split each build part of a step. Wall passes build nothing. A bonus counts
+toward its own pass, so a triangle played at ×3 can be the pass that takes you
+to ×4.
+
+The multiplier can no longer be banked. Six seconds without a bonus drops it one
+step, and the pill pulses in the last two seconds before it slips. A turnover
+still sends it back to ×1.
+
+Court targets and star lines were set under the old rule and may move once
+rounds under the new one have been played.
+
+### Endless is now Extra Time
+
+The run starts with 30 seconds on the clock, and you buy more by playing well:
+an olé adds 4 seconds, a zone pass 3, and a triangle or a split 2. Wall passes
+add none. Every so often a challenge appears above the court, such as "Split the
+press" or "Five one-touch passes", with ten seconds to complete it for a bigger
+chunk of time. Time bought shrinks as the run goes on, and the press still
+grows to five defenders and keeps quickening, so every run still ends when the
+clock runs out or the press catches you.
+
+Your score is still how long you lasted, so personal bests and the leaderboard
+read the same way. Still Water remains the mode's court.
+
 ## 0.4.8 - 2026-09-17
 
 ### Account buttons say when they are working

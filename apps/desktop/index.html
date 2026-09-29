@@ -502,8 +502,8 @@
                 />
               </svg>
               <div class="mode-copy">
-                <strong>Endless flow</strong>
-                <span>Survive the rising press</span>
+                <strong>Extra Time</strong>
+                <span>Earn every second</span>
               </div>
             </button>
             <button data-home-mode="practice" type="button">
@@ -587,7 +587,7 @@
                   <span class="stat-label">TIME</span>
                   <strong id="time-value" class="clock-value">1:15</strong>
                 </div>
-                <!-- The multiplier pill is re-labelled in Endless, which
+                <!-- The multiplier pill is re-labelled in Extra Time, which
                 scores no points and so has no multiplier: it shows the
                 countdown to the next defender instead. Hence the id on a
                 label every other mode leaves alone. -->
@@ -671,6 +671,27 @@
                   ></span>
                 </div>
               </div>
+              <!-- Extra Time's live challenge. It is a second one-touch-
+              readout on purpose: every placement rule for the streak pill
+              (below the scoreboard, portrait offsets, hidden behind the
+              overlay) is keyed on that class, so this lands in the same safe
+              spot and only steps down a row (see .challenge-readout). -->
+              <div
+                id="challenge-readout"
+                class="one-touch-readout challenge-readout"
+                role="status"
+                aria-live="off"
+                hidden
+              >
+                <div class="one-touch-pill">
+                  <span id="challenge-label" class="one-touch-label"
+                    >SPLIT THE PRESS</span
+                  >
+                  <span class="one-touch-track"
+                    ><span id="challenge-fill" class="one-touch-fill"></span
+                  ></span>
+                </div>
+              </div>
               <div
                 id="game-overlay"
                 class="game-overlay"
@@ -725,7 +746,7 @@
                   </div>
                   <div id="result-stats" class="result-stats" hidden>
                     <dl class="result-headline">
-                      <!-- Endless is scored on how long the run lasted, so
+                      <!-- Extra Time is scored on how long the run lasted, so
                       this pair is relabelled there (see showRoundResults). -->
                       <div><dt id="result-score-label">Score</dt><dd id="result-score">0</dd></div>
                       <div><dt>XP earned</dt><dd id="result-xp">+0</dd></div>
@@ -1502,9 +1523,11 @@
       <p class="help-grid-note">
         Clean passes score 12–18 by distance (a return pass earns half), and
         banking one off the boundary — a wall pass — adds 18. These four pay
-        more, and every one of them stacks with your multiplier, which climbs
-        with each zone you hit — one step at a time up to ×5, then every two
-        hits — up to ×10, and resets on a turnover.
+        more, and every one of them stacks with your multiplier, which is
+        built by flow. Zones build it fastest; olés, triangles and splits build
+        it too, and wall passes don't. It climbs one step at a time up to ×5,
+        then a step every two flow — up to ×10. It slips a step after 6
+        seconds without a bonus, and resets on a turnover.
       </p>
       <div class="diagram-grid">
         <figure class="diagram-figure">
@@ -1573,7 +1596,7 @@
             <text x="70" y="112" text-anchor="middle" font-size="10" font-weight="700" fill="#ffe66b">ZONE +18</text>
           </svg>
           <figcaption>
-            <strong>Zone — +18, +2 Energy, and it raises your multiplier.</strong>
+            <strong>Zone — +18, +2 Energy, and it builds your multiplier fastest.</strong>
             Receive a pass with your player overlapping the dashed circle
             before it rotates away.
           </figcaption>
@@ -1661,9 +1684,11 @@
       <div class="help-modes">
         <p>
           <strong>King of the Court</strong> is coming soon.
-          <strong>Endless flow</strong> gets tougher over time; each triangle
-          adds 5 seconds. <strong>Free practice</strong> lets you learn without
-          a turnover limit.
+          <strong>Extra Time</strong> starts you on 30 seconds and one
+          possession. Zones, splits, triangles and olés buy more time, walls
+          buy none, and each challenge pays a big chunk; one mistake ends it
+          and the press keeps growing. <strong>Free practice</strong> lets you
+          learn without a turnover limit.
         </p>
       </div>
       <p class="help-footnote">

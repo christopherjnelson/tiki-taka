@@ -645,6 +645,29 @@ h1 span {
 .one-touch-readout.is-milestone .one-touch-fill {
   background: var(--pink);
 }
+/* Extra Time's challenge pill borrows every placement rule of the streak
+   pill (it carries the same class) and steps down one row so both can show
+   at once. It is centred and a touch tighter so the longest label fits the
+   narrowest phone. */
+.challenge-readout {
+  justify-content: center;
+  margin-top: 32px;
+}
+.challenge-readout .one-touch-pill {
+  gap: 8px;
+  max-width: 100%;
+  padding: 5px 10px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  border-color: #ffd23f;
+}
+.challenge-readout .one-touch-track {
+  width: 44px;
+  flex: none;
+}
+.challenge-readout .one-touch-fill {
+  background: #ffd23f;
+}
 body.play-view .one-touch-readout {
   width: min(100cqw, 161.2903cqh);
 }
@@ -6717,4 +6740,16 @@ body:has(.noscript) .boot-sync {
     font-size: 7px;
     letter-spacing: 0.04em;
   }
+}
+
+/* The multiplier is about to slip a step (last 2 seconds of the idle timer). */
+#combo-value.decaying {
+  animation: flow-decay-pulse 0.5s ease-in-out infinite;
+}
+@keyframes flow-decay-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #combo-value.decaying { animation: none; opacity: 0.65; }
 }

@@ -36,11 +36,11 @@ Play in a desktop browser with keyboard, mouse, or a standard gamepad. The game 
 
 Control the ball carrier while three teammates find supporting positions. Pass before the press closes in. An interception or tackle costs a possession and resets the formation; the number of possessions depends on the difficulty tier (five on Relaxed, three on Standard, one on Ruthless).
 
-Build a score multiplier by receiving in bonus zones and queue passes for one-touch combinations. Triangles, bonus-zone receptions, press splits, and Olé milestones earn Energy, the shared reserve behind Focus (slowing the court) and Boost. Home offers four modes:
+Build a score multiplier by chaining bonuses (zones build it fastest; olés, triangles and splits build it too, wall passes don't) before it slips a step after 6 seconds idle, and queue passes for one-touch combinations. Triangles, bonus-zone receptions, press splits, and Olé milestones earn Energy, the shared reserve behind Focus (slowing the court) and Boost. Home offers four modes:
 
 - **World tour** — six fixed venues, three difficulty tiers, stars and progression.
 - **King of the Court** — four players, one ball, scored on squares taken rather than flow. Not yet playable; shown on Home as coming soon.
-- **Endless** — its own court (Still Water, the one venue that is not on the tour), one difficulty, and a clock that counts up. Nothing is scored but the seconds you last: a third defender joins at 0:45, a fourth at 1:45, a fifth at 3:15, and the press keeps quickening after that. The first mistake ends the run.
+- **Extra Time** — its own court (Still Water, the one venue that is not on the tour) and one difficulty. You start with 30 seconds on a clock that counts down; zones, splits, triangles and olés buy time back (walls buy none), and a rotating challenge pays 8 seconds at once. Nothing is scored but the seconds you last. The bank holds 60 seconds at most and refunds shrink as the run goes on, while the press grows — a third defender at 0:45, a fourth at 1:45, a fifth at 3:15, quicker forever. The first mistake, or an empty clock, ends the run.
 - **Free practice** — no turnover limit, for learning the rhythm.
 
 (An earlier date-seeded Daily Circuit mode has been removed.)

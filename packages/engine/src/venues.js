@@ -47,7 +47,7 @@ export const VENUES = [
     secondary: "#ff4ba8",
     seeds: [1974],
   },
-  // Endless's own court, and the only venue that is not a place on the world
+  // Extra Time's own court, and the only venue that is not a place on the world
   // tour - deliberately so. It has no city and no crowd: a still, quiet court
   // where the only thing that matters is that the ball keeps moving. Its
   // palette steps away from the tour's neon for the same reason, and it owns
@@ -56,7 +56,7 @@ export const VENUES = [
   {
     id: "still-water",
     name: "Still Water",
-    vibe: "No clock, no whistle",
+    vibe: "Every second counts",
     accent: "#8fe6cf",
     secondary: "#b6a8ff",
     seeds: [],
@@ -64,7 +64,7 @@ export const VENUES = [
     // its own: it is the one court that is not on the tour, and the sign is
     // the court's, so the home preview and a live run agree without either
     // having to know which mode is running.
-    competition: "TIKI TAKA · ENDLESS",
+    competition: "TIKI TAKA · EXTRA TIME",
   },
 ];
 
