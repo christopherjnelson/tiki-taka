@@ -1516,7 +1516,22 @@ function syncCourtsHeading() {
 function setAttractVenue(venueId) {
   if (!attractGame || attractGame.config.venue === venueId) return;
   attractGame.config.venue = venueId;
+  syncAttractKotc();
   attractNeedsRepaint = true;
+}
+// The Rooftop only ever hosts King of the Court, so the demo plays that
+// mode's rules whenever it is wearing that skin: passes take squares and the
+// renderer draws the grid. The engine reads `config.kotc` per reception, so
+// flipping it mid-rally is safe. Ground is wiped on every switch so the demo
+// never resumes a board it painted under the other rules.
+function syncAttractKotc() {
+  const kotc = attractGame.config.venue === KOTC_COURT.venue;
+  if (Boolean(attractGame.config.kotc) === kotc) return;
+  attractGame.config.kotc = kotc;
+  attractGame.squares.fill(false);
+  attractGame.crowns = 0;
+  attractGame.flow = 0;
+  attractGame.score = 0;
 }
 // --- Choreographed rally --------------------------------------------------
 //
@@ -1770,6 +1785,7 @@ function startAttract() {
   // Skin the demo to whatever court is currently selected (or last selected)
   // rather than whatever COURTS[1]'s own seed would otherwise resolve to.
   attractGame.config.venue = homeRestingVenue();
+  syncAttractKotc();
   attractNeedsRepaint = true;
   // Same convention as window.__game for the player's round: a stable,
   // read-only hook for tests/debugging to confirm the demo keeps running the

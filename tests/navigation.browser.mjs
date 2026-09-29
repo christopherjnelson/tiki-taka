@@ -1923,6 +1923,14 @@ await check(
     assert.match(await kingBtn.locator("strong").textContent(), /King of the Court/i);
     assert.equal(await kingBtn.isDisabled(), false);
     await kingBtn.click();
+    // The home demo previews the mode it is dressed as: on The Rooftop it
+    // plays King of the Court's rules, so its passes take squares.
+    assert.equal(await page.evaluate(() => window.__attractGame?.config?.kotc), true);
+    await page.waitForFunction(
+      () => window.__attractGame?.squares?.some(Boolean),
+      null,
+      { timeout: 10_000 },
+    );
     await page.locator("#title-play").click();
     await page.locator("#arena-view").waitFor({ state: "visible" });
     assert.equal(await page.locator("#mode-label").textContent(), "KING OF THE COURT");
