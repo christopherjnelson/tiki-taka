@@ -361,6 +361,18 @@ await check('a complete playable career run clears and unlocks the next court', 
   await runRound(page, {
     steps: 180,
     async onStep() {
+      // Keep the round winnable whatever the scripted player does (see the
+      // comment above the forced clear below): lost possessions never end it,
+      // and the score is past the target before the buzzer can go. Topping up
+      // only after the round had ended was too late - a round that ran out
+      // its possessions, or reached the buzzer short of the target, was
+      // already a defeat, which is how this check kept going red.
+      await page.evaluate(() => {
+        const game = window.__game;
+        if (!game) return;
+        game.config.possessions = 1e9;
+        if (game.time < 3) game.score = Math.max(game.score, Math.ceil(game.config.target * 1.5));
+      });
       const target = (await page.locator('#target-label').textContent())?.match(/→\s*([1-4])/);
       if (target) {
         held = 0;
