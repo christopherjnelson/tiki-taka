@@ -15,6 +15,7 @@
 // Leave it as an empty string to hide the strip entirely (e.g. between
 // releases when there's nothing worth calling out).
 export const ANNOUNCEMENT_TEXT =
-  "0.6.0 is live — King of the Court is playable. Take squares of the " +
-  "court with every pass, whole shapes with your bonuses, and hold all 24 " +
-  "to be crowned. See the Changelog for the full picture.";
+  "0.6.0 is live and Tiki Taka is in beta. King of the Court is playable: " +
+  "take squares of the court with every pass, whole shapes with your bonuses, and hold all 24 " +
+  "to be crowned. Leaderboards and personal bests have been reset for the " +
+  "new scoring. See the Changelog for the full picture.";

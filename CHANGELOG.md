@@ -9,6 +9,11 @@ works offline behind the service worker like everything else.
 
 ## 0.6.0 - 2026-09-29
 
+### Tiki Taka is in beta
+
+Every mode is now playable, so the game leaves alpha. The build tag in the
+corner reads BETA.
+
 ### King of the Court is playable
 
 Each mode now turns bonuses into something different: World tour into a
@@ -32,7 +37,16 @@ no points and no multiplier in this mode. Difficulty sets the press: two
 defenders on Relaxed, three on Standard, four on Ruthless. Each tier has its
 own personal best and leaderboard, and rounds are played on a court of their
 own, The Rooftop. The Discord record post for a King of the Court record now
-reads in squares.
+reads in squares, and an Extra Time record is now called one rather than an
+Endless record.
+
+### Fresh leaderboards
+
+The 0.5.0 multiplier and Extra Time make big scores and long runs much harder
+to reach than before, so the old ones could never be caught. The leaderboards
+start empty with this release, and so do personal bests: your World tour
+scores, your Extra Time time and each court's best score. Your level, unlocked
+courts and stars are kept.
 
 ## 0.5.0 - 2026-09-28
 

@@ -1,7 +1,7 @@
 {
   "name": "tiki-taka",
   "version": "0.6.0",
-  "releaseStage": "alpha",
+  "releaseStage": "beta",
   "license": "PolyForm-Noncommercial-1.0.0",
   "private": true,
   "workspaces": [

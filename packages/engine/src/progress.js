@@ -59,9 +59,19 @@ export function roundCounts(mode, cleared) {
       return false;
   }
 }
+// Personal bests belong to a scoring season. 0.5.0 made every bonus feed a
+// multiplier that now decays, and turned Endless into Extra Time, so scores
+// and run lengths set before then are out of reach and would sit at the top of
+// every board for good. A save from an earlier season keeps its xp, unlocked
+// courts and stars, and loses only its records and per-court best scores.
+// Bump this (and clear the server's round_scores the same day) to start a new
+// season. It is a field rather than a new `version` so that a build from
+// before the bump can still read and save a newer save.
+export const SCORE_SEASON = 2;
 export function freshProgress() {
   return {
     version: 2,
+    scoreSeason: SCORE_SEASON,
     xp: 0,
     unlocked: 0,
     courts: {},
@@ -107,6 +117,7 @@ export function normalizeProgress(value) {
   try {
     if (!value || (value.version !== 1 && value.version !== 2)) return freshProgress();
     const progress = freshProgress();
+    const sameSeason = value.scoreSeason === SCORE_SEASON;
     // The old flat 300-XP-per-level curve inflated levels far past what this
     // rebalance intends, and there is no honest way to rescale a version-1 xp
     // total onto the new progressive curve. So a version-1 save resets xp to
@@ -141,13 +152,15 @@ export function normalizeProgress(value) {
           const stars = Number.isFinite(raw.stars)
             ? Math.min(3, Math.max(0, Math.floor(raw.stars)))
             : 0;
-          const best = Number.isFinite(raw.best) ? Math.max(0, raw.best) : 0;
+          const best =
+            sameSeason && Number.isFinite(raw.best) ? Math.max(0, raw.best) : 0;
           entry[tier] = { stars, best };
         }
         if (Object.keys(entry).length) progress.courts[index] = entry;
       }
     }
     if (
+      sameSeason &&
       value.records &&
       typeof value.records === "object" &&
       !Array.isArray(value.records)

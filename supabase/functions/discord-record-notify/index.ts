@@ -35,7 +35,8 @@ const COLORS: Record<string, number> = {
   standard: 0x35d7c3,
   ruthless: 0xff9f43,
 };
-// Endless is scored on seconds survived, not points, and has no court: it is
+// Endless (shown to players as Extra Time since 0.5.0; the stored mode key
+// stays "endless") is scored on seconds survived, not points, and has no court: it is
 // one global ladder played on its own rondo. Everything below that differs
 // between the two kinds of record hangs off this one check.
 const isEndless = (mode: unknown) => mode === "endless";
@@ -123,7 +124,7 @@ Deno.serve(async (req: Request) => {
     allowed_mentions: { parse: [] },
     embeds: [{
       title: endless
-        ? "🌊 NEW ENDLESS RECORD"
+        ? "⏱️ NEW EXTRA TIME RECORD"
         : kotc
           ? "👑 NEW KING OF THE COURT RECORD"
           : "🏆 NEW COURT RECORD",
@@ -150,7 +151,7 @@ Deno.serve(async (req: Request) => {
       ],
       footer: {
         text: endless
-          ? "Longest run on the global Endless ladder"
+          ? "Longest run on the global Extra Time ladder"
           : kotc
             ? "Most squares held for this difficulty"
             : "Global best for this court and difficulty",

@@ -82,8 +82,8 @@ The release version has one manually maintained source of truth: root
 `package.json`. `package-lock.json` mirrors that value mechanically and the
 unit suite checks that it has not drifted. PRs do not bump the version unless
 they are intentionally preparing a deployment. The adjacent `releaseStage`
-controls the build badge independently: leave it at `alpha` for the 0.3 and
-0.4 lines, then change it to `beta` when that product milestone is reached.
+controls the build badge independently. It moved from `alpha` to `beta` with
+0.6.0.
 
 ## Local data and generated output
 
