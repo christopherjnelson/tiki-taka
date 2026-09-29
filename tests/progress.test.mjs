@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { freshProgress, readProgress, saveProgress, awardMatch, roundCounts, rank, isReadableProgress } from '../src/progress.js';
+import { freshProgress, readProgress, saveProgress, awardMatch, roundCounts, rank, isReadableProgress, SCORE_SEASON } from '../src/progress.js';
 
 // `reference` is what a clean round scores on the court; `target` is the
 // clear line taken from it, and the star rungs are their own ratios of the
@@ -13,7 +13,7 @@ function finishedGame({ score = 200, reference = 600, target = 180, time = 0, tu
 
 test('fresh progress has a stable, independent shape', () => {
   const first = freshProgress(), second = freshProgress();
-  assert.deepEqual(first, { version: 2, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: 'balanced', difficulty: 'standard', lastCourt: 0 });
+  assert.deepEqual(first, { version: 2, scoreSeason: SCORE_SEASON, xp: 0, unlocked: 0, courts: {}, records: {}, sound: true, tactic: 'balanced', difficulty: 'standard', lastCourt: 0 });
   first.courts[0] = { standard: { stars: 1 } };
   assert.deepEqual(second.courts, {});
 });
@@ -63,7 +63,7 @@ test('save and read round-trip while corrupt or unavailable storage fails safely
 
 test('loaded scalar values are clamped and invalid tactics fall back', () => {
   const storage = { getItem: () => JSON.stringify({
-    version: 2, xp: -5, unlocked: 99, lastCourt: 99, tactic: 'cheat', sound: 'yes', difficulty: 'nightmare',
+    version: 2, scoreSeason: SCORE_SEASON, xp: -5, unlocked: 99, lastCourt: 99, tactic: 'cheat', sound: 'yes', difficulty: 'nightmare',
     courts: { 0: { standard: { stars: -9, best: -3 } }, 1: { standard: { stars: 999, best: 42 }, ruthless: { stars: 2, best: 10 } }, 99: { standard: { stars: 3, best: 1 } } },
     records: { valid: 12, negative: -1, infinite: null, text: '100' },
   }) };
@@ -84,6 +84,7 @@ test('loaded scalar values are clamped and invalid tactics fall back', () => {
 test('normalizeProgress survives garbage per-tier court data without throwing', () => {
   const storage = { getItem: () => JSON.stringify({
     version: 2,
+    scoreSeason: SCORE_SEASON,
     courts: {
       0: 42,
       1: 'not an object',
@@ -267,6 +268,7 @@ test('practice records nothing at all, cleared or not', () => {
 test('a version-1 stored progress resets xp to 0 but keeps everything else', () => {
   const storage = { getItem: () => JSON.stringify({
     version: 1,
+    scoreSeason: SCORE_SEASON,
     xp: 91234,
     unlocked: 3,
     lastCourt: 2,
@@ -288,6 +290,29 @@ test('a version-1 stored progress resets xp to 0 but keeps everything else', () 
   // The Daily mode no longer exists, so legacy daily-* keys are dropped
   // rather than carried forward as dead weight.
   assert.deepEqual(progress.records, { 'court-0-standard': 500 });
+});
+
+test('a save from an earlier scoring season loses its bests but keeps its progress', () => {
+  const stored = {
+    version: 2,
+    xp: 4200,
+    unlocked: 3,
+    lastCourt: 2,
+    courts: { 0: { standard: { stars: 3, best: 17737 } }, 2: { ruthless: { stars: 1, best: 28291 } } },
+    records: { 'court-0-standard': 17737, 'court-2-ruthless': 28291, endless: 298 },
+  };
+  for (const scoreSeason of [undefined, SCORE_SEASON - 1]) {
+    const progress = readProgress({ getItem: () => JSON.stringify({ ...stored, scoreSeason }) });
+    assert.equal(progress.scoreSeason, SCORE_SEASON);
+    assert.equal(progress.xp, 4200);
+    assert.equal(progress.unlocked, 3);
+    assert.deepEqual(progress.courts, { 0: { standard: { stars: 3, best: 0 } }, 2: { ruthless: { stars: 1, best: 0 } } });
+    assert.deepEqual(progress.records, {});
+  }
+  // Once stamped with this season, bests set from here on survive a reload.
+  const current = readProgress({ getItem: () => JSON.stringify({ ...stored, scoreSeason: SCORE_SEASON }) });
+  assert.equal(current.records.endless, 298);
+  assert.equal(current.courts[0].standard.best, 17737);
 });
 
 test('isReadableProgress accepts known versions and junk, but not a future version', () => {

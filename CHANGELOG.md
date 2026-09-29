@@ -34,6 +34,14 @@ own personal best and leaderboard, and rounds are played on a court of their
 own, The Rooftop. The Discord record post for a King of the Court record now
 reads in squares.
 
+### Fresh leaderboards
+
+The 0.5.0 multiplier and Extra Time make big scores and long runs much harder
+to reach than before, so the old ones could never be caught. The leaderboards
+start empty with this release, and so do personal bests: your World tour
+scores, your Extra Time time and each court's best score. Your level, unlocked
+courts and stars are kept.
+
 ## 0.5.0 - 2026-09-28
 
 ### Every bonus builds the multiplier
