@@ -9,6 +9,11 @@ works offline behind the service worker like everything else.
 
 ## 0.6.0 - 2026-09-29
 
+### Tiki Taka is in beta
+
+Every mode is now playable, so the game leaves alpha. The build tag in the
+corner reads BETA.
+
 ### King of the Court is playable
 
 Each mode now turns bonuses into something different: World tour into a

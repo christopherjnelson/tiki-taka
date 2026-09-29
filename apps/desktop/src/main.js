@@ -126,7 +126,7 @@ function setDialogBackChrome(buttonId, backTo, closeLabel) {
 // process environment values to the client.
 const buildIdentity = typeof __TIKI_TAKA_BUILD__ !== "undefined"
   ? __TIKI_TAKA_BUILD__
-  : { stage: "ALPHA", version: "dev", sha: "local", build: "local" };
+  : { stage: "BETA", version: "dev", sha: "local", build: "local" };
 const buildIdentityText = `${buildIdentity.stage} · v${buildIdentity.version} · ${buildIdentity.sha}${
   buildIdentity.build === "local" ? " · local" : ` · build ${buildIdentity.build}`
 }`;

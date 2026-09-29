@@ -73,7 +73,7 @@ curl -fsSIL https://tiki-taka.chris.guru/manifest.webmanifest
 curl -fsSIL https://tiki-taka.chris.guru/assets/REPLACE_WITH_HASHED_ASSET
 curl -fsSIL https://tiki-taka.chris.guru/assets/REPLACE_WITH_WOFF2
 curl -fsS -H 'Range: bytes=0-1023' -D - -o /dev/null https://tiki-taka.chris.guru/audio/REPLACE_WITH_AUDIO
-curl -fsS https://tiki-taka.chris.guru/ | grep -E 'ALPHA|v0\.3\.0|REPLACE_WITH_SHORT_SHA|REPLACE_WITH_RUN_ATTEMPT'
+curl -fsS https://tiki-taka.chris.guru/ | grep -E 'BETA|v0\.6\.0|REPLACE_WITH_SHORT_SHA|REPLACE_WITH_RUN_ATTEMPT'
 ```
 
 In a fresh browser profile, verify service-worker registration, authentication
