@@ -37,7 +37,8 @@ no points and no multiplier in this mode. Difficulty sets the press: two
 defenders on Relaxed, three on Standard, four on Ruthless. Each tier has its
 own personal best and leaderboard, and rounds are played on a court of their
 own, The Rooftop. The Discord record post for a King of the Court record now
-reads in squares.
+reads in squares, and an Extra Time record is now called one rather than an
+Endless record.
 
 ### Fresh leaderboards
 
