@@ -462,7 +462,7 @@
                 ><span>Clear six venues and collect every star.</span>
               </div>
             </button>
-            <button data-home-mode="kotc" type="button" disabled aria-disabled="true">
+            <button data-home-mode="kotc" type="button">
               <svg
                 class="mode-icon"
                 viewBox="0 0 48 48"
@@ -482,7 +482,7 @@
               </svg>
               <div class="mode-copy">
                 <strong>King of the Court</strong
-                ><span>Coming soon</span>
+                ><span>Take every square</span>
               </div>
             </button>
             <button data-home-mode="endless" type="button">
@@ -596,7 +596,7 @@
                   <strong id="combo-value">×1</strong>
                 </div>
                 <div class="stat lives-stat">
-                  <span class="stat-label">POSSESSIONS</span>
+                  <span id="lives-label" class="stat-label">POSSESSIONS</span>
                   <strong id="lives-value">3 / 3</strong>
                 </div>
               </div>
@@ -759,7 +759,7 @@
                       <div class="result-stat" id="result-banks-cell"><dt>Wall passes</dt><dd id="result-banks">0</dd></div>
                       <div class="result-stat" id="result-passes-cell"><dt>Passes</dt><dd id="result-passes">0</dd></div>
                       <div class="result-stat" id="result-streak-cell"><dt>Best streak</dt><dd id="result-streak">0</dd></div>
-                      <div class="result-stat" id="result-combo-cell"><dt>Flow peak</dt><dd id="result-combo">x1</dd></div>
+                      <div class="result-stat" id="result-combo-cell"><dt id="result-combo-label">Flow peak</dt><dd id="result-combo">x1</dd></div>
                       <div class="result-stat" id="result-turnovers-cell"><dt>Turnovers</dt><dd id="result-turnovers">0</dd></div>
                     </dl>
                   </div>
@@ -1683,7 +1683,15 @@
       </div>
       <div class="help-modes">
         <p>
-          <strong>King of the Court</strong> is coming soon.
+          <strong>King of the Court</strong> is a 90-second round on The
+          Rooftop, scored in squares. The court is a grid of 24: every pass
+          takes the square its receiver stands in, a triangle takes the
+          squares inside it, a split takes every square the pass crosses, a
+          zone takes the 3x3 block around the receiver and an olé takes the
+          receiver's whole row. Wall passes take nothing. A turnover costs
+          the 3x3 block around it but never ends the round; hold all 24 to be
+          crowned, and the board clears for another go. Difficulty sets the
+          press: two, three or four defenders.
           <strong>Extra Time</strong> starts you on 30 seconds and one
           possession. Zones, splits, triangles and olés buy more time, walls
           buy none, and each challenge pays a big chunk; one mistake ends it

@@ -528,6 +528,11 @@ h1 span {
   padding-left: 20px;
   border-left: 1px solid #4b3468;
 }
+/* A pill a mode has no use for (the multiplier in King of the Court) is
+   hidden outright; `display: flex` above would otherwise beat [hidden]. */
+.stat[hidden] {
+  display: none;
+}
 .score-stat {
   padding-left: 0;
   border: 0;

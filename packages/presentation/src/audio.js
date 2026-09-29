@@ -344,6 +344,8 @@ export class Sound {
         ? [440, 660]
         : type === "challenge"
           ? [523, 659, 784]
+        : type === "crown"
+          ? [523, 659, 784, 1047]
         : type === "victory"
           ? [392, 523, 659, 784]
           : type === "defeat"
