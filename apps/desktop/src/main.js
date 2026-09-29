@@ -17,6 +17,8 @@ import {
   endlessStage,
   EXTRA_TIME,
   ENDLESS_COURT,
+  KOTC_COURT,
+  KOTC_CELLS,
   ENDLESS_DEFENDER_STEPS,
 } from "../../../packages/engine/src/game.js";
 import { Renderer } from "../../../packages/presentation/src/renderer.js";
@@ -803,12 +805,16 @@ function syncTitle() {
       ? `${court.name} · Free Practice in progress`
       : selectedHomeMode === "endless"
         ? `${game.config.name} · ${formatClock(game.score)} survived`
-        : `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`
+        : selectedHomeMode === "kotc"
+          ? `${game.config.name} · ${game.squaresHeld()} of ${KOTC_CELLS} squares held`
+          : `${game.config.name} · ${Math.max(0, Math.ceil(game.time))} seconds remain`
     : selectedHomeMode === "practice"
       ? `${court.name} · Free Practice`
       : selectedHomeMode === "endless"
         ? `${ENDLESS_COURT.name} · ${ENDLESS_COURT.short}`
-        : `${court.name} · ${court.place}`;
+        : selectedHomeMode === "kotc"
+          ? `${KOTC_COURT.name} · ${KOTC_COURT.short}`
+          : `${court.name} · ${court.place}`;
 }
 function selectCourt(i) {
   if (i < 0 || i >= COURTS.length || i > progress.unlocked) return;
@@ -930,13 +936,11 @@ const LEADERBOARD_MODES = [
   { id: "endless", label: "Extra Time" },
 ];
 const LEADERBOARD_MODE_IDS = LEADERBOARD_MODES.map((m) => m.id);
-// Only World tour has courts and a difficulty tier in the same sense: it is
-// scored on possession/flow across six fixed venues at three tiers. Endless
-// has no venue choice (a single fixed court) and King of the Court is not
-// scored on flow at all, so neither has a comparable tier axis yet. Both
-// show up here so a player can see the board is waiting on them, but their
-// court tabs and difficulty toggle stay hidden rather than offering a
-// control that does nothing — the mobileWallMode lesson (CLAUDE.md).
+// Only World tour has courts. Endless and King of the Court each play one
+// fixed court, so their court tabs stay hidden rather than offering a control
+// that does nothing — the mobileWallMode lesson (CLAUDE.md). King of the
+// Court keeps the difficulty toggle (its tier sets the press); Endless has
+// one difficulty, the clock, so it hides that too.
 // What the board calls itself, per mode. "Circuit leaderboards" was written
 // when World tour was the only board there was, and it kept saying so after
 // the mode toggle arrived — so switching to King of the Court left a heading
@@ -955,10 +959,15 @@ function syncHomeLeaderboardHeading() {
   if (heading) heading.textContent = `${label.toUpperCase()} LEADERBOARD`;
   const section = $("home-leaderboard");
   if (section) section.setAttribute("aria-label", `${label} leaderboard`);
-  // The ranked column is seconds survived in Endless, points everywhere else.
+  // The ranked column is seconds survived in Endless, squares in King of the
+  // Court, points everywhere else.
   const scoreHead = $("hl-head-score");
   if (scoreHead)
-    scoreHead.textContent = isSurvivalMode(homeLeaderboardMode) ? "TIME" : "SCORE";
+    scoreHead.textContent = isSurvivalMode(homeLeaderboardMode)
+      ? "TIME"
+      : homeLeaderboardMode === "kotc"
+        ? "SQUARES"
+        : "SCORE";
   const icon = $("hl-mode-icon");
   const source = document.querySelector(
     `[data-home-mode="${homeLeaderboardMode}"] .mode-icon`,
@@ -973,8 +982,10 @@ function syncHomeLeaderboardHeading() {
 function leaderboardModeHasCourts(modeId) {
   return modeId === "career";
 }
+// King of the Court has no courts, but its tier sets the press, so scores are
+// only comparable within one and its board keeps the difficulty toggle.
 function leaderboardModeHasDifficulty(modeId) {
-  return modeId === "career";
+  return modeId === "career" || modeId === "kotc";
 }
 // More than the bare top 10 the board used to show, without turning the
 // panel into an unbounded scroll: 25 is enough to place most players who
@@ -1162,13 +1173,10 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
   function emptyStateMessage() {
     // World tour's empty state names the court, since that's what's being
     // filtered. Endless has no court filter - one global ladder - so it says
-    // the board is empty. King of the Court still has no gameplay at all
-    // (switchMode() refuses it), so it says so plainly rather than implying a
-    // court came up empty.
+    // the board is empty, and King of the Court is filtered by tier only.
     if (modeAtRequest === "career") return "No scores recorded yet for this court.";
     if (isSurvivalMode(modeAtRequest)) return "No runs recorded yet. Be the first.";
-    const modeLabel = LEADERBOARD_MODES.find((m) => m.id === modeAtRequest)?.label || "This mode";
-    return `${modeLabel} is coming soon — no scores yet.`;
+    return "No rounds recorded yet. Be the first.";
   }
 
   function renderEntries(entries) {
@@ -1227,14 +1235,16 @@ async function syncHomeLeaderboard(courtIdx = homeLeaderboardCourt, tier = homeL
 
     // World tour records are keyed by court and tier; Endless keeps one
     // record under its own mode name (awardMatch writes `records.endless`,
-    // in seconds). King of the Court has nothing to look up yet.
+    // in seconds); King of the Court keeps one per tier, in squares.
     if (progress?.records) {
       const directScore =
         modeAtRequest === "career"
           ? progress.records[`court-${courtIdx}-${tier}`]
           : isSurvivalMode(modeAtRequest)
             ? progress.records.endless
-            : undefined;
+            : modeAtRequest === "kotc"
+              ? progress.records[`kotc-${tier}`]
+              : undefined;
       if (typeof directScore === "number" && directScore > 0) {
         userBestScore = directScore;
       }
@@ -1481,7 +1491,9 @@ function attractVenueForCourt(i) {
 function homeRestingVenue() {
   return selectedHomeMode === "endless"
     ? ENDLESS_COURT.venue
-    : attractVenueForCourt(selectedCourtIndex);
+    : selectedHomeMode === "kotc"
+      ? KOTC_COURT.venue
+      : attractVenueForCourt(selectedCourtIndex);
 }
 // Says plainly who the court list is for. It stays live while Endless is
 // selected - a player browsing courts is choosing what to play NEXT, and
@@ -1493,7 +1505,9 @@ function syncCourtsHeading() {
   title.textContent =
     selectedHomeMode === "endless"
       ? `Extra Time plays ${ENDLESS_COURT.name}.`
-      : "Choose your court.";
+      : selectedHomeMode === "kotc"
+        ? `King of the Court plays ${KOTC_COURT.name}.`
+        : "Choose your court.";
 }
 // Re-skins the demo in place: background, accent and secondary colors only.
 // Never touches seed, defenders, speed or target, so the rally already in
@@ -1502,7 +1516,22 @@ function syncCourtsHeading() {
 function setAttractVenue(venueId) {
   if (!attractGame || attractGame.config.venue === venueId) return;
   attractGame.config.venue = venueId;
+  syncAttractKotc();
   attractNeedsRepaint = true;
+}
+// The Rooftop only ever hosts King of the Court, so the demo plays that
+// mode's rules whenever it is wearing that skin: passes take squares and the
+// renderer draws the grid. The engine reads `config.kotc` per reception, so
+// flipping it mid-rally is safe. Ground is wiped on every switch so the demo
+// never resumes a board it painted under the other rules.
+function syncAttractKotc() {
+  const kotc = attractGame.config.venue === KOTC_COURT.venue;
+  if (Boolean(attractGame.config.kotc) === kotc) return;
+  attractGame.config.kotc = kotc;
+  attractGame.squares.fill(false);
+  attractGame.crowns = 0;
+  attractGame.flow = 0;
+  attractGame.score = 0;
 }
 // --- Choreographed rally --------------------------------------------------
 //
@@ -1756,6 +1785,7 @@ function startAttract() {
   // Skin the demo to whatever court is currently selected (or last selected)
   // rather than whatever COURTS[1]'s own seed would otherwise resolve to.
   attractGame.config.venue = homeRestingVenue();
+  syncAttractKotc();
   attractNeedsRepaint = true;
   // Same convention as window.__game for the player's round: a stable,
   // read-only hook for tests/debugging to confirm the demo keeps running the
@@ -1959,6 +1989,11 @@ function config() {
     // there - and only the seed is decided here, so every run opens somewhere
     // new.
     return { ...ENDLESS_COURT, seed: Date.now() >>> 0 };
+  // King of the Court plays its own court too, but unlike Extra Time it does
+  // take the picked tier: the tier is the press (see KOTC_TIERS), and
+  // applyDifficulty knows to set that instead of possessions and targets.
+  if (mode === "kotc")
+    return applyDifficulty({ ...KOTC_COURT, seed: Date.now() >>> 0 }, progress.difficulty);
   if (mode === "practice") {
     const court = COURTS[courtIndex] || COURTS[0];
     return applyDifficulty(
@@ -2026,7 +2061,11 @@ function possessionOrdinal(n) {
 // applyDifficulty actually stamped onto the running round, never off
 // progress.difficulty/UI state that could have changed since kickoff.
 function recordKey() {
-  return mode === "career" ? `court-${courtIndex}-${game.config.difficulty}` : mode;
+  return mode === "career"
+    ? `court-${courtIndex}-${game.config.difficulty}`
+    : mode === "kotc"
+      ? `kotc-${game.config.difficulty}`
+      : mode;
 }
 // Builds the difficulty <select> options straight from DIFFICULTIES, the
 // same way the engine defines them — never hardcoded here.
@@ -2103,6 +2142,19 @@ function tierDifficultyDescriptionHtml(tier) {
   }
   return `The intended challenge, exactly as built: ${possessions} against the ${press}.`;
 }
+// King of the Court's tier is only the press, so its card says how many
+// defenders and how quick, read off the config applyDifficulty stamped on the
+// round rather than restated here.
+function kotcTierDescriptionHtml(tier, config) {
+  const n = config.defenders;
+  return `<strong>${n} defenders</strong> on The Rooftop. ${
+    tier.id === "relaxed"
+      ? "A gentler press while you learn the squares."
+      : tier.id === "ruthless"
+        ? "A hard press. Every turnover is ground gone."
+        : "The intended press."
+  } Turnovers cost squares, never the round.`;
+}
 // Practice ignores the possession limit entirely (unlimited recoveries — see
 // the isPractice branches in syncHud), which is the only dial Ruthless turns
 // now that the press and the defender count belong to the court. So in
@@ -2145,11 +2197,15 @@ function syncDifficultyChrome() {
   const plainDescription =
     mode === "practice"
       ? tierPracticeDescriptionHtml(difficultyMeta).replace(/<\/?strong>/g, "")
-      : difficultyMeta.label;
+      : mode === "kotc"
+        ? kotcTierDescriptionHtml(difficultyMeta, game.config).replace(/<\/?strong>/g, "")
+        : difficultyMeta.label;
   const descriptionHtml =
     mode === "practice"
       ? tierPracticeDescriptionHtml(difficultyMeta)
-      : tierDifficultyDescriptionHtml(difficultyMeta);
+      : mode === "kotc"
+        ? kotcTierDescriptionHtml(difficultyMeta, game.config)
+        : tierDifficultyDescriptionHtml(difficultyMeta);
 
   $("difficulty-select").disabled = false;
   $("difficulty-select").value = activeDifficulty;
@@ -2315,7 +2371,12 @@ function showRoundResults({
   overlay.dataset.result = cleared ? "victory" : "defeat";
   overlay.dataset.actions = "waiting";
   const survival = isSurvivalMode(mode);
-  $("result-score-label").textContent = survival ? "You lasted" : "Score";
+  const ground = mode === "kotc";
+  $("result-score-label").textContent = survival
+    ? "You lasted"
+    : ground
+      ? "Squares"
+      : "Score";
   $("result-score").textContent = survival
     ? formatClock(game.score)
     : String(game.score);
@@ -2337,9 +2398,18 @@ function showRoundResults({
   // Extra Time pays no points, so its "peak multiplier" would always be a
   // number that multiplied nothing. Its zone count is still a real measure
   // of how well the run flowed, so show that instead.
+  // King of the Court has no multiplier either; its own headline besides the
+  // squares is the crowns.
+  $("result-combo-label").textContent = survival
+    ? "Zones"
+    : ground
+      ? "Crowns"
+      : "Flow peak";
   $("result-combo").textContent = survival
     ? String(game.zones || 0)
-    : `x${flowMultiplier(game.bestFlow || 0)}`;
+    : ground
+      ? String(game.crowns || 0)
+      : `x${flowMultiplier(game.bestFlow || 0)}`;
   $("result-burst").hidden = false;
   $("result-stats").hidden = false;
   $("result-cheer").hidden = false;
@@ -2435,8 +2505,8 @@ function prepare() {
   // Endless borrows London's art and soundtrack (see getVenue) but is not
   // played AT London - it is one fixed rondo of its own, so the band names
   // the mode rather than a court on the circuit.
-  const bandName = mode === "endless" ? game.config.name : venue.name;
-  const bandSub = mode === "endless" ? game.config.place : venue.vibe;
+  const bandName = mode === "endless" || mode === "kotc" ? game.config.name : venue.name;
+  const bandSub = mode === "endless" || mode === "kotc" ? game.config.place : venue.vibe;
   if ($("arena-venue-label"))
     $("arena-venue-label").textContent = bandName.toUpperCase();
   if ($("arena-venue-sub"))
@@ -2457,7 +2527,9 @@ function prepare() {
       ? `THE CIRCUIT / ${String(courtIndex + 1).padStart(2, "0")}`
       : mode === "endless"
         ? "EXTRA TIME"
-        : mode.toUpperCase();
+        : mode === "kotc"
+          ? "KING OF THE COURT"
+          : mode.toUpperCase();
   // Endless sets target: 0, and Free practice's target is an internal pacing
   // number for the objective/goal-bar rather than a real pass/fail line (it
   // has unlimited recoveries and no clock) — neither should show a "/ N"
@@ -2465,6 +2537,7 @@ function prepare() {
   // "FLOW SCORE" label with no target suffix, same as before this target
   // pairing existed.
   const hasScoreTarget = Boolean(game.config.target) && !game.config.practice;
+  const isKotc = mode === "kotc";
   // Extra Time repurposes two pills: the big readout is the seconds lasted
   // (its score) and the multiplier pill counts down to the next defender.
   // syncHud() fills both; these are their names.
@@ -2472,16 +2545,31 @@ function prepare() {
     ? "SCORE"
     : mode === "endless"
       ? "LASTED"
-      : "FLOW SCORE";
+      : isKotc
+        ? "SQUARES"
+        : "FLOW SCORE";
   $("combo-label").textContent = mode === "endless" ? "NEXT DEFENDER" : "MULTIPLIER";
-  $("score-target").textContent = hasScoreTarget ? `/ ${game.config.target}` : "";
-  $("score-target").hidden = !hasScoreTarget;
+  // King of the Court has no multiplier, so the pill goes (see .stat[hidden]),
+  // and the possessions pill counts crowns instead: turnovers cost squares
+  // there, not a life, so "3 / 3" would be a lie.
+  $("combo-value").parentElement.hidden = isKotc;
+  $("lives-label").textContent = isKotc ? "CROWNS" : "POSSESSIONS";
+  // The squares readout carries its own denominator, drawn as the score's
+  // dimmer suffix like a target is elsewhere.
+  $("score-target").textContent = hasScoreTarget
+    ? `/ ${game.config.target}`
+    : isKotc
+      ? `/ ${KOTC_CELLS}`
+      : "";
+  $("score-target").hidden = !hasScoreTarget && !isKotc;
   // Extra Time's objective line is rewritten every frame by syncHud() as
   // challenges come and go; this is only what it says before kickoff.
   $("goal-label").textContent =
     mode === "endless"
       ? "BONUSES BUY TIME. CHALLENGES BUY MORE."
-      : `${game.config.target} POINTS TO CLEAR`;
+      : isKotc
+        ? "HOLD ALL 24 SQUARES TO BE CROWNED"
+        : `${game.config.target} POINTS TO CLEAR`;
   $("tactic-select").disabled = false;
   $("tactic-select").value = progress.tactic;
   $("tactic-description").textContent = TACTICS[progress.tactic].label;
@@ -2511,24 +2599,32 @@ function prepare() {
       ? `NO TIMER · UNLIMITED RECOVERIES · FIND YOUR RHYTHM`
       : mode === "endless"
         ? `${EXTRA_TIME.start} SECONDS TO START · BONUSES BUY TIME · ONE MISTAKE ENDS IT`
-        : `${game.config.time} SECONDS · ${possessions} ${possessionLabel} · ${possessionsOrdinal} LOSS ENDS THE ROUND`;
+        : isKotc
+          ? `${game.config.time} SECONDS · PASSES TAKE SQUARES · TURNOVERS COST THEM`
+          : `${game.config.time} SECONDS · ${possessions} ${possessionLabel} · ${possessionsOrdinal} LOSS ENDS THE ROUND`;
   setOverlay(
     mode === "endless"
       ? "BUY YOURSELF EXTRA TIME"
-      : mode === "practice"
-        ? "A LITTLE SPACE TO LEARN"
-        : "FOUR PLAYERS. ONE BALL.",
-    mode === "practice" ? "Find your feet." : "Keep it beautiful.",
+      : isKotc
+        ? "THE ROOFTOP · TAKE THE GROUND"
+        : mode === "practice"
+          ? "A LITTLE SPACE TO LEARN"
+          : "FOUR PLAYERS. ONE BALL.",
+    isKotc ? "Hold the court." : mode === "practice" ? "Find your feet." : "Keep it beautiful.",
     mode === "endless"
       ? `You start with ${EXTRA_TIME.start} seconds. Zones, splits, triangles and olés buy more time; a challenge buys ${EXTRA_TIME.challenge.reward} at once. Walls earn none. One mistake ends the run, and the press keeps growing — a third defender at 0:45, a fourth at 1:45, a fifth at 3:15.`
-      : mode === "practice"
-        ? "No timer. Unlimited recoveries. Experiment freely."
-        : `Keep possession for ${game.config.time} seconds. Earn ${game.config.target} points. You have ${possessions} ${possessions === 1 ? "possession" : "possessions"}; the ${possessionOrdinal(possessions)} loss ends the round.`,
+      : isKotc
+        ? `${game.config.time} seconds. A pass takes the square its receiver stands in; a triangle, a split, a zone or an olé takes whole shapes of squares. Walls take nothing. A turnover costs the ground around it but never the round. Hold all ${KOTC_CELLS} at once to be crowned, then start again.`
+        : mode === "practice"
+          ? "No timer. Unlimited recoveries. Experiment freely."
+          : `Keep possession for ${game.config.time} seconds. Earn ${game.config.target} points. You have ${possessions} ${possessions === 1 ? "possession" : "possessions"}; the ${possessionOrdinal(possessions)} loss ends the round.`,
     mode === "endless"
       ? "Start the run"
-      : mode === "practice"
-        ? "Start the warm-up"
-        : "Play the court",
+      : isKotc
+        ? "Take the court"
+        : mode === "practice"
+          ? "Start the warm-up"
+          : "Play the court",
   );
   // Must run after setOverlay(): that generic reset hides #overlay-difficulty
   // (it is also reused by the results screen and the "end this round?"
@@ -2542,7 +2638,6 @@ function prepare() {
   syncHud();
 }
 function switchMode(next, index = courtIndex) {
-  if (next === "kotc") return;
   closePauseMenu({ restoreFocus: false });
   selectedCourtIndex = index;
   selectedHomeMode = next;
@@ -3218,6 +3313,14 @@ const VENUE_SPECTRUM_THEMES = {
   // Endless's court: jade and lilac, no hot pink. The visualiser is the one
   // piece of stadium energy on that screen, so it is kept as calm as the
   // court it sits beside.
+  // King of the Court's court: gold and ember, matching the crown.
+  "the-rooftop": {
+    low: "#ffd166",
+    mid: "#ffb35c",
+    high: "#ff7a59",
+    glow: "#ffd166",
+    unlit: "rgba(30, 20, 14, 0.42)",
+  },
   "still-water": {
     low: "#8fe6cf",
     mid: "#d9f5ec",
@@ -3476,15 +3579,20 @@ function syncHud() {
   syncOneTouchReadout();
 
   const isEndless = Boolean(game.config.endless);
+  const isKotc = Boolean(game.config.kotc);
   const stage = isEndless ? endlessStage(game.elapsed) : null;
   // In Extra Time the TIME pill is the bank draining, so the big readout
   // carries the score proper: whole seconds survived. It stays digits-only,
   // as the markup requires.
-  const scoreReadout = game.score;
+  // King of the Court's big readout is the squares held right now ("14 / 24",
+  // the denominator is the suffix span), not the round score: the score folds
+  // crowns in, and the crowns have their own pill.
+  const scoreReadout = isKotc ? game.squaresHeld() : game.score;
   if (scoreReadout !== hudCache.score) {
-    $("score-value").textContent = isEndless
-      ? String(scoreReadout)
-      : String(scoreReadout).padStart(3, "0");
+    $("score-value").textContent =
+      isEndless || isKotc
+        ? String(scoreReadout)
+        : String(scoreReadout).padStart(3, "0");
     hudCache.score = scoreReadout;
   }
 
@@ -3527,9 +3635,11 @@ function syncHud() {
   }
 
   const roundPossessions = possessionLimit(game.config);
-  const livesText = game.config.practice
-    ? "∞"
-    : `${Math.max(0, roundPossessions - game.turnovers)} / ${roundPossessions}`;
+  const livesText = isKotc
+    ? String(game.crowns)
+    : game.config.practice
+      ? "∞"
+      : `${Math.max(0, roundPossessions - game.turnovers)} / ${roundPossessions}`;
   if (livesText !== hudCache.lives) {
     $("lives-value").textContent = livesText;
     hudCache.lives = livesText;
@@ -3646,7 +3756,10 @@ function syncHud() {
       hudCache.challengeFill = fill;
     }
   }
-  const goalPercent = isEndless
+  // King of the Court's bar is the court itself: how much of it is held.
+  const goalPercent = isKotc
+    ? (game.squaresHeld() / KOTC_CELLS) * 100
+    : isEndless
     ? // A live challenge drains the bar with its remaining time. Otherwise it
       // shows progress toward the next rung, so the bar reads as "how much
       // longer does this much space last". Full once there is no rung left.
@@ -3718,11 +3831,11 @@ function finish() {
   const completedRound = {
     id: globalThis.crypto?.randomUUID?.() || `round-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     mode,
-    // Endless is one fixed rondo, not a venue on the circuit: its rows carry
-    // no court, so the board is a single global ladder rather than six
+    // Endless and King of the Court are each one fixed court, not a venue on
+    // the circuit: their rows carry no court, so the board is a single global ladder rather than six
     // identical ones. The column is nullable for exactly this (see
     // round_scores_court_range_check).
-    court: isSurvivalMode(mode) ? null : courtIndex,
+    court: isSurvivalMode(mode) || mode === "kotc" ? null : courtIndex,
     score: game.score,
     passes: game.passes,
     bestOneTouch: game.bestOneTouch,
@@ -3736,7 +3849,7 @@ function finish() {
   };
   // An attempt is not a result: only a round that counts in its mode (see
   // roundCounts in progress.js — career only when cleared, practice never,
-  // Endless/King of the Court not yet) writes a round_scores row, queues for
+  // Endless and King of the Court every finished round) writes a round_scores row, queues for
   // the leaderboard, or offers the "save this score?" prompt below.
   const roundSaves = roundCounts(mode, result.cleared);
   if (roundSaves) {
@@ -3760,8 +3873,11 @@ function finish() {
   // the round ended for a different reason than the engine actually used —
   // possessionLimit() is the one place both read that fallback from, so this
   // can't drift the way a re-typed literal 3 already had.
+  const isKotc = mode === "kotc";
+  // King of the Court's turnovers cost ground, never the round, so it can
+  // never be "out of possessions".
   const outOfPossessions =
-    game.turnovers >= possessionLimit(game.config) && !game.config.practice;
+    !isKotc && game.turnovers >= possessionLimit(game.config) && !game.config.practice;
   const survivalRun = isSurvivalMode(mode);
   const endlessBest = progress.records.endless || 0;
   // Extra Time ends one of two ways: the bank hit zero (finish() zeroes it)
@@ -3770,8 +3886,23 @@ function finish() {
   const ending = timeRanOut
     ? "Time ran out"
     : "The press caught you";
+  const kotcBest = progress.records[`kotc-${game.config.difficulty}`] || 0;
+  const squaresWord = (n) => `${n} ${n === 1 ? "square" : "squares"}`;
+  const kotcHeld = squaresWord(game.squaresHeld());
+  const kotcLead =
+    game.crowns > 0
+      ? `${game.crowns === 1 ? "Crowned once" : `Crowned ${game.crowns} times`}, with ${kotcHeld} held at the whistle.`
+      : `${kotcHeld[0].toUpperCase()}${kotcHeld.slice(1)} held at the whistle.`;
   const extra =
-    survivalRun
+    isKotc
+      ? `${kotcLead} ${
+          result.newBest
+            ? "A new personal best on this difficulty."
+            : kotcBest > game.score
+              ? `Your best on this difficulty is ${kotcBest}.`
+              : "Every pass takes ground; every turnover gives some back."
+        }`
+      : survivalRun
       ? result.newBest
         ? `${ending}. A new personal best, with ${game.defenders.length} defenders on the court.`
         : endlessBest > game.score
@@ -3792,8 +3923,10 @@ function finish() {
   // the top bar and the pause menu's Home entry, both of which are reachable
   // from here — this overlay never pretends to offer it.
   showRoundResults({
-    cleared: result.cleared,
-    kicker: survivalRun
+    cleared: result.cleared || (isKotc && game.crowns > 0),
+    kicker: isKotc
+      ? `FULL TIME · ${squaresWord(game.score).toUpperCase()}${result.newBest ? " · NEW BEST" : ""}`
+      : survivalRun
       ? `${timeRanOut ? "TIME UP" : "CAUGHT"} · ${formatClock(game.score)}${result.newBest ? " · NEW BEST" : ""}`
       : result.cleared
         ? `VICTORY · COURT CLEARED${result.newBest ? " · NEW BEST" : ""}`
@@ -3801,7 +3934,11 @@ function finish() {
           ? "DEFEAT · POSSESSIONS LOST"
           : "DEFEAT · TARGET MISSED",
     title:
-      mode === "endless"
+      isKotc
+        ? game.crowns > 0
+          ? "Long live the king."
+          : "Full time."
+        : mode === "endless"
         ? timeRanOut
           ? "Out of time."
           : "Caught out."
@@ -3817,7 +3954,9 @@ function finish() {
           // Retry - a word that frames a survival run as a failed attempt.
           survivalRun
           ? "Start a new run"
-          : !result.cleared
+          : isKotc
+            ? "Take the court again"
+            : !result.cleared
             ? "Retry"
             : mode === "practice"
               ? "Practise this court again"
@@ -3834,9 +3973,14 @@ function finish() {
     stars: mode === "career" ? result.stars : 0,
     xp: result.xp,
   });
-  sound.play(result.cleared ? "victory" : "defeat");
+  // King of the Court is never "cleared", but a round with a crown in it is
+  // still a win worth a fanfare; a crownless one gets the softer full-time cue
+  // Extra Time's runs do.
+  sound.play(result.cleared || (isKotc && game.crowns > 0) ? "victory" : "defeat");
   announce(
-    survivalRun
+    isKotc
+      ? `Full time. ${squaresWord(game.score)}${game.crowns ? `, crowned ${game.crowns} ${game.crowns === 1 ? "time" : "times"}` : ""}.`
+      : survivalRun
       ? `${timeRanOut ? "Time ran out" : "Caught"}. You lasted ${formatClock(game.score)}.`
       : `Round complete. ${game.score} points. ${result.cleared ? "Court cleared." : ""}`,
   );
@@ -4848,7 +4992,7 @@ $("pause-home").addEventListener("click", () => {
 $("pause-settings").addEventListener("click", openSettings);
 document.querySelectorAll("[data-home-mode]").forEach((button) => {
   button.addEventListener("click", () => {
-    if (button.disabled || button.dataset.homeMode === "kotc") return;
+    if (button.disabled) return;
     selectedHomeMode = button.dataset.homeMode;
     document.querySelectorAll("[data-home-mode]").forEach((btn) => {
       const active = btn === button;
@@ -5653,6 +5797,9 @@ function frame(now) {
       // its chance to finish the round. When it does take over, #resume-reason
       // is the one place the message appears.
       if (event !== turnoverEvent) renderer.addEvent(event);
+      // The turnover's own popup is the hold overlay, so the ground it took
+      // back is flashed on the court separately.
+      else if (event.lost?.length) renderer.flashSquares(event.lost, "loss");
       // finish() chooses the outcome-specific full-time sound after progress
       // has decided whether this was a clear or a defeat.
       //

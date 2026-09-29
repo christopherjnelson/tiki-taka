@@ -1442,9 +1442,8 @@ await check(
         },
         async saveUserData() { return {}; },
         async recordRound() { return { games: 0, bestScore: 0, totalPasses: 0, bestOneTouch: 0 }; },
-        // Only "career" has any scores recorded — kotc and endless are not
-        // playable modes yet (see switchMode()'s refusal in main.js), so a
-        // real backend would never have rows for them either.
+        // Only "career" has any scores recorded here; the other boards are
+        // deliberately empty so the empty states can be asserted.
         async getLeaderboard(args) {
           window.__leaderboardCalls.push(args);
           if (args.mode !== "career") return { entries: [] };
@@ -1480,17 +1479,19 @@ await check(
     assert.equal(careerCall.court, 0);
     assert.equal(careerCall.difficulty, "standard");
 
-    // Switching to King of the Court hides the World-tour-only controls,
-    // queries by the new mode, and shows a calm empty state rather than an
-    // error or a spinner that never resolves.
+    // Switching to King of the Court hides the court tabs (it has one court)
+    // but keeps the difficulty toggle (the tier is its press), queries by the
+    // new mode and tier, and shows a calm empty state rather than an error or
+    // a spinner that never resolves.
     const kotcButton = page.locator('#hl-mode-toggle .hl-mode-btn[data-mode="kotc"]');
     await kotcButton.click();
     await page.waitForFunction(() => window.__leaderboardCalls.at(-1)?.mode === "kotc");
     const kotcCall = await page.evaluate(() => window.__leaderboardCalls.at(-1));
     assert.equal(kotcCall.court, undefined);
-    assert.equal(kotcCall.difficulty, undefined);
+    assert.equal(kotcCall.difficulty, "standard");
     assert.equal(await page.locator("#hl-tabs").isHidden(), true);
-    assert.equal(await page.locator("#hl-difficulty-toggle").isHidden(), true);
+    assert.equal(await page.locator("#hl-difficulty-toggle").isHidden(), false);
+    assert.equal(await page.locator("#hl-head-score").textContent(), "SQUARES");
     assert.equal(await heading.textContent(), "KING OF THE COURT LEADERBOARD");
     await page.waitForFunction(
       () => document.querySelectorAll("#home-leaderboard-list .hl-row").length === 0,
@@ -1499,7 +1500,7 @@ await check(
     await page.waitForFunction(
       () => !/unable to load|offline|error/i.test(document.querySelector("#home-leaderboard-status")?.textContent || ""),
     );
-    assert.match(await status.textContent(), /coming soon/i);
+    assert.match(await status.textContent(), /no rounds recorded yet/i);
     assert.equal(await status.evaluate((el) => el.classList.contains("is-error")), false);
 
     // Endless hides the same court/tier chrome, but it is playable now, so
@@ -1899,6 +1900,7 @@ await check(
       ["practice", /^Start the warm-up$/],
       ["career", /^Play the court$/],
       ["endless", /^Start the run$/],
+      ["kotc", /^Take the court$/],
     ]) {
       await page.locator(`[data-home-mode="${mode}"]`).click();
       await page.locator("#title-play").click();
@@ -1916,14 +1918,29 @@ await check(
       await page.locator("#pause-home").click();
       await page.locator("#home-view").waitFor({ state: "visible" });
     }
-    // King of the Court is coming soon and clicking it does nothing
+    // King of the Court is a playable mode: enabled, and it opens a round.
     const kingBtn = page.locator('[data-home-mode="kotc"]');
     assert.match(await kingBtn.locator("strong").textContent(), /King of the Court/i);
-    assert.match(await kingBtn.locator("span").textContent(), /Coming soon/i);
-    assert.equal(await kingBtn.getAttribute("disabled"), "");
-    await kingBtn.click({ force: true });
-    assert.equal(await page.locator("#home-view").isVisible(), true);
-    assert.equal(await page.locator("#arena-view").isHidden(), true);
+    assert.equal(await kingBtn.isDisabled(), false);
+    await kingBtn.click();
+    // The home demo previews the mode it is dressed as: on The Rooftop it
+    // plays King of the Court's rules, so its passes take squares.
+    assert.equal(await page.evaluate(() => window.__attractGame?.config?.kotc), true);
+    await page.waitForFunction(
+      () => window.__attractGame?.squares?.some(Boolean),
+      null,
+      { timeout: 10_000 },
+    );
+    await page.locator("#title-play").click();
+    await page.locator("#arena-view").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#mode-label").textContent(), "KING OF THE COURT");
+    assert.equal(await page.locator("#score-target").textContent(), "/ 24");
+    assert.equal(await page.locator("#lives-label").textContent(), "CROWNS");
+    assert.equal(await page.locator("#combo-value").isHidden(), true, "no multiplier pill without a multiplier");
+    await page.locator("#top-pause").click();
+    await page.locator("#pause-menu").waitFor({ state: "visible" });
+    await page.locator("#pause-home").click();
+    await page.locator("#home-view").waitFor({ state: "visible" });
     // Nowhere in the shell still calls home "Courts".
     const strays = await page.evaluate(() =>
       [...document.querySelectorAll("button")]

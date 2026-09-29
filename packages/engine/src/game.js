@@ -321,6 +321,118 @@ export function bankPoint(a, b) {
       distance(a, p) + distance(p, b) - (distance(a, q) + distance(q, b)),
   )[0];
 }
+// King of the Court (mode key "kotc") turns bonuses into ground. The playable
+// area (LIMITS) is cut into a grid of squares; passes take the square the
+// receiver stands in, bonuses paint shapes of squares, and only a turnover
+// gives ground back. Everything here is pure geometry so the renderer and the
+// tests read the same grid the simulation does.
+export const KOTC_GRID = { cols: 6, rows: 4 };
+export const KOTC_CELLS = KOTC_GRID.cols * KOTC_GRID.rows;
+export const KOTC_ROUND_SECONDS = 90;
+const KOTC_CELL_SIZE = {
+  w: (LIMITS.right - LIMITS.left) / KOTC_GRID.cols,
+  h: (LIMITS.bottom - LIMITS.top) / KOTC_GRID.rows,
+};
+// The press is the only difficulty dial here: the tour's possessions and score
+// scaling mean nothing in a mode that has neither. Speeds sit inside the
+// tour's 76-123 range, so Relaxed is Concrete Club's pace with one defender
+// fewer and Ruthless is a little under After Hours with a fourth.
+export const KOTC_TIERS = {
+  relaxed: { defenders: 2, speed: 80 },
+  standard: { defenders: 3, speed: 95 },
+  ruthless: { defenders: 4, speed: 110 },
+};
+// Cells are numbered row by row from the top-left: index = row * cols + col.
+// Points outside the grid clamp onto its nearest square, so a defender pinned
+// against the boundary still has a square to take from the player.
+export function kotcCellIndex(x, y) {
+  const col = clamp(
+    Math.floor((x - LIMITS.left) / KOTC_CELL_SIZE.w),
+    0,
+    KOTC_GRID.cols - 1,
+  );
+  const row = clamp(
+    Math.floor((y - LIMITS.top) / KOTC_CELL_SIZE.h),
+    0,
+    KOTC_GRID.rows - 1,
+  );
+  return row * KOTC_GRID.cols + col;
+}
+export function kotcCellRect(index) {
+  const col = index % KOTC_GRID.cols;
+  const row = Math.floor(index / KOTC_GRID.cols);
+  return {
+    x: LIMITS.left + col * KOTC_CELL_SIZE.w,
+    y: LIMITS.top + row * KOTC_CELL_SIZE.h,
+    w: KOTC_CELL_SIZE.w,
+    h: KOTC_CELL_SIZE.h,
+  };
+}
+export function kotcCellCenter(index) {
+  const rect = kotcCellRect(index);
+  return { x: rect.x + rect.w / 2, y: rect.y + rect.h / 2 };
+}
+// The 3x3 block centred on `index`, clipped at the edges of the grid. Used
+// for both the zone bonus (ground gained) and a turnover (ground lost).
+export function kotcBlock(index) {
+  const col = index % KOTC_GRID.cols;
+  const row = Math.floor(index / KOTC_GRID.cols);
+  const cells = [];
+  for (let r = Math.max(0, row - 1); r <= Math.min(KOTC_GRID.rows - 1, row + 1); r++)
+    for (let c = Math.max(0, col - 1); c <= Math.min(KOTC_GRID.cols - 1, col + 1); c++)
+      cells.push(r * KOTC_GRID.cols + c);
+  return cells;
+}
+export function kotcRow(index) {
+  const row = Math.floor(index / KOTC_GRID.cols);
+  return Array.from({ length: KOTC_GRID.cols }, (_, c) => row * KOTC_GRID.cols + c);
+}
+// Every square a straight pass crosses. Liang-Barsky against each square's
+// rectangle: exact, and a lane that only grazes a corner still counts, which
+// is the generous reading for the player.
+export function kotcPathCells(a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const cells = [];
+  for (let i = 0; i < KOTC_CELLS; i++) {
+    const rect = kotcCellRect(i);
+    let t0 = 0;
+    let t1 = 1;
+    const edges = [
+      [-dx, a.x - rect.x],
+      [dx, rect.x + rect.w - a.x],
+      [-dy, a.y - rect.y],
+      [dy, rect.y + rect.h - a.y],
+    ];
+    let inside = true;
+    for (const [p, q] of edges) {
+      if (p === 0) {
+        if (q < 0) inside = false;
+      } else {
+        const t = q / p;
+        if (p < 0) t0 = Math.max(t0, t);
+        else t1 = Math.min(t1, t);
+      }
+    }
+    if (inside && t0 <= t1) cells.push(i);
+  }
+  return cells;
+}
+// Every square whose centre lies inside the triangle (edges count).
+export function kotcTriangleCells(points) {
+  const [a, b, c] = points;
+  const cells = [];
+  for (let i = 0; i < KOTC_CELLS; i++) {
+    const centre = kotcCellCenter(i);
+    const d1 = orient(a, b, centre);
+    const d2 = orient(b, c, centre);
+    const d3 = orient(c, a, centre);
+    const negative = d1 < 0 || d2 < 0 || d3 < 0;
+    const positive = d1 > 0 || d2 > 0 || d3 > 0;
+    if (!(negative && positive)) cells.push(i);
+  }
+  return cells;
+}
 // Tier multipliers layered on top of each court's own ramp (COURTS above).
 // Standard is exactly today's numbers - it must never change these values.
 //
@@ -476,6 +588,27 @@ export const ENDLESS_COURT = {
   description:
     "Extra Time: start with 30 seconds and one possession. Bonuses buy time, challenges buy more, and the press never stops growing. A third defender at 0:45, a fourth at 1:45, a fifth at 3:15. One mistake ends it.",
 };
+// King of the Court's own court, modelled on ENDLESS_COURT and kept out of
+// COURTS for the same reason: it has no target, stars or clear line, so a
+// place in the circuit would hand it a court card and a leaderboard tab it is
+// not part of. Speed and defenders here are the standard tier's; the picked
+// tier overrides them through KOTC_TIERS (see applyDifficulty).
+export const KOTC_COURT = {
+  name: "The Rooftop",
+  place: "HOLD THE COURT",
+  short: "Take every square",
+  venue: "the-rooftop",
+  target: 0,
+  reference: 0,
+  time: KOTC_ROUND_SECONDS,
+  speed: KOTC_TIERS.standard.speed,
+  defenders: KOTC_TIERS.standard.defenders,
+  possessions: null,
+  difficulty: "standard",
+  kotc: true,
+  description:
+    "Ninety seconds to take the court. Every pass takes the square the receiver stands in; bonuses take whole shapes of squares. A turnover costs you the ground around it, and it does not end the round. Hold all 24 at once to be crowned and start again.",
+};
 // Pure: the press the clock has earned at `elapsed` seconds. Exported so the
 // UI can telegraph the next rung without re-deriving the ladder.
 export function endlessStage(elapsed) {
@@ -498,6 +631,9 @@ export function endlessStage(elapsed) {
 // mutating `config`.
 export function applyDifficulty(config, tier) {
   const id = Object.hasOwn(DIFFICULTY_TIERS, tier) ? tier : "standard";
+  // King of the Court has no possessions or reference to scale: the tier is
+  // just the size and pace of the press.
+  if (config.kotc) return { ...config, ...KOTC_TIERS[id], difficulty: id };
   const scale = DIFFICULTY_TIERS[id];
   // The tier scales the REFERENCE, and the clear line and star rungs are
   // taken from that - so a tier never changes what a star means relative to
@@ -548,6 +684,11 @@ export class Game {
     this.passes = 0;
     this.turnovers = 0;
     this.flow = 0;
+    // King of the Court ground: one flag per grid square, plus how many times
+    // the whole court has been held. Both are inert (all false, zero) in every
+    // other mode.
+    this.squares = Array(KOTC_CELLS).fill(false);
+    this.crowns = 0;
     this.bestFlow = 0;
     this.flowIdle = 0;
     this.oneTouchStreak = 0;
@@ -696,6 +837,9 @@ export class Game {
       from: this.carrier,
       to: id,
       bank,
+      // Where the pass was struck. `x`/`y` walk toward the receiver, so the
+      // lane a King of the Court split paints needs its own fixed start.
+      origin: { x: from.x, y: from.y },
       bounced: false,
       waypoint,
       // Distance rewards the actual passer-to-receiver progression, not an
@@ -785,7 +929,9 @@ export class Game {
     if (completesTriangle) flowBuilt += FLOW_BUILD.triangle;
     if (splitHit) flowBuilt += FLOW_BUILD.split;
     if (milestone) flowBuilt += FLOW_BUILD.ole;
-    if (flowBuilt > 0) {
+    // King of the Court pays in ground, not flow: the multiplier stays at
+    // zero there so nothing downstream ever reads a stale one.
+    if (flowBuilt > 0 && !this.config.kotc) {
       this.flow += flowBuilt;
       this.bestFlow = Math.max(this.bestFlow, this.flow);
       this.flowIdle = 0;
@@ -859,7 +1005,7 @@ export class Game {
     }
     // Extra Time is scored on survival time alone (see update()), so bonuses
     // there pay time (and Energy), never points.
-    if (this.config.endless) points = 0;
+    if (this.config.endless || this.config.kotc) points = 0;
     this.score += points;
     // Several bonuses can land on one pass; the label shows the best of them
     // while `bonuses` carries the full list for the popup stack.
@@ -867,26 +1013,33 @@ export class Game {
     const timeGrant = this.config.endless
       ? this.settleExtraTime(bonuses, ball, p)
       : 0;
+    const ground = this.config.kotc
+      ? this.claimGround(ball, p, bonuses, milestone, triangleCoords)
+      : null;
     // In Extra Time a popup carries the bonus's name, colour and any time it
     // bought, and no number - `points: null` tells the renderer to print the
     // text rather than a total. A plain pass stays silent.
-    if (!this.config.endless || best)
-      this.emit(
-        "score",
-        this.config.endless
-          ? timeGrant > 0
-            ? `${BONUS_LABELS[best]} +${timeGrant}s`
-            : BONUS_LABELS[best]
-          : `${best ? BONUS_LABELS[best] : "PASS"} +${points}`,
-        p.x,
-        p.y - 25,
-        {
-          bonuses,
-          points: this.config.endless ? null : points,
-          bestBonus: best || null,
-          triangle: triangleCoords,
-        },
-      );
+    //
+    // King of the Court names the ground taken instead ("TRIANGLE +5"). A pass
+    // that took nothing new stays silent unless a bonus fired, so the popup
+    // never claims "PASS +0" on a square that was already yours.
+    let text = `${best ? BONUS_LABELS[best] : "PASS"} +${points}`;
+    if (this.config.endless)
+      text = timeGrant > 0 ? `${BONUS_LABELS[best]} +${timeGrant}s` : BONUS_LABELS[best];
+    else if (ground)
+      text = ground.gained > 0
+        ? `${best ? BONUS_LABELS[best] : "PASS"} +${ground.gained}`
+        : BONUS_LABELS[best];
+    const popup = this.config.endless ? Boolean(best) : ground ? Boolean(best) || ground.gained > 0 : true;
+    if (popup)
+      this.emit("score", text, p.x, p.y - 25, {
+        bonuses,
+        points: this.config.endless || ground ? null : points,
+        bestBonus: best || null,
+        triangle: triangleCoords,
+        ...(ground ? { squares: ground.gained, taken: ground.cells } : {}),
+      });
+    if (ground) this.settleCrown(p);
     if (!ball.focusUsed && focusReward > 0) {
       const gained = Math.min(focusReward, this.tactic.focus - this.focus);
       if (gained > 0) {
@@ -912,6 +1065,60 @@ export class Game {
       this.passCooldown = 0;
       this.pass(queued.id, queued.bank);
     }
+  }
+  squaresHeld() {
+    return this.squares.reduce((n, held) => n + (held ? 1 : 0), 0);
+  }
+  // Score is crowns * 24 + squares held, so being crowned (24 held becomes 0
+  // held and one crown) never moves it, and a turnover is the only way it
+  // goes down.
+  syncGroundScore() {
+    this.score = this.crowns * KOTC_CELLS + this.squaresHeld();
+  }
+  // Turns one received pass into ground. Returns how many squares were newly
+  // taken and which. A wall pass takes nothing at all - not even the
+  // receiver's square, and not the shape of any bonus it also earned - which
+  // is what makes bouncing the ball off the wall a way to keep it moving
+  // rather than a way to score.
+  claimGround(ball, receiver, bonuses, milestone, triangleCoords) {
+    if (ball.bank) return { gained: 0, cells: [] };
+    const painted = new Set([kotcCellIndex(receiver.x, receiver.y)]);
+    const paint = (cells) => cells.forEach((cell) => painted.add(cell));
+    if (bonuses.includes("triangle") && triangleCoords) {
+      // The three players' own squares as well as everything the triangle
+      // encloses, so a thin sliver that holds no square centre still pays.
+      paint(kotcTriangleCells(triangleCoords));
+      paint(triangleCoords.map((point) => kotcCellIndex(point.x, point.y)));
+    }
+    if (bonuses.includes("split"))
+      paint(kotcPathCells(ball.origin, receiver));
+    if (bonuses.includes("zone"))
+      paint(kotcBlock(kotcCellIndex(receiver.x, receiver.y)));
+    if (milestone) paint(kotcRow(kotcCellIndex(receiver.x, receiver.y)));
+    const cells = [...painted].filter((cell) => !this.squares[cell]).sort((a, b) => a - b);
+    for (const cell of cells) this.squares[cell] = true;
+    this.syncGroundScore();
+    return { gained: cells.length, cells };
+  }
+  // The moment every square is held the player is crowned and the board
+  // clears so play carries on: there is no second-best ending to a round
+  // that has been won, only another lap.
+  settleCrown(at) {
+    if (this.squaresHeld() < KOTC_CELLS) return;
+    this.crowns++;
+    this.squares.fill(false);
+    this.syncGroundScore();
+    this.emit("crown", "CROWNED!", at.x, at.y - 50, {
+      crowns: this.crowns,
+      points: null,
+    });
+  }
+  // A turnover gives back the 3x3 block of squares around where it happened.
+  loseGround(at) {
+    const lost = kotcBlock(kotcCellIndex(at.x, at.y)).filter((cell) => this.squares[cell]);
+    for (const cell of lost) this.squares[cell] = false;
+    this.syncGroundScore();
+    return lost;
   }
   // Flow is not banked: each FLOW_DECAY_SECONDS without a flow-building bonus
   // slips the multiplier one step (flow falls to the floor of the step below)
@@ -1039,7 +1246,9 @@ export class Game {
     this.zoneBlindTimer = 0;
     this.zoneBlindDuration = 0;
   }
-  turnover(reason) {
+  // `at` is where it happened - the interception point or the carrier - which
+  // King of the Court needs to know which ground to lose.
+  turnover(reason, at = { x: 500, y: 310 }) {
     this.turnovers++;
     this.flow = 0;
     this.flowIdle = 0;
@@ -1051,6 +1260,22 @@ export class Game {
     this.focusActive = false;
     this.boostActive = false;
     this.lock = 1.2;
+    if (this.config.kotc) {
+      // Ground is the only thing at stake, and the round belongs to the
+      // clock: a turnover never counts against possessions here.
+      const lost = this.loseGround(at);
+      this.emit(
+        "turnover",
+        lost.length > 0
+          ? `${reason} · -${lost.length} ${lost.length === 1 ? "SQUARE" : "SQUARES"}`
+          : reason,
+        500,
+        310,
+        { squares: lost.length, lost },
+      );
+      this.resetPositions();
+      return;
+    }
     this.emit("turnover", reason, 500, 310);
     const possessions = Number.isFinite(this.config.possessions)
       ? this.config.possessions
@@ -1179,7 +1404,7 @@ export class Game {
         this.historyTimes = [this.elapsed];
       }
       if (this.hold >= MAX_HOLD) {
-        this.turnover("HELD TOO LONG");
+        this.turnover("HELD TOO LONG", p);
         return;
       }
     }
@@ -1275,7 +1500,7 @@ export class Game {
         d.y = clamp(d.y + ((ty - d.y) / dist) * step, 65, 555);
       }
       if (!this.ball && this.grace <= 0 && distance(d, p) < 29) {
-        this.turnover("CAUGHT IN POSSESSION");
+        this.turnover("CAUGHT IN POSSESSION", p);
         return;
       }
     }
@@ -1293,7 +1518,7 @@ export class Game {
       if (b.trail.length > 9) b.trail.shift();
       for (const d of this.defenders) {
         if (segmentDistance(d, old, b) < 20) {
-          this.turnover("PASS INTERCEPTED");
+          this.turnover("PASS INTERCEPTED", b);
           return;
         }
       }

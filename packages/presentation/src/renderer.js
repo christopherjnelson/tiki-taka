@@ -2,6 +2,10 @@ import {
   WIDTH,
   HEIGHT,
   PLAYER_RADIUS,
+  LIMITS,
+  KOTC_GRID,
+  KOTC_CELLS,
+  kotcCellRect,
   ZONE_LIFETIME,
   ZONE_POINTS,
   bankPoint,
@@ -174,6 +178,9 @@ const VENUE_LOOK = {
   // Extra Time's court. Ink and jade rather than neon, and the quietest wash of
   // the lot: nothing here should feel like a stadium.
   "still-water": { surround: ["#0d1518", "#16262a"], surface: ["#122024", "#0a1418"], light: "#d9f5ec", wash: 0.09 },
+  // King of the Court's court. Warm dusk over a cool slate surface, so the
+  // gold of a held square is the warmest thing on the pitch.
+  "the-rooftop": { surround: ["#1d1512", "#30201a"], surface: ["#17202c", "#0e1520"], light: "#ffd9a0", wash: 0.1 },
 };
 // The pitch inset the engine's LIMITS agree on (packages/engine/src/game.js:
 // LIMITS = { left: 50, right: 950, top: 50, bottom: 570 }) - 50 in, on all
@@ -353,6 +360,42 @@ const BORDERS = {
       c.strokeStyle = withAlpha(v.accent, 0.3);
       c.lineWidth = Math.max(1, D * 0.018);
       c.stroke();
+    }
+  },
+  // The Rooftop: a brick parapet with string lights, the only border with a
+  // warm light in it. Coping line along the inner edge, a bulb every few
+  // metres, and the sag of the wire between them.
+  "the-rooftop"(c, L, D, v) {
+    c.fillStyle = "#1a110e";
+    c.fillRect(0, 0, L, D);
+    const course = D * 0.16;
+    c.strokeStyle = withAlpha(v.secondary, 0.16);
+    c.lineWidth = Math.max(1, D * 0.02);
+    c.beginPath();
+    for (let y = course; y < D; y += course) {
+      c.moveTo(0, y);
+      c.lineTo(L, y);
+    }
+    c.stroke();
+    c.strokeStyle = withAlpha(v.accent, 0.7);
+    c.lineWidth = Math.max(1.5, D * 0.05);
+    c.beginPath();
+    c.moveTo(0, D * 0.93);
+    c.lineTo(L, D * 0.93);
+    c.stroke();
+    const gap = D * 1.5;
+    c.strokeStyle = withAlpha("#ffffff", 0.22);
+    c.lineWidth = Math.max(1, D * 0.018);
+    c.beginPath();
+    for (let x = 0; x < L; x += gap) {
+      c.moveTo(x, D * 0.3);
+      c.quadraticCurveTo(x + gap / 2, D * 0.5, x + gap, D * 0.3);
+    }
+    c.stroke();
+    for (let x = gap / 2; x < L; x += gap) {
+      circle(c, x, D * 0.44, D * 0.075);
+      c.fillStyle = withAlpha(v.accent, 0.9);
+      c.fill();
     }
   },
   amsterdam(c, L, D, v) {
@@ -646,7 +689,22 @@ export class Renderer {
       c.fillRect(px, py, pw, ph);
     }
   }
+  // A short flash over squares just taken ("gain") or given back ("loss") in
+  // King of the Court. Kept as its own effect, drawn under the players, so a
+  // popup and a flash never share a lifetime or a layer.
+  flashSquares(cells, tone) {
+    if (!cells?.length) return;
+    this.effects.push({
+      type: "squares",
+      cells,
+      tone,
+      age: 0,
+      life: tone === "loss" ? 0.85 : 0.7,
+    });
+  }
   addEvent(e) {
+    if (e?.taken?.length) this.flashSquares(e.taken, "gain");
+    if (e?.type === "crown") this.flashSquares(Array.from({ length: KOTC_CELLS }, (_, i) => i), "gain");
     if (
       !e ||
       e.type === "end" ||
@@ -661,7 +719,9 @@ export class Renderer {
       life:
         e.type === "turnover"
           ? 1.35
-          : e.type === "score"
+          : e.type === "crown"
+            ? 2.2
+            : e.type === "score"
             ? 1.25
             : e.type === "challenge"
               ? 1.7
@@ -790,6 +850,7 @@ export class Renderer {
         label(c, "FOCUS ACTIVE", 500, 79, 13, "#fff", "center", 800);
       });
     }
+    this.drawGround(game);
     this.drawZone(game);
     const carrier = game.players[game.carrier],
       selected = Number.isInteger(target)
@@ -960,7 +1021,8 @@ export class Renderer {
       );
     if (game.ball) this.drawBall(game.ball.x, game.ball.y, game.elapsed * 7);
     for (const e of this.effects)
-      if (e.type !== "one-touch" || !e.milestone) this.drawEffect(e);
+      if ((e.type !== "one-touch" || !e.milestone) && e.type !== "squares")
+        this.drawEffect(e);
     // Most frames have no transient effects. Avoid allocating a replacement
     // empty array at display refresh rate in that common case.
     if (this.effects.length)
@@ -968,16 +1030,65 @@ export class Renderer {
     c.globalAlpha = 1;
     c.setLineDash([]);
   }
+  // King of the Court's ground: a faint grid over the pitch, a tint on every
+  // held square, and the flashes for ground just taken or lost. All in court
+  // coordinates, so the portrait rotation applied by resize() carries it
+  // along; nothing here is text, so nothing needs to be turned upright.
+  // The flashes are advanced by the shared loop in render() (they are in
+  // this.effects), and painted here so they sit under the players.
+  drawGround(game) {
+    if (!game.config?.kotc || !game.squares) return;
+    const c = this.ctx;
+    c.save();
+    c.lineWidth = 1;
+    c.strokeStyle = "rgba(255,255,255,0.09)";
+    c.beginPath();
+    for (let col = 0; col <= KOTC_GRID.cols; col++) {
+      const x = kotcCellRect(col).x;
+      c.moveTo(x, LIMITS.top);
+      c.lineTo(x, LIMITS.bottom);
+    }
+    // Lines at the far edge of each row: the last cell's bottom edge.
+    for (let row = 0; row <= KOTC_GRID.rows; row++) {
+      const y = row === KOTC_GRID.rows
+        ? LIMITS.bottom
+        : kotcCellRect(row * KOTC_GRID.cols).y;
+      c.moveTo(LIMITS.left, y);
+      c.lineTo(LIMITS.right, y);
+    }
+    c.stroke();
+    for (let i = 0; i < KOTC_CELLS; i++) {
+      if (!game.squares[i]) continue;
+      const r = kotcCellRect(i);
+      c.fillStyle = withAlpha(this.venue.accent, 0.22);
+      c.fillRect(r.x, r.y, r.w, r.h);
+      c.strokeStyle = withAlpha(this.venue.accent, 0.5);
+      c.lineWidth = 1.5;
+      c.strokeRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6);
+    }
+    for (const e of this.effects) {
+      if (e.type !== "squares") continue;
+      const t = Math.min(1, e.age / e.life);
+      // Gains flash in the venue's own gold, losses in its second colour, and
+      // both fall away quickly enough that a chain of passes stays readable.
+      c.fillStyle = withAlpha(e.tone === "loss" ? this.venue.secondary : "#ffffff", (1 - t) * (e.tone === "loss" ? 0.45 : 0.28));
+      for (const cell of e.cells) {
+        const r = kotcCellRect(cell);
+        c.fillRect(r.x, r.y, r.w, r.h);
+      }
+    }
+    c.restore();
+  }
   // The zone can be active, or dark and about to arrive (blind gap between
   // rotations). Both states share the portrait upright() wrap; only the
   // active state draws the countdown ring and label, so a player never reads
   // the gap as the zone breaking rather than one about to appear.
   drawZone(game) {
     const z = game.zone;
-    // Extra Time pays no points, so the zone cannot promise "+18" there. It
-    // still pays Energy and still feeds the streak, so it keeps its ring and
-    // its name - only the number goes.
-    const scored = !game.config?.endless;
+    // Only the tour pays points, so only the tour's ring promises "+18". Extra
+    // Time pays seconds and King of the Court pays ground; both still pay
+    // Energy, so the ring keeps its name there - only the number goes.
+    const scored = !game.config?.endless && !game.config?.kotc;
     if (z) {
       if (this.ctx._tikiPortrait)
         return this.upright(z.x, z.y, () =>
@@ -1269,7 +1380,7 @@ export class Renderer {
     c.restore();
   }
   drawEffect(e) {
-    if (this.ctx._tikiPortrait && e.type === "turnover")
+    if (this.ctx._tikiPortrait && (e.type === "turnover" || e.type === "crown"))
       return this.upright(500, 310, () => this.drawEffect(e));
     const c = this.ctx,
       t = Math.min(1, e.age / e.life);
@@ -1284,6 +1395,18 @@ export class Renderer {
       c.stroke();
       label(c, e.text, 500, 298, 20, this.venue.secondary, "center", 900);
       label(c, "RESET / FIND THE NEXT PASS", 500, 330, 11, "#fff");
+    } else if (e.type === "crown") {
+      // The whole court has been held and has just cleared. Held long enough
+      // to read, and fading late rather than early.
+      c.globalAlpha = Math.min(1, (1 - t) * 2.5);
+      rounded(c, 300, 262, 400, 96, 20);
+      c.fillStyle = "rgba(10,10,30,.95)";
+      c.fill();
+      c.strokeStyle = BONUS_GOLD;
+      c.lineWidth = 3;
+      c.stroke();
+      label(c, "CROWNED!", 500, 297, 40, BONUS_GOLD, "center", 900);
+      label(c, e.crowns > 1 ? `CROWN ×${e.crowns} · THE COURT IS EMPTY AGAIN` : "THE COURT IS EMPTY AGAIN", 500, 336, 12, "#fff", "center", 800);
     } else if (e.type === "one-touch") {
       const milestone = Boolean(e.milestone),
         rise = this.reducedMotion ? 0 : t * 24,

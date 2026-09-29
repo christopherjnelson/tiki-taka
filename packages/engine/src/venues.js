@@ -66,6 +66,20 @@ export const VENUES = [
     // having to know which mode is running.
     competition: "TIKI TAKA · EXTRA TIME",
   },
+  // King of the Court's own court, off the tour for the same reason Still
+  // Water is: a fixed place for a mode that is not a stop on the circuit, with
+  // no seed of its own (every round seeds from the clock). Gold and ember
+  // rather than the tour's neon, because the mode is about wearing a crown, and
+  // neither reads as a held square's tint against the grid.
+  {
+    id: "the-rooftop",
+    name: "The Rooftop",
+    vibe: "Hold the court",
+    accent: "#ffd166",
+    secondary: "#ff7a59",
+    seeds: [],
+    competition: "TIKI TAKA · KING OF THE COURT",
+  },
 ];
 
 const bySeed = new Map(
@@ -81,6 +95,7 @@ export function getVenue(config = {}) {
   if (bySeed.has(config.seed)) return bySeed.get(config.seed);
   if (config.practice) return VENUES[0];
   if (config.endless) return VENUES.find((venue) => venue.id === "still-water");
+  if (config.kotc) return VENUES.find((venue) => venue.id === "the-rooftop");
   if (config.key)
     return VENUES[Math.abs(Number(config.seed) || 0) % VENUES.length];
   return VENUES[0];

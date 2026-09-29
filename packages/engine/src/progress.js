@@ -15,11 +15,13 @@ const FIRST_CLEAR_TIER = { relaxed: 0.6, standard: 1, ruthless: 1.5 };
 // a point total: three minutes is a good run - it is past the fourth defender
 // and closing on the fifth - and pays the full performance cap.
 const ENDLESS_REFERENCE = 180;
+// King of the Court's score is squares (crowns * 24 + squares held), so its
+// reference is a round worth two crowns: 48 squares over ninety seconds pays
+// the full performance cap.
+const KOTC_REFERENCE = 48;
 // XP is a progression reward, so it is only paid in progression modes: World
-// tour (career), Endless, and King of the Court ("kotc" - a disabled
-// placeholder today, with no gameplay of its own yet, so it is folded into
-// the plain performance-only rule below until it ships its own). Practice is
-// excluded on purpose: a no-stakes sandbox for finding your feet, not a way
+// tour (career), Endless, and King of the Court ("kotc"), the last two paying
+// performance only. Practice is excluded on purpose: a no-stakes sandbox for finding your feet, not a way
 // to grind levels.
 const XP_MODES = new Set(["career", "endless", "kotc"]);
 // Per-mode "does this round save?" rule. An attempt is not a result: only a
@@ -31,11 +33,8 @@ const XP_MODES = new Set(["career", "endless", "kotc"]);
 // Endless no matter how the run went. A single global check would silently
 // stop Endless from ever saving anything the day it ships, which is exactly
 // backwards for the one mode whose whole point is a leaderboard result.
-// Endless is being redesigned as a survival mode scored on elapsed time, not
-// points, so it needs its own condition here (not `cleared`) when it ships -
-// same for King of the Court once it has gameplay. Until then both are
-// explicit `false` below, on their own seam, rather than falling through to
-// a shared rule that might accidentally start counting them.
+// Endless is a survival mode scored on elapsed time and King of the Court on
+// squares held, so each has its own condition here (not `cleared`).
 export function roundCounts(mode, cleared) {
   switch (mode) {
     case "career":
@@ -51,9 +50,11 @@ export function roundCounts(mode, cleared) {
       // NOT "fix" this to `cleared` - see the note above.
       return true;
     case "kotc":
-      // TODO(kotc): King of the Court has no gameplay yet; give it its own
-      // rule here when it ships.
-      return false;
+      // Every finished round is a result: there is no target to miss and a
+      // turnover costs ground, not the round, so the squares held at the
+      // buzzer are the whole score. Like Endless, do NOT "fix" this to
+      // `cleared`.
+      return true;
     default:
       return false;
   }
@@ -190,10 +191,12 @@ export function awardMatch(progress, game, mode, courtIndex) {
     ? game.config.difficulty
     : "standard";
   const isPractice = mode === "practice" || Boolean(game.config?.practice);
-  // Extra Time is never "cleared": its clock reaching zero is the run
-  // ending, not a target met, and it has no star or clear line to earn.
+  // Extra Time and King of the Court are never "cleared": the clock reaching
+  // zero is the run ending, not a target met, and neither has a star or clear
+  // line to earn.
   const cleared =
     !game.config?.endless &&
+    !game.config?.kotc &&
     (game.time <= 0 || isPractice) &&
     (isPractice || game.turnovers < possessions) &&
     game.score >= game.config.target;
@@ -207,7 +210,9 @@ export function awardMatch(progress, game, mode, courtIndex) {
       ? game.config.reference
       : game.config.target > 0
         ? game.config.target
-        : ENDLESS_REFERENCE;
+        : game.config?.kotc
+          ? KOTC_REFERENCE
+          : ENDLESS_REFERENCE;
   const stars = cleared
     ? 1 +
       Number(game.score >= reference * STAR_RATIOS.two) +
@@ -217,7 +222,14 @@ export function awardMatch(progress, game, mode, courtIndex) {
   // divisor was the target, roughly a third of it, so this saturated at its
   // cap on any competent round and stopped distinguishing anything.
   const performance = Math.min(20, Math.max(0, Math.floor((20 * game.score) / reference)));
-  const key = mode === "career" ? `court-${courtIndex}-${tier}` : mode;
+  // King of the Court keeps a best per tier: its tiers change how hard the
+  // press is, so a Relaxed round and a Ruthless one are not the same number.
+  const key =
+    mode === "career"
+      ? `court-${courtIndex}-${tier}`
+      : mode === "kotc"
+        ? `kotc-${tier}`
+        : mode;
   // Read "is this new ground" BEFORE the writes further down overwrite it.
   const isFirstClearOfCourtTier =
     (progress.courts[courtIndex]?.[tier]?.stars || 0) === 0;
@@ -233,9 +245,8 @@ export function awardMatch(progress, game, mode, courtIndex) {
     }
     xp = Math.max(3, performance + stars * STAR_XP + clearBonus);
   } else {
-    // Endless (target 0, cleared/stars trivially true) pays performance only
-    // - no star or clear pay. King of the Court has no gameplay yet and
-    // falls through to this same rule until it ships its own.
+    // Endless and King of the Court (target 0, never cleared) pay performance
+    // only - no star or clear pay - each against its own reference above.
     xp = Math.max(3, performance);
   }
   progress.xp += xp;
