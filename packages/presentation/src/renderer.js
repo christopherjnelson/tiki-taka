@@ -1085,10 +1085,10 @@ export class Renderer {
   // the gap as the zone breaking rather than one about to appear.
   drawZone(game) {
     const z = game.zone;
-    // Extra Time pays no points, so the zone cannot promise "+18" there. It
-    // still pays Energy and still feeds the streak, so it keeps its ring and
-    // its name - only the number goes.
-    const scored = !game.config?.endless;
+    // Only the tour pays points, so only the tour's ring promises "+18". Extra
+    // Time pays seconds and King of the Court pays ground; both still pay
+    // Energy, so the ring keeps its name there - only the number goes.
+    const scored = !game.config?.endless && !game.config?.kotc;
     if (z) {
       if (this.ctx._tikiPortrait)
         return this.upright(z.x, z.y, () =>
